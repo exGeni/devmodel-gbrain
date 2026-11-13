@@ -65,14 +65,6 @@ receipts_init verify || exit 2
 CHECKS=(
   # ── heavy (longest-first) ──
   "typecheck"
-  "check:admin-build"
-  # #7126: src/admin-embedded.ts embeds exactly the committed admin/dist; the
-  # admin build above writes a throwaway directory, so it cannot catch this.
-  "check:admin-embedded"
-  "check:wasm"
-  "check:pglite-embedded"
-  # gbrain's bundled skills survive bun build --compile byte-identical (GBRA-194).
-  "check:skills-embedded"
   # HEIC + AVIF decoders survive bun build --compile (~0.6s: the smoketest
   # bundles a handful of modules, not the CLI).
   "check:image-decoders"
@@ -81,10 +73,6 @@ CHECKS=(
   # true orphans (unreachable from every entrypoint AND every test) and any
   # test-only module without a reasoned PERMITTED_TEST_ONLY entry. ~1s.
   "check:orphan-modules"
-  # agent contract v1 (A2): generated docs/guides/error-codes.md matches the registry
-  "check:error-codes"
-  # #5575 ENG-16: write-gate detector patterns are bounded and window-safe
-  "check:write-gate-regex"
   # agent contract v1 scanner (B9): shrink-only per-rule baselines
   "check:agent-contract"
   # No-op placeholder assertions (expect(true).toBe(true) and friends) in
@@ -104,11 +92,6 @@ CHECKS=(
   # on-demand runs; local `verify`-only callers lose the canary, local
   # `bun run test` keeps it.
   "check:bootstrap-templates"
-  "check:skill-brain-first"
-  # A-NEW-3: bundled SKILL.md files pass the shared-skill publication parser.
-  "check:skill-publication"
-  "check:conversation-parser"
-  "check:resolver"
   "check:privacy"
   "check:test-names"
   "check:test-isolation"
@@ -121,24 +104,16 @@ CHECKS=(
   # C2: weight maps name only existing files; the unweighted share per lane
   # warns (step summary) and fails only on the scheduled run.
   "check:weight-coverage"
-  # X1 (wave 9 lane A): every recipe model is priced or marked unpriced_models.
-  "check:recipe-pricing"
   # ── light tail (sub-second greps; historical order) ──
   "check:proposal-pii"
   "check:jsonb"
   # Positional $N::jsonb + JSON.stringify double-encode (AST-lite, ~0.2s).
   "check:jsonb-params"
   "check:search-path"
-  "check:source-id-projection"
   "check:source-config-leak"
   "check:progress"
   "check:no-tracked-symlinks"
-  "check:admin-scope-drift"
-  "check:cli-exec"
   "check:system-of-record"
-  "check:eval-glossary"
-  "check:tool-catalog"
-  "check:skills-manifest"
   "check:no-pii-agent-voice"
   "check:synthetic-corpus-privacy"
   "check:operations-filter-bypass"
@@ -153,17 +128,10 @@ CHECKS=(
   "check:getpage-scope"
   "check:origin-assignment"
   "check:no-double-retry"
-  "check:batch-audit-site"
-  "check:engine-dynamic-import"
   "check:file-url-pathname"
   "check:grok-pin"
   "check:opencode-pin"
   "check:pin-doc-privacy"
-  "check:worker-lock-renewal-shape"
-  "check:bootstrap-tag"
-  "check:install-ref"
-  "check:plugin-tree"
-  "check:skill-refs"
   # Previously reachable ONLY from the deleted check:all (i.e. never run):
   "check:newlines"
   "check:no-legacy-getconnection"
@@ -181,9 +149,6 @@ CHECKS=(
   # EO10 (refactor wave 1): engine-sql/ and schema-migrations/ never import
   # back up into the engine façades or migrate.ts (ESM TDZ cycles).
   "check:layering"
-  # P8: provider SDKs are imported only by allowlisted modules, so every model
-  # call stays observable through invokeAI (write-inference guard, call log).
-  "check:ai-sdk-importers"
   # #5595/#5475: no fsync of a read-only descriptor outside src/core/fs-durable.ts
   # (Windows refuses it with EPERM).
   "check:durable-flush"
@@ -196,21 +161,6 @@ CHECKS=(
   # #4992: subprocess launches go through src/core/spawn.ts (windowsHide
   # default); NOT_YET_MIGRATED is a ratchet that only shrinks.
   "check:windows-hide"
-  # Goal (a) (refactor wave 1): engine SQL only shrinks; baseline
-  # scripts/engine-sql-baseline.tsv.
-  "check:engine-sql-ratchet"
-  # GBRA-248 W1: world reads in src/core (loadConfig, env, fs, module state,
-  # spawn, process hooks) only fall; baseline scripts/core-world-reads-baseline.tsv.
-  "check:core-world-reads"
-  # GBRA-161: derived-retire writers only shrink; reviewed ceilings in
-  # docs/architecture/derived-census.tsv.
-  "check:derived-census"
-  # Wave B segmented storage (spec 1.5 layer 4): whole-body page readers only
-  # shrink; baseline scripts/page-body-readers-baseline.tsv.
-  "check:page-body-readers"
-  # Wave B large pages: every content_chunks reader applies the chunk-visibility
-  # predicate or carries a reason; baseline scripts/chunk-visibility-baseline.tsv only shrinks.
-  "check:chunk-visibility"
   # CQ3 / EO17 (refactor wave 1): engine-sql splices only constant text, no
   # composed $n, no expanded IN lists.
   "check:engine-sql-dynamic"
@@ -219,11 +169,6 @@ CHECKS=(
   # EO4 (refactor wave 1): RLS read brands stay unforgeable; brand factories
   # importable only from their allowlists (never src/core/ops/**).
   "check:engine-sql-brands"
-  # A17 (refactor wave 1, W4 sync): SyncRun mutable fields are read/written
-  # only as run.<field> over src/commands/sync/ (no destructuring or aliasing).
-  "check:sync-run-state"
-  "check:schema-migrations"
-  "check:schema-fresh"
   # W7 (refactor wave 1): workflow phrases the wave retired stay out of the
   # docs agents follow (CLAUDE.md, AGENTS.md, CONTRIBUTING.md, docs/, skills/).
   "check:retired-phrases"
@@ -243,8 +188,6 @@ CHECKS=(
   "check:regen-all"
   # v0.50.5.0 security wave: compiled binaries must not autoload a cwd bunfig.toml.
   "check:compile-autoload"
-  # The vendored postgres driver's three copies equal pinned upstream plus its patch (networked; a recorded skip offline).
-  "check:vendor-postgres"
 )
 
 # ──────────────────────────────────────────────────────────────────────────

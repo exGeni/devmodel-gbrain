@@ -1,2 +1,0 @@
-# Guard self-test fixture baseline (see docs/TESTING.md#engine-sql-ratchet).
-method	src/core/postgres-engine.ts	PostgresEngine.getPage
