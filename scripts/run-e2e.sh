@@ -33,9 +33,9 @@ RUNNER_SHARD="${SHARD:-}"
 unset SHARD
 
 cd "$(dirname "$0")/.."
-# Executed-test receipts (X2): captured here, before the GBRAIN_* scrub below,
+# Executed-test receipts (X2): captured here, before the env scrub below,
 # and unset so test processes never inherit them. Each file pass keeps its
-# native JUnit report as a receipt (lane e2e unless GBRAIN_TEST_RECEIPT_LANE
+# native JUnit report as a receipt (lane e2e unless DEVMODEL_TEST_RECEIPT_LANE
 # says otherwise).
 . scripts/lib/test-env.sh
 receipts_init e2e || exit 2
@@ -44,8 +44,8 @@ receipts_init e2e || exit 2
 # redirects HOME (and E2E tests spawn CLI subprocesses with varying cwd), so
 # a relative --coverage-dir would scatter lcov output across working dirs.
 # Normalize it once against the repo root, before HOME moves. COVERAGE_DIR is
-# deliberately NOT GBRAIN-prefixed: the hermetic env scrub below drops
-# GBRAIN_*/operator prefixes, and this variable must survive that scrub.
+# deliberately NOT DEVMODEL-prefixed: the hermetic env scrub below drops
+# DEVMODEL_*, GBRAIN_* and operator prefixes, and this variable must survive it.
 if [ -n "${COVERAGE_DIR:-}" ]; then
   case "$COVERAGE_DIR" in
     /*) ;;
@@ -61,7 +61,7 @@ unset DATABASE_URL GBRAIN_DATABASE_URL
 # ambient ANTHROPIC/OPENAI keys for keyless-CI parity; e2e is the lane where
 # real keys are deliberate (live embed/parity tests skip-gate on them), so
 # opt back in at this boundary.
-export GBRAIN_TEST_KEEP_PROVIDER_KEYS=1
+export DEVMODEL_TEST_KEEP_PROVIDER_KEYS=1
 
 # --- HOME isolation: snapshot real user config before switching ---
 # Tolerate unset HOME (minimal containers, exotic CI shells) without tripping set -u.
@@ -86,7 +86,7 @@ fi
 
 # Portable mktemp: explicit XXXXXX is required by GNU mktemp on Linux CI.
 # `-t prefix` works on BSD but errors on GNU when the template lacks Xs.
-E2E_TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/gbrain-e2e.XXXXXX")
+E2E_TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/devmodel-e2e.XXXXXX")
 trap 'rm -rf "$E2E_TMP_HOME"' EXIT
 
 # The foreground file runs as an owned child so signals interrupt wait promptly.
@@ -122,24 +122,25 @@ mkdir -p "$E2E_TMP_HOME/.gbrain"
 
 # --- Hermetic env scrub: operator/agent context must not bleed into E2E ---
 # A dev shell or a Conductor workspace exports CONDUCTOR_*, MCP_*, OPENCLAW_*,
-# HERMES_*, and GBRAIN_* config overrides (e.g. a stray GBRAIN_BRAIN_ID,
+# HERMES_*, this repository's DEVMODEL_* knobs, and the real gbrain's GBRAIN_*
+# config overrides (e.g. a stray GBRAIN_BRAIN_ID,
 # GBRAIN_SOURCE, GBRAIN_*_THRESHOLD, GBRAIN_SUPERVISOR_PID_FILE, an operator's
 # HERMES_BIN/HERMES_HOME) that would silently change test behavior — making
 # "hermetic" E2E non-hermetic and its failures unreproducible across machines.
 # Drop them before bun starts. This is a DENYLIST of operator-context prefixes
 # (not an allowlist rebuild), so PATH, HOME, TMPDIR, CI, and bun
 # internals survive untouched. We keep GBRAIN_HOME (just set above for HOME
-# isolation); everything else GBRAIN_* is an operator override the suite must
-# not inherit. GROK_ also drops an operator's GROK_BIN/GROK_HOME; OPENCODE_
+# isolation) and the DEVMODEL_* knobs listed below; everything else under both
+# prefixes is an operator override the suite must not inherit. GROK_ also drops an operator's GROK_BIN/GROK_HOME; OPENCODE_
 # drops OPENCODE_BIN and the OPENCODE_CONFIG* trio. Adapts GStack's
 # buildHermeticEnv() allowlist to this shell E2E runner.
-for _e2e_var in $(env | grep -oE '^(CONDUCTOR_|MCP_|OPENCLAW_|HERMES_|GROK_|OPENCODE_|GBRAIN_)[A-Za-z0-9_]*' | sort -u); do
+for _e2e_var in $(env | grep -oE '^(CONDUCTOR_|MCP_|OPENCLAW_|HERMES_|GROK_|OPENCODE_|GBRAIN_|DEVMODEL_)[A-Za-z0-9_]*' | sort -u); do
   case "$_e2e_var" in
     GBRAIN_HOME) ;;  # required for HOME isolation (set above) — keep
-    GBRAIN_TEST_KEEP_PROVIDER_KEYS) ;;  # provider-keys preload opt-in (set above) — keep
-    GBRAIN_CI_DISABLE_TEST_ENV_FILE) ;;  # CI forbids loading checkout-local .env.testing — keep through Bun startup
-    GBRAIN_TEST_WAIT_MULTIPLIER) ;;  # coverage deadline multiplier read by test/helpers/wait-for.ts — keep
-    GBRAIN_E2E_FILE_TIMEOUT) ;;  # per-file cap override — read AFTER this scrub, so it must survive it
+    DEVMODEL_TEST_KEEP_PROVIDER_KEYS) ;;  # provider-keys preload opt-in (set above) — keep
+    DEVMODEL_CI_DISABLE_TEST_ENV_FILE) ;;  # CI forbids loading checkout-local .env.testing — keep through Bun startup
+    DEVMODEL_TEST_WAIT_MULTIPLIER) ;;  # coverage deadline multiplier read by test/helpers/wait-for.ts — keep
+    DEVMODEL_E2E_FILE_TIMEOUT) ;;  # per-file cap override — read AFTER this scrub, so it must survive it
     *) unset "$_e2e_var" || true ;;
   esac
 done
@@ -329,9 +330,9 @@ for f in "${files[@]}"; do
   fi
   echo ""
   echo "=== $name ==="
-  # Hard outer timeout (default 180s per file; GBRAIN_E2E_FILE_TIMEOUT or
-  # E2E_FILE_TIMEOUT_SECS overrides — the GBRAIN_ name is kept in the scrub
-  # keep-list above, the non-GBRAIN name survives the scrub by construction;
+  # Hard outer timeout (default 180s per file; DEVMODEL_E2E_FILE_TIMEOUT or
+  # E2E_FILE_TIMEOUT_SECS overrides — the DEVMODEL_ name is kept in the scrub
+  # keep-list above, the other name survives the scrub by construction;
   # nightly coverage runs use it to absorb instrumentation overhead). bun's
   # --timeout covers tests AND hooks, but it's timer-based: a call that blocks
   # the event loop synchronously never lets the timer fire and the file wedges
@@ -339,7 +340,7 @@ for f in "${files[@]}"; do
   # gtimeout/timeout SIGKILLs the file so the suite advances. gtimeout (macOS
   # via coreutils) preferred; timeout (Linux) fallback; bare bun (no outer
   # cap) if neither is installed.
-  file_timeout="${GBRAIN_E2E_FILE_TIMEOUT:-${E2E_FILE_TIMEOUT_SECS:-180}}"
+  file_timeout="${DEVMODEL_E2E_FILE_TIMEOUT:-${E2E_FILE_TIMEOUT_SECS:-180}}"
   # Digits-only validation (same strict positive-int posture as the TS env
   # knobs): a malformed value falls back to the default instead of
   # word-splitting into extra gtimeout arguments.

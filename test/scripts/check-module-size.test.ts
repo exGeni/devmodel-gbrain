@@ -1,7 +1,7 @@
 /**
  * Failing-side proof for every check-module-size.sh rule. The guard-self-test
  * fixtures cover rule 1 (growth); these tests drive rules
- * 2-4 and the unknown-policy arm through GBRAIN_GUARD_ROOT temp trees so no
+ * 2-4 and the unknown-policy arm through DEVMODEL_GUARD_ROOT temp trees so no
  * rule can rot into a permanently-green no-op — the exact failure class the
  * module-size ratchet exists to kill.
  */
@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 function makeTree(tsvRows: string[], files: Record<string, number>): string {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-module-size-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-module-size-'));
   tempDirs.push(root);
   mkdirSync(join(root, 'scripts'), { recursive: true });
   writeFileSync(join(root, 'scripts', 'module-size-limits.tsv'), tsvRows.join('\n') + '\n');
@@ -34,7 +34,7 @@ function makeTree(tsvRows: string[], files: Record<string, number>): string {
 
 /** Like makeTree but with verbatim file content (retired region-exempt fixtures). */
 function makeTreeWithContent(tsvRows: string[], files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-module-size-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-module-size-'));
   tempDirs.push(root);
   mkdirSync(join(root, 'scripts'), { recursive: true });
   writeFileSync(join(root, 'scripts', 'module-size-limits.tsv'), tsvRows.join('\n') + '\n');
@@ -49,7 +49,7 @@ function makeTreeWithContent(tsvRows: string[], files: Record<string, string>): 
 function runGuard(root: string, env: Record<string, string> = {}) {
   const res = spawnSync('bash', [GUARD], {
     encoding: 'utf8',
-    env: { ...process.env, GBRAIN_GUARD_ROOT: root, ...env },
+    env: { ...process.env, DEVMODEL_GUARD_ROOT: root, ...env },
     timeout: 30_000,
   });
   return { code: res.status ?? -1, out: `${res.stdout}\n${res.stderr}` };
@@ -66,7 +66,7 @@ describe('check-module-size.sh rule-by-rule failing sides', () => {
 
   test('rule 2 slack: within the slack window passes', () => {
     const root = makeTree(['src/small.ts\t40\tratchet\tfixture'], { 'src/small.ts': 10 });
-    const r = runGuard(root, { GBRAIN_MODULE_SIZE_SLACK: '50' });
+    const r = runGuard(root, { DEVMODEL_MODULE_SIZE_SLACK: '50' });
     expect(r.code).toBe(0);
   });
 
@@ -80,19 +80,19 @@ describe('check-module-size.sh rule-by-rule failing sides', () => {
 
   test('rule 4: an unlisted src file over the cap fails; under the cap passes', () => {
     const over = makeTree([], { 'src/unlisted.ts': 30 });
-    const rOver = runGuard(over, { GBRAIN_MODULE_SIZE_NEWFILE_CAP: '20' });
+    const rOver = runGuard(over, { DEVMODEL_MODULE_SIZE_NEWFILE_CAP: '20' });
     expect(rOver.code).toBe(1);
     expect(rOver.out).toContain('over the 20 cap for files not listed');
 
     const under = makeTree([], { 'src/unlisted.ts': 10 });
-    expect(runGuard(under, { GBRAIN_MODULE_SIZE_NEWFILE_CAP: '20' }).code).toBe(0);
+    expect(runGuard(under, { DEVMODEL_MODULE_SIZE_NEWFILE_CAP: '20' }).code).toBe(0);
   });
 
-  test('skip: an empty src/ with no TSV rows prints GBRAIN_CHECK_SKIPPED and exits 0', () => {
+  test('skip: an empty src/ with no TSV rows prints DEVMODEL_CHECK_SKIPPED and exits 0', () => {
     const root = makeTree([], {});
     const r = runGuard(root);
     expect(r.code).toBe(0);
-    expect(r.out).toContain('GBRAIN_CHECK_SKIPPED:');
+    expect(r.out).toContain('DEVMODEL_CHECK_SKIPPED:');
     expect(r.out).not.toContain('OK: module sizes');
   });
 
@@ -100,7 +100,7 @@ describe('check-module-size.sh rule-by-rule failing sides', () => {
     const root = makeTree(['src/ghost.ts\t100\tratchet\tfixture'], {});
     const r = runGuard(root);
     expect(r.code).toBe(1);
-    expect(r.out).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(r.out).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 
   test('a src file turns the skip off: the guard reports OK', () => {
@@ -108,7 +108,7 @@ describe('check-module-size.sh rule-by-rule failing sides', () => {
     const r = runGuard(root);
     expect(r.code).toBe(0);
     expect(r.out).toContain('OK: module sizes');
-    expect(r.out).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(r.out).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 
   test('unknown policy fails loudly instead of skipping the row', () => {
@@ -157,7 +157,7 @@ describe('check-module-size.sh rule-by-rule failing sides', () => {
       ['src/ghost.ts\t100\tratchet\tfixture', 'src/big.ts\t5\tratchet\tfixture'],
       { 'src/big.ts': 30, 'src/unlisted.ts': 30 },
     );
-    const r = runGuard(root, { GBRAIN_MODULE_SIZE_NEWFILE_CAP: '20' });
+    const r = runGuard(root, { DEVMODEL_MODULE_SIZE_NEWFILE_CAP: '20' });
     expect(r.code).toBe(1);
     expect(r.out).toContain('does not exist'); // rule 3
     expect(r.out).toContain('over its 5 ceiling'); // rule 1

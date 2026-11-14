@@ -1,6 +1,6 @@
-# Development harness
+# devmodel-gbrain
 
-This repository is a development model: the test lanes, guards, CI workflows and
+This repository is a development model cut from [gbrain](https://github.com/garrytan/gbrain): the test lanes, guards, CI workflows and
 contributor tools that agents and people run to build and ship software, shipped with
 [gstack](https://github.com/garrytan/gstack). gstack ships, lands and releases it: `/ship`
 opens the pull request, `gstack-ship-queue land` merges it and `gstack-release-stamp open`

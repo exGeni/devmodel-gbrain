@@ -14,7 +14,7 @@ page changes in the same pull request.
    `Why:`, `Fix:`, and `See:` or `Docs:`. Do what `Fix:` says, read the `Docs:` anchor when the fix
    is not enough, and rerun the same command.
 3. **A skip is not a pass.** A check that had nothing to check prints
-   `GBRAIN_CHECK_SKIPPED: <reason>`; report it as skipped, with the reason.
+   `DEVMODEL_CHECK_SKIPPED: <reason>`; report it as skipped, with the reason.
 4. **Never weaken, skip or delete a check to make it pass.** A check goes only with its subject.
 5. **Ask the owner** when the fix needs a credential, a repository setting, consent or a decision
    no record settles. Say what you need, why, and what else you considered.
@@ -44,14 +44,14 @@ uniform (`OK:`, `✓`, `ok`): rely on the exit status.
 `scripts/run-verify-parallel.sh` runs every check in its `CHECKS` list in a bounded pool, then the
 `SOLO_CHECKS` one at a time; `--dry-list` prints them.
 
-- **Outcomes.** Each check is recorded as `pass`, `fail`, `timeout` (over `GBRAIN_VERIFY_TIMEOUT`,
+- **Outcomes.** Each check is recorded as `pass`, `fail`, `timeout` (over `DEVMODEL_VERIFY_TIMEOUT`,
   120 s by default) or `skip`, in `outcomes.tsv` in the log directory and in the verify receipt. The
-  log directory is `GBRAIN_VERIFY_LOG_DIR` when set; otherwise a temporary one, deleted on success
+  log directory is `DEVMODEL_VERIFY_LOG_DIR` when set; otherwise a temporary one, deleted on success
   and kept on failure, and the last line names it.
 - **The failure banner** lists the failing checks and shows the last 30 lines of each one's log.
   The whole log is in the log directory. A drift in a generated artifact, golden or manifest is
   fixed with `bun run regen:all`, which the banner also says.
-- **Skips.** A check whose subject is absent prints `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0;
+- **Skips.** A check whose subject is absent prints `DEVMODEL_CHECK_SKIPPED: <reason>` and exits 0;
   verify records it as `skip`, lists it under `self-skipped (recorded as skip, not pass)` and still
   exits 0. The size and orphan ratchets skip while `src/` is empty.
 - **The guard self-test** (`scripts/guard-self-test.sh`) runs each guard listed `selftest yes` in
@@ -89,7 +89,7 @@ These end green or red without being a plain pass or fail; report them as what t
 
 - **OOM rescue.** A shard that failed with the WebAssembly out-of-memory signature is re-run
   serially. A green rescue exits 0 and the last line ends `oom_rescued=<n>files(...)`; the old
-  failure blocks stay in the failure log. `GBRAIN_TEST_NO_OOM_FALLBACK=1` turns the rescue off.
+  failure blocks stay in the failure log. `DEVMODEL_TEST_NO_OOM_FALLBACK=1` turns the rescue off.
 - **Killed externally** (`KILLED externally ...`) or **WEDGED** (`WEDGED after <n>s`): the
   first is queued for the serial rescue, the second is red.
 - **EXIT-HANG** (`EXIT-HANG ... warn-pass`): a shard whose files all started and passed but whose
@@ -109,7 +109,7 @@ Every `bun test` loads the preloads in `bunfig.toml` (details:
 | Preload | What it does |
 |---|---|
 | `test/helpers/database-url-guard-preload.ts` | Refuses to start while `DATABASE_URL` or `GBRAIN_DATABASE_URL` is set: `TEST-RUN GUARD: refusing to start — DATABASE_URL is set.`, exit 1. Unset the variable. |
-| `test/helpers/operator-env-preload.ts` | Removes the operator's own variables from the test process; test opt-ins survive under the `GBRAIN_TEST_` prefix ([opt-in naming rule](../TESTING.md#opt-in-naming-rule)). An opt-in set under its old name exits 2 with `Why:` and `Fix:`. |
+| `test/helpers/operator-env-preload.ts` | Removes the operator's own variables from the test process; test opt-ins survive under the `DEVMODEL_TEST_` prefix ([opt-in naming rule](../TESTING.md#opt-in-naming-rule)). An opt-in set under its old name exits 2 with `Why:` and `Fix:`. |
 | `test/helpers/provider-keys-preload.ts` | Removes model-provider keys, so tests run keyless. |
 | `test/helpers/real-home-guard-preload.ts` | Fails the test that changes install files under the real home. |
 | `test/helpers/gbrain-home-preload.ts` | Points `GBRAIN_HOME` at a fresh temporary directory. |
@@ -120,7 +120,7 @@ writing to it.
 
 ## Executed-test receipts
 
-With `GBRAIN_TEST_RECEIPT_DIR` set, every runner writes receipts
+With `DEVMODEL_TEST_RECEIPT_DIR` set, every runner writes receipts
 ([executed-test receipts](../TESTING.md#executed-test-receipts)); CI uploads them as `receipts-*`.
 
 - A file counts as run only when one of its attempts left a well-formed JUnit report. A receipt

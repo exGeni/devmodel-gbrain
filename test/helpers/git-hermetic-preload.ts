@@ -62,7 +62,7 @@ if (!existingKeys.includes('commit.gpgsign') && !existingKeys.includes('tag.gpgs
   process.env[`GIT_CONFIG_KEY_${base + 1}`] = 'tag.gpgsign';
   process.env[`GIT_CONFIG_VALUE_${base + 1}`] = 'false';
   process.env.GIT_CONFIG_COUNT = String(base + 2);
-  if (process.env.GBRAIN_DEBUG_PRELOAD === '1') {
+  if (process.env.DEVMODEL_DEBUG_PRELOAD === '1') {
     console.error('[git-hermetic-preload] gpg signing disabled for test git processes');
   }
 }

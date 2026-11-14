@@ -24,7 +24,7 @@ import { appendFileSync, existsSync, readdirSync, readFileSync, statSync, writeF
 import { join } from 'node:path';
 import { buildSide, compare, DEFAULT_DELTAS, loadReceiptDir, parseDeltas, parseJUnit, type DeltaRow, type Receipt } from './ci-executed-counts.ts';
 
-export const MANIFEST_SCHEMA = 'gbrain-ci-manifest/v1';
+export const MANIFEST_SCHEMA = 'devmodel-ci-manifest/v1';
 export const MANIFEST_ARTIFACT = 'ci-manifest';
 export const MANIFEST_FILE = 'ci-manifest.json';
 export const MANIFEST_DOCS = 'docs/ci-red-runbook.md#ci-failure-manifest';

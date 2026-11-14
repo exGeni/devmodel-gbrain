@@ -29,16 +29,16 @@
 # optionally TAB, why it is retired).
 #
 # Nothing to scan (none of the paths above exist): prints
-# `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0, which `bun run verify` records
+# `DEVMODEL_CHECK_SKIPPED: <reason>` and exits 0, which `bun run verify` records
 # as a skip, not a pass.
 #
 # Run: bash scripts/check-retired-phrases.sh
 # Wired into `bun run verify` via package.json `check:retired-phrases`.
-# Self-test seam: GBRAIN_GUARD_ROOT points at a fixture tree.
+# Self-test seam: DEVMODEL_GUARD_ROOT points at a fixture tree.
 
 set -uo pipefail
 
-ROOT="${GBRAIN_GUARD_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+ROOT="${DEVMODEL_GUARD_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 cd "$ROOT" || exit 2
 
 SCAN=()
@@ -47,7 +47,7 @@ for p in CLAUDE.md AGENTS.md CONTRIBUTING.md docs skills scripts .github package
 done
 if [ "${#SCAN[@]}" -eq 0 ]; then
   echo "✓ retired phrases: nothing to scan under $ROOT"
-  echo "GBRAIN_CHECK_SKIPPED: none of the scanned docs, scripts or package.json exist"
+  echo "DEVMODEL_CHECK_SKIPPED: none of the scanned docs, scripts or package.json exist"
   exit 0
 fi
 

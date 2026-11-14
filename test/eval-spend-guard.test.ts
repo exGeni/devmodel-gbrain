@@ -34,7 +34,7 @@ const SCRIPT = join(ROOT, 'scripts/eval-spend-guard.sh');
 // A chmod-444 file is still appendable under CAP_DAC_OVERRIDE (root, some
 // sandboxes); the unwritable-ledger pin needs the kernel to honor the bits.
 function permissionsEnforced(): boolean {
-  const d = mkdtempSync(join(tmpdir(), 'gbrain-spend-guard-probe-'));
+  const d = mkdtempSync(join(tmpdir(), 'devmodel-spend-guard-probe-'));
   try {
     const f = join(d, 'ro');
     writeFileSync(f, '');
@@ -54,7 +54,7 @@ const PERMS_ENFORCED = permissionsEnforced();
 // Same idea for READ bits: a chmod-000 file is still readable under
 // CAP_DAC_OVERRIDE; the unreadable-ledger pin needs the kernel to honor it.
 function readPermissionsEnforced(): boolean {
-  const d = mkdtempSync(join(tmpdir(), 'gbrain-spend-guard-probe-'));
+  const d = mkdtempSync(join(tmpdir(), 'devmodel-spend-guard-probe-'));
   try {
     const f = join(d, 'noread');
     writeFileSync(f, '{"cost_usd":1}\n');
@@ -74,7 +74,7 @@ const READ_PERMS_ENFORCED = readPermissionsEnforced();
 let dir: string;
 let ledger: string;
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'gbrain-spend-guard-'));
+  dir = mkdtempSync(join(tmpdir(), 'devmodel-spend-guard-'));
   ledger = join(dir, 'receipts', 'spend.jsonl');
   // The guard requires the ledger to EXIST (a missing ledger is not a $0
   // ledger). Every test starts from an empty, present ledger; the missing-
@@ -91,7 +91,7 @@ function guardEnv(extraEnv: Record<string, string> = {}): Record<string, string>
     PATH: process.env.PATH ?? '/usr/bin:/bin',
     HOME: dir,
     TMPDIR: dir,
-    GBRAIN_EVAL_SPEND_LEDGER: ledger,
+    DEVMODEL_EVAL_SPEND_LEDGER: ledger,
     ...extraEnv,
   };
 }
@@ -185,8 +185,8 @@ describe('eval-spend-guard.sh', () => {
 
   test('actual-cost file written by the command overrides the estimate (bare number)', () => {
     const costFile = join(dir, 'actual.txt');
-    const r = run(['75', '3', '--', 'sh', '-c', `printf '1.2345\\n' > "$GBRAIN_EVAL_ACTUAL_COST_FILE"`], {
-      GBRAIN_EVAL_ACTUAL_COST_FILE: costFile,
+    const r = run(['75', '3', '--', 'sh', '-c', `printf '1.2345\\n' > "$DEVMODEL_EVAL_ACTUAL_COST_FILE"`], {
+      DEVMODEL_EVAL_ACTUAL_COST_FILE: costFile,
     });
     expect(r.status).toBe(0);
     const [done] = doneRows();
@@ -202,7 +202,7 @@ describe('eval-spend-guard.sh', () => {
       '--',
       'sh',
       '-c',
-      `test -n "$GBRAIN_EVAL_ACTUAL_COST_FILE" && printf '{"cost_usd": 0.5, "note":"x"}' > "$GBRAIN_EVAL_ACTUAL_COST_FILE"`,
+      `test -n "$DEVMODEL_EVAL_ACTUAL_COST_FILE" && printf '{"cost_usd": 0.5, "note":"x"}' > "$DEVMODEL_EVAL_ACTUAL_COST_FILE"`,
     ]);
     expect(r.status).toBe(0);
     expect(doneRows()[0].cost_usd).toBe(0.5);
@@ -240,7 +240,7 @@ describe('eval-spend-guard.sh', () => {
   // ── reservation / reconciliation (fail closed in TIME) ──────────────────
 
   test('the reservation is on the ledger while the command runs, blocks a concurrent guard, and is superseded by the reconciliation', async () => {
-    const g = start(['10', '6', '--', 'sh', '-c', 'sleep 2; printf 2 > "$GBRAIN_EVAL_ACTUAL_COST_FILE"']);
+    const g = start(['10', '6', '--', 'sh', '-c', 'sleep 2; printf 2 > "$DEVMODEL_EVAL_ACTUAL_COST_FILE"']);
     await waitFor(() => runningRows().length === 1, 'the reservation row');
     const [reserved] = ledgerRows();
     expect(ledgerRows().length).toBe(1);
@@ -327,7 +327,7 @@ describe('eval-spend-guard.sh', () => {
   test('a command that ignores SIGTERM is SIGKILLed after the grace period; the guard still reconciles (exit 143)', async () => {
     // The child traps TERM and would sleep on forever; with the grace knob at
     // 1 s the guard escalates to KILL instead of waiting unbounded.
-    const g = start(['10', '4', '--', 'bash', '-c', 'trap "" TERM; sleep 30'], { GBRAIN_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS: '1' });
+    const g = start(['10', '4', '--', 'bash', '-c', 'trap "" TERM; sleep 30'], { DEVMODEL_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS: '1' });
     await waitFor(() => g.stderr().includes('reserved $4.000000'), "the 'reserved $' line");
     // Let the child install its trap before we signal.
     await new Promise((r) => setTimeout(r, 300));
@@ -541,8 +541,8 @@ describe('eval-spend-guard.sh', () => {
 
   test("a cost file of '1.' / '.5' is normalized before it is written", () => {
     const costFile = join(dir, 'actual.txt');
-    const r = run(['75', '3', '--', 'sh', '-c', `printf '.5' > "$GBRAIN_EVAL_ACTUAL_COST_FILE"`], {
-      GBRAIN_EVAL_ACTUAL_COST_FILE: costFile,
+    const r = run(['75', '3', '--', 'sh', '-c', `printf '.5' > "$DEVMODEL_EVAL_ACTUAL_COST_FILE"`], {
+      DEVMODEL_EVAL_ACTUAL_COST_FILE: costFile,
     });
     expect(r.status).toBe(0);
     expect(readFileSync(ledger, 'utf-8')).toContain('"cost_usd":0.500000');
@@ -562,8 +562,8 @@ describe('eval-spend-guard.sh', () => {
     for (const [payload, note] of cases) {
       writeFileSync(ledger, '');
       const costFile = join(dir, 'actual.txt');
-      const r = run(['75', '3', '--', 'sh', '-c', `printf '%s' '${payload}' > "$GBRAIN_EVAL_ACTUAL_COST_FILE"`], {
-        GBRAIN_EVAL_ACTUAL_COST_FILE: costFile,
+      const r = run(['75', '3', '--', 'sh', '-c', `printf '%s' '${payload}' > "$DEVMODEL_EVAL_ACTUAL_COST_FILE"`], {
+        DEVMODEL_EVAL_ACTUAL_COST_FILE: costFile,
       });
       expect(r.status, payload).toBe(0);
       expect(r.stderr, payload).toContain(note);
@@ -586,7 +586,7 @@ describe('eval-spend-guard.sh', () => {
     expect(existsSync(ledger)).toBe(false); // NOT silently created
     expect(r.stderr).toContain('ledger does not exist');
     expect(r.stderr).toContain(ledger);
-    expect(r.stderr).toContain('GBRAIN_EVAL_SPEND_LEDGER_INIT=1');
+    expect(r.stderr).toContain('DEVMODEL_EVAL_SPEND_LEDGER_INIT=1');
   });
 
   test('the default ledger path (no env override) is also required to exist', () => {
@@ -597,20 +597,20 @@ describe('eval-spend-guard.sh', () => {
       env: { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: dir, TMPDIR: dir },
     });
     expect(r.status).toBe(3);
-    expect(r.stderr).toContain(join(dir, 'gbrain-lme-receipts', 'spend.jsonl'));
+    expect(r.stderr).toContain(join(dir, 'devmodel-eval-receipts', 'spend.jsonl'));
   });
 
-  test('GBRAIN_EVAL_SPEND_LEDGER_INIT=1 creates the ledger with a loud NEW LEDGER line, then launches', () => {
+  test('DEVMODEL_EVAL_SPEND_LEDGER_INIT=1 creates the ledger with a loud NEW LEDGER line, then launches', () => {
     rmSync(join(dir, 'receipts'), { recursive: true, force: true });
     const marker = join(dir, 'ran.txt');
-    const r = run(['75', '1', '--', 'sh', '-c', `echo ok > "${marker}"`], { GBRAIN_EVAL_SPEND_LEDGER_INIT: '1' });
+    const r = run(['75', '1', '--', 'sh', '-c', `echo ok > "${marker}"`], { DEVMODEL_EVAL_SPEND_LEDGER_INIT: '1' });
     expect(r.status).toBe(0);
     expect(existsSync(marker)).toBe(true);
     expect(r.stderr).toContain('NEW LEDGER');
     expect(r.stderr).toContain(ledger);
     expect(ledgerRows().length).toBe(2);
     // A second run with INIT still set does NOT re-announce (the file exists now).
-    const r2 = run(['75', '1', '--', 'true'], { GBRAIN_EVAL_SPEND_LEDGER_INIT: '1' });
+    const r2 = run(['75', '1', '--', 'true'], { DEVMODEL_EVAL_SPEND_LEDGER_INIT: '1' });
     expect(r2.status).toBe(0);
     expect(r2.stderr).not.toContain('NEW LEDGER');
     expect(ledgerRows().length).toBe(4);
@@ -654,7 +654,7 @@ describe('eval-spend-guard.sh process groups (#6776)', () => {
   test('a SIGTERMed guard stops the whole process group, including a grandchild that ignores SIGTERM (exit 143)', async () => {
     const leaderFile = join(dir, 'leader.pid');
     const kidFile = join(dir, 'kid.pid');
-    const g = start(['10', '4', '--', ...groupCommand(leaderFile, kidFile)], { GBRAIN_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS: '1' });
+    const g = start(['10', '4', '--', ...groupCommand(leaderFile, kidFile)], { DEVMODEL_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS: '1' });
     let kid = 0;
     let leader = 0;
     try {
@@ -677,7 +677,7 @@ describe('eval-spend-guard.sh process groups (#6776)', () => {
     const helperFile = join(dir, 'helper.pid');
     // Async: the leftover helper holds the guard's stdout/stderr open, so a
     // spawnSync would wait for the pipes rather than the guard.
-    const g = start(['10', '1', '--', 'sh', '-c', 'sleep 30 & echo $! > "' + helperFile + '"; exit 0'], { GBRAIN_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS: '1' });
+    const g = start(['10', '1', '--', 'sh', '-c', 'sleep 30 & echo $! > "' + helperFile + '"; exit 0'], { DEVMODEL_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS: '1' });
     const { code } = await g.exit;
     const helper = existsSync(helperFile) ? readPid(helperFile) : 0;
     try {

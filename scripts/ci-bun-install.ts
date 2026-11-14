@@ -6,7 +6,7 @@
  * a runner's install sat for 805 s, a registry or network stall,
  * and the job's 15-minute budget cancelled it a minute short of finishing, with
  * nothing naming the cause. This wrapper ends a stalled attempt after
- * GBRAIN_CI_INSTALL_ATTEMPT_S, retries once after a short pause, and on a
+ * DEVMODEL_CI_INSTALL_ATTEMPT_S, retries once after a short pause, and on a
  * second failure stops with a named `::error::`. Anything else it leaves as Bun
  * printed it: the output is inherited, and a failure that is not a stall (a
  * frozen-lockfile mismatch, an unreachable registry) is retried once and then
@@ -16,17 +16,17 @@
  *
  * Usage: bun scripts/ci-bun-install.ts [bun install flags...]
  * Environment (defaults are the CI values; the test overrides them):
- *   GBRAIN_CI_INSTALL_ATTEMPT_S      per-attempt bound in seconds, default 180
- *   GBRAIN_CI_INSTALL_RETRY_SLEEP_S  pause before the retry in seconds, default 10
- *   GBRAIN_CI_INSTALL_BUN            the Bun executable to run, default this one
+ *   DEVMODEL_CI_INSTALL_ATTEMPT_S      per-attempt bound in seconds, default 180
+ *   DEVMODEL_CI_INSTALL_RETRY_SLEEP_S  pause before the retry in seconds, default 10
+ *   DEVMODEL_CI_INSTALL_BUN            the Bun executable to run, default this one
  */
 import { runBounded } from './ci-bounded-run.ts';
 
 const flags = process.argv.slice(2);
 process.exit(await runBounded({
-  argv: [process.env.GBRAIN_CI_INSTALL_BUN || process.execPath, 'install', ...flags],
+  argv: [process.env.DEVMODEL_CI_INSTALL_BUN || process.execPath, 'install', ...flags],
   label: ['bun', 'install', ...flags].join(' '),
-  attemptSeconds: Number(process.env.GBRAIN_CI_INSTALL_ATTEMPT_S ?? 180),
-  retrySeconds: Number(process.env.GBRAIN_CI_INSTALL_RETRY_SLEEP_S ?? 10),
+  attemptSeconds: Number(process.env.DEVMODEL_CI_INSTALL_ATTEMPT_S ?? 180),
+  retrySeconds: Number(process.env.DEVMODEL_CI_INSTALL_RETRY_SLEEP_S ?? 10),
   hint: 'a registry or network stall; the install normally takes seconds',
 }));

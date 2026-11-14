@@ -108,7 +108,7 @@ env -u DATABASE_URL -u GBRAIN_DATABASE_URL bun run test:slow
 # 4-way shard contention makes subprocess tests several times slower per file
 # than a quiet run — timeout-class failures that pass alone. Scale the
 # per-test ceiling for the sharded lane (overridable).
-export GBRAIN_TEST_TIMEOUT_MULTIPLIER=\${GBRAIN_TEST_TIMEOUT_MULTIPLIER:-6}
+export DEVMODEL_TEST_TIMEOUT_MULTIPLIER=\${DEVMODEL_TEST_TIMEOUT_MULTIPLIER:-6}
 mkdir -p .context/ci-local-shards
 echo \"[runner] 4-shard parallel unit + E2E (xargs -P4)\"
 set +e

@@ -8,7 +8,7 @@ python3 - <<'PY'
 import os, pathlib, shutil, subprocess, tempfile
 root = pathlib.Path.cwd()
 paths = subprocess.check_output(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard']).split(b'\0')
-with tempfile.TemporaryDirectory(prefix='gbrain-secrets-') as directory:
+with tempfile.TemporaryDirectory(prefix='devmodel-secrets-') as directory:
     dest = pathlib.Path(directory)
     for raw in set(paths):
         if not raw:

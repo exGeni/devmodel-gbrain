@@ -59,7 +59,7 @@ describe('run-unit-shard.sh exclusion symmetry', () => {
 
 /** Exercise the real shell runner; fake only the expensive Bun test process. */
 function runGroupedFixture(count: number, mode = 'pass', shard = '') {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-unit-groups-test-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-unit-groups-test-'));
   try {
     for (const dir of ['scripts', 'scripts/lib', 'test', 'bin', 'calls']) mkdirSync(join(root, dir));
     copyFileSync(SHARD_SH, join(root, 'scripts/run-unit-shard.sh'));
@@ -105,7 +105,7 @@ exit "$failed"
     const result = spawnSync('bash', [join(root, 'scripts/run-unit-shard.sh'), '--max-concurrency', '3'], {
       cwd: root, encoding: 'utf8', timeout: 10_000,
       env: { ...process.env, PATH: `${join(root, 'bin')}:${process.env.PATH}`, FAKE_CALLS: join(root, 'calls'), FAKE_MODE: mode,
-        SHARD: shard, GBRAIN_TEST_TIMEOUT_MULTIPLIER: '2',
+        SHARD: shard, DEVMODEL_TEST_TIMEOUT_MULTIPLIER: '2',
         DATABASE_URL: 'postgres://example.invalid/test', GBRAIN_DATABASE_URL: 'postgres://example.invalid/test', GBRAIN_HOME: '/example/private-home' },
     });
     const calls = readdirSync(join(root, 'calls')).filter(f => f.endsWith('.args')).sort((a, b) => parseInt(a) - parseInt(b)).map(file => ({
@@ -162,7 +162,7 @@ describe('run-unit-shard.sh bounded processes', () => {
     expect(result.output).toContain('groups=2 complete_groups=2 files=2 pass=2 fail=0 skip=0 rc=0');
     const parent = readFileSync(join(REPO_ROOT, 'scripts/run-unit-parallel.sh'), 'utf8');
     const countFunction = parent.slice(parent.indexOf('bun_summary_count() {'), parent.indexOf('# shard_total_files:'));
-    const root = mkdtempSync(join(tmpdir(), 'gbrain-unit-counts-test-'));
+    const root = mkdtempSync(join(tmpdir(), 'devmodel-unit-counts-test-'));
     try {
       const log = join(root, 'shard.log');
       writeFileSync(log, result.output);
@@ -176,9 +176,9 @@ describe('run-unit-shard.sh bounded processes', () => {
     const parent = readFileSync(join(REPO_ROOT, 'scripts/run-unit-parallel.sh'), 'utf8');
     const gate = parent.slice(parent.indexOf('    grouped_incomplete=0'), parent.indexOf('    if [ "$grouped_incomplete" = "0" ]'));
     expect(gate).not.toBe('');
-    const root = mkdtempSync(join(tmpdir(), 'gbrain-unit-completion-test-'));
+    const root = mkdtempSync(join(tmpdir(), 'devmodel-unit-completion-test-'));
     try {
-      for (const logText of [result.output, result.output.replace(/^__gbrain_unit_shard__.*\n/gm, '')]) {
+      for (const logText of [result.output, result.output.replace(/^__devmodel_unit_shard__.*\n/gm, '')]) {
         const log = join(root, 'shard.log');
         writeFileSync(log, logText);
         const out = execFileSync('bash', ['-c', `SHARD_LOG="$1"\n${gate}\nprintf '%s' "$grouped_incomplete"`, 'gate-test', log], { encoding: 'utf8' });

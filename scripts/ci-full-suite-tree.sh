@@ -25,7 +25,7 @@ if [ -z "${MANIFEST:-}" ] || [ ! -s "$MANIFEST" ]; then
   problem="no ci-manifest.json from this run"
 else
   problem=$(jq -r --argjson id "$RUN_ID" --argjson attempt "$RUN_ATTEMPT" --arg sha "$sha" '
-    if .schema != "gbrain-ci-manifest/v1" then "ci-manifest.json has schema \(.schema)"
+    if .schema != "devmodel-ci-manifest/v1" then "ci-manifest.json has schema \(.schema)"
     elif .run_id != $id or .run_attempt != $attempt then "ci-manifest.json belongs to run \(.run_id) attempt \(.run_attempt), not run \($id) attempt \($attempt) (re-run the whole workflow, not only its failed jobs)"
     elif .sha != $sha then "ci-manifest.json belongs to commit \(.sha), not \($sha)"
     elif .complete != true then "ci-manifest.json is incomplete: \(.problems | join("; "))"

@@ -16,7 +16,7 @@ import {
   sourceE2ECorpus,
 } from "../../scripts/mine-shard-weights.ts";
 
-/** A checkout tracking `files`, the set the miner bounds its output by (GBRAIN_MINE_ROOT). */
+/** A checkout tracking `files`, the set the miner bounds its output by (DEVMODEL_MINE_ROOT). */
 function trackedCheckout(dir: string, files: string[]): NodeJS.ProcessEnv {
   const root = join(dir, 'checkout');
   mkdirSync(root, { recursive: true });
@@ -25,7 +25,7 @@ function trackedCheckout(dir: string, files: string[]): NodeJS.ProcessEnv {
     writeFileSync(join(root, file), '');
   }
   for (const args of [['init', '-q'], ['add', '-A']]) expect(spawnSync('git', args, { cwd: root, encoding: 'utf8' }).status).toBe(0);
-  return { ...process.env, GBRAIN_MINE_ROOT: root };
+  return { ...process.env, DEVMODEL_MINE_ROOT: root };
 }
 
 const SAMPLE = `test (1)\tUNKNOWN STEP\t2026-05-25T11:26:40.000000Z ##[group]test/alpha.test.ts:
@@ -255,8 +255,8 @@ describe('complete CI timing extraction', () => {
     // rendered GitHub log rewrites ::group:: into ##[group].
     const captured = unitLog.replaceAll('\tstep\t', '\tcapture\t').replaceAll('##[group]', '::group::');
     const marker = (seconds: number, text: string) => line('test (1)', seconds, text).replace('\tstep\t', '\tcapture\t');
-    const start = marker(0, '##[gbrain-capture-start]');
-    const complete = marker(7, '##[gbrain-capture-complete] exit=0');
+    const start = marker(0, '##[devmodel-capture-start]');
+    const complete = marker(7, '##[devmodel-capture-complete] exit=0');
     expect(Object.fromEntries(mineWeights(start + captured + complete, 'unit'))).toEqual({ 'test/one.test.ts': 2000, 'evals/two.test.ts': 3000 });
     for (const raw of [captured, start + captured, captured + complete, start + captured + complete.replace('exit=0', 'exit=7'), start + captured + complete + start, start + start + captured + complete]) {
       expect(() => mineWeights(raw, 'unit')).toThrow('capture completion');
@@ -290,7 +290,7 @@ describe('complete CI timing extraction', () => {
 });
 
 it('a failed CLI refresh leaves the existing output untouched', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-failure-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-mine-failure-'));
   try {
     const out = join(dir, 'weights');
     const input = join(dir, 'truncated.log');
@@ -311,7 +311,7 @@ it('a failed CLI refresh leaves the existing output untouched', () => {
 });
 
 it('partial serial artifacts preserve unobserved files; malformed durations cannot replace either output', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-serial-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-mine-serial-'));
   try {
     const out = join(dir, 'weights.json');
     const meta = join(dir, 'weights.metadata.json');
@@ -333,7 +333,7 @@ it('partial serial artifacts preserve unobserved files; malformed durations cann
 });
 
 it('GitHub refresh verifies every eligible job before replacing the complete lane', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-github-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-mine-github-'));
   try {
     const bin = join(dir, 'bin');
     const artifacts = join(dir, 'artifacts');
@@ -346,8 +346,8 @@ it('GitHub refresh verifies every eligible job before replacing the complete lan
     const out = join(dir, 'weights.json');
     const meta = join(dir, 'weights.metadata.json');
     const line = (job: string, text: string) => `${job}\tcapture\t2026-05-25T11:26:50.000Z ${text}\n`;
-    const complete = (job: string, file: string) => line(job, '##[gbrain-capture-start]') + line(job, `::group::${file}:`) + line(job, '0 fail')
-      + line(job, 'Ran 1 test across 1 file. [1ms]') + line(job, '##[gbrain-capture-complete] exit=0');
+    const complete = (job: string, file: string) => line(job, '##[devmodel-capture-start]') + line(job, `::group::${file}:`) + line(job, '0 fail')
+      + line(job, 'Ran 1 test across 1 file. [1ms]') + line(job, '##[devmodel-capture-complete] exit=0');
     const artifact = (shard: number, body: string | null) => {
       const path = join(artifacts, `timings-unit-${shard}.log`);
       if (body === null) rmSync(path, { force: true }); else writeFileSync(path, body);
@@ -358,7 +358,7 @@ it('GitHub refresh verifies every eligible job before replacing the complete lan
     writeFileSync(meta, '{"existing":true}\n');
     const args = [join(import.meta.dir, '../../scripts/mine-shard-weights.ts'), '--run', '123', '--out', out];
     const env = { ...trackedCheckout(dir, ['test/one.test.ts', 'test/two.test.ts']), PATH: `${bin}:${process.env.PATH}`, FIXTURE_GH_INFO: info, FIXTURE_GH_ARTIFACTS: artifacts };
-    for (const partial of [null, line('test (2)', '##[gbrain-capture-start]') + line('test (2)', 'snapshot setup started') + line('test (2)', '##[gbrain-capture-complete] exit=0')]) {
+    for (const partial of [null, line('test (2)', '##[devmodel-capture-start]') + line('test (2)', 'snapshot setup started') + line('test (2)', '##[devmodel-capture-complete] exit=0')]) {
       artifact(2, partial);
       expect(spawnSync(process.execPath, args, { env, encoding: 'utf8' }).status).not.toBe(0);
       expect(readFileSync(out, 'utf8')).toBe('{"test/old.test.ts":42}\n');
@@ -378,16 +378,16 @@ it('GitHub unit refresh requires each shard capture artifact to record a success
   const captured = (text: string) => `${job}\tcapture\t2026-10-10T06:00:01.000Z ${text}\n`;
   const body = (line: (text: string) => string) => line('::group::test/one.test.ts:') + line(' 0 fail') + line('Ran 1 test across 1 file. [1ms]');
   const opts = { expectedJobs: [job], requireCapture: true };
-  for (const raw of [body(github), body(captured), captured('##[gbrain-capture-start]') + body(captured),
-    captured('##[gbrain-capture-start]') + body(captured) + captured('##[gbrain-capture-complete] exit=1')]) {
+  for (const raw of [body(github), body(captured), captured('##[devmodel-capture-start]') + body(captured),
+    captured('##[devmodel-capture-start]') + body(captured) + captured('##[devmodel-capture-complete] exit=1')]) {
     expect(() => mineWeights(raw, 'unit', opts)).toThrow('capture completion');
   }
-  expect([...mineWeights(captured('##[gbrain-capture-start]') + body(captured) + captured('##[gbrain-capture-complete] exit=0'), 'unit', opts).keys()]).toEqual(['test/one.test.ts']);
+  expect([...mineWeights(captured('##[devmodel-capture-start]') + body(captured) + captured('##[devmodel-capture-complete] exit=0'), 'unit', opts).keys()]).toEqual(['test/one.test.ts']);
   expect(mineWeights(body(github), 'unit', { expectedJobs: [job] }).size).toBe(1);
 });
 
 it('GitHub serial refresh reads each job log by id instead of the whole-run log', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-serial-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-mine-serial-'));
   try {
     const bin = join(dir, 'bin');
     mkdirSync(bin);
@@ -410,7 +410,7 @@ it('GitHub serial refresh reads each job log by id instead of the whole-run log'
 });
 
 it('E2E CLI pins source, attempt and job provenance and preserves both outputs on refused evidence', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-full-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-mine-full-'));
   try {
     const repo = join(import.meta.dir, '../..');
     // The corpus is whatever the checkout's own run-e2e.sh discovers: build a
@@ -426,8 +426,8 @@ it('E2E CLI pins source, attempt and job provenance and preserves both outputs o
     inCheckout('add', '-A');
     inCheckout('commit', '-q', '-m', 'fixture corpus');
     const sha = inCheckout('rev-parse', 'HEAD').stdout.trim();
-    // The module binds its checkout at import (GBRAIN_MINE_ROOT), so ask it in a child.
-    const discover = (commit: string) => spawnSync(process.execPath, ['-e', `import { sourceE2ECorpus } from ${JSON.stringify(join(repo, 'scripts/mine-shard-weights.ts'))}; console.log(JSON.stringify(sourceE2ECorpus(process.argv[1])));`, commit], { cwd: checkout, encoding: 'utf8', env: { ...process.env, GBRAIN_MINE_ROOT: checkout } });
+    // The module binds its checkout at import (DEVMODEL_MINE_ROOT), so ask it in a child.
+    const discover = (commit: string) => spawnSync(process.execPath, ['-e', `import { sourceE2ECorpus } from ${JSON.stringify(join(repo, 'scripts/mine-shard-weights.ts'))}; console.log(JSON.stringify(sourceE2ECorpus(process.argv[1])));`, commit], { cwd: checkout, encoding: 'utf8', env: { ...process.env, DEVMODEL_MINE_ROOT: checkout } });
     const discovered = discover(sha);
     expect(discovered.status, discovered.stderr).toBe(0);
     const corpus = JSON.parse(discovered.stdout) as string[];
@@ -452,7 +452,7 @@ esac
     const line = (text: string) => `e2e\tstep\t2026-09-24T06:00:00.000Z ${text}\n`;
     const files = corpus.map(path => line(`=== ${path.split('/').at(-1)} ===`) + line(' 0 fail') + line('Ran 1 test across 1 file. [1.00ms]'));
     const complete = files.join('') + line(`Files: ${files.length} total, ${files.length} passed, 0 failed`);
-    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_GH_INFO: infoPath, FIXTURE_GH_LOG: logPath, GBRAIN_MINE_ROOT: checkout };
+    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_GH_INFO: infoPath, FIXTURE_GH_LOG: logPath, DEVMODEL_MINE_ROOT: checkout };
     const base = [join(repo, 'scripts/mine-shard-weights.ts'), '--lane', 'e2e', '--out', out];
     const run = (args = ['--run', '123']) => spawnSync(process.execPath, [...base, ...args], { env, encoding: 'utf8', cwd: checkout });
     writeFileSync(out, '{"keep":123}\n');
@@ -501,7 +501,7 @@ esac
 }, 30000);
 
 it('an E2E lane that ran no files is refused, from a log or a run, and leaves both outputs untouched', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-empty-e2e-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-mine-empty-e2e-'));
   try {
     const repo = join(import.meta.dir, '../..');
     const out = join(dir, 'weights.json');
@@ -525,7 +525,7 @@ it('an E2E lane that ran no files is refused, from a log or a run, and leaves bo
     const infoPath = join(dir, 'run.json');
     writeFileSync(infoPath, JSON.stringify({ attempt: 1, conclusion: 'success', headSha: sha, jobs: [{ name: 'e2e', databaseId: 456, conclusion: 'success' }] }));
     writeFileSync(input, 'e2e\tRun the E2E lane\t2026-11-14T06:00:00.000Z No files for shard (unsharded); exiting clean.\n');
-    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, GBRAIN_MINE_ROOT: checkout, FIXTURE_GH_INFO: infoPath, FIXTURE_GH_LOG: input };
+    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, DEVMODEL_MINE_ROOT: checkout, FIXTURE_GH_INFO: infoPath, FIXTURE_GH_LOG: input };
     writeFileSync(out, '{"keep":123}\n');
     writeFileSync(meta, '{"prior":true}\n');
     const mine = (args: string[]) => spawnSync(process.execPath, [join(repo, 'scripts/mine-shard-weights.ts'), '--lane', 'e2e', '--out', out, ...args], { env, encoding: 'utf8', cwd: checkout });
@@ -540,7 +540,7 @@ it('an E2E lane that ran no files is refused, from a log or a run, and leaves bo
 });
 
 it('GitHub refresh mines every shard of a packed unit job (test.yml runs two per runner)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-packed-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-mine-packed-'));
   try {
     const bin = join(dir, 'bin');
     const artifacts = join(dir, 'artifacts');
@@ -551,8 +551,8 @@ it('GitHub refresh mines every shard of a packed unit job (test.yml runs two per
     const info = join(dir, 'run.json');
     const out = join(dir, 'weights.json');
     const line = (job: string, text: string) => `${job}\tcapture\t2026-05-25T11:26:50.000Z ${text}\n`;
-    const complete = (job: string, file: string) => line(job, '##[gbrain-capture-start]') + line(job, `::group::${file}:`) + line(job, '0 fail')
-      + line(job, 'Ran 1 test across 1 file. [1ms]') + line(job, '##[gbrain-capture-complete] exit=0');
+    const complete = (job: string, file: string) => line(job, '##[devmodel-capture-start]') + line(job, `::group::${file}:`) + line(job, '0 fail')
+      + line(job, 'Ran 1 test across 1 file. [1ms]') + line(job, '##[devmodel-capture-complete] exit=0');
     writeFileSync(join(artifacts, 'timings-unit-1.log'), complete('test (1)', 'test/one.test.ts'));
     writeFileSync(join(artifacts, 'timings-unit-3.log'), complete('test (3)', 'test/three.test.ts'));
     writeFileSync(join(artifacts, 'timings-unit-4.log'), complete('test (4)', 'test/four.test.ts'));
@@ -570,7 +570,7 @@ it('GitHub refresh mines every shard of a packed unit job (test.yml runs two per
 });
 
 it('a refresh from several GitHub runs takes each file\'s median, so one fast or slow run or runner cannot set the weights', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-runs-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-mine-runs-'));
   try {
     const bin = join(dir, 'bin');
     const fixtures = join(dir, 'fixtures');
@@ -581,9 +581,9 @@ it('a refresh from several GitHub runs takes each file\'s median, so one fast or
     const line = (job: string, ms: number, text: string) => `${job}\tcapture\t${at(ms)} ${text}\n`;
     const shard = (job: string, files: [string, number][]) => {
       let t = 0;
-      let body = line(job, t, '##[gbrain-capture-start]');
+      let body = line(job, t, '##[devmodel-capture-start]');
       for (const [file, ms] of files) { body += line(job, t, `::group::${file}:`); t += ms; }
-      return body + line(job, t, ' 0 fail') + line(job, t, `Ran ${files.length} tests across ${files.length} files. [1ms]`) + line(job, t, '##[gbrain-capture-complete] exit=0');
+      return body + line(job, t, ' 0 fail') + line(job, t, `Ran ${files.length} tests across ${files.length} files. [1ms]`) + line(job, t, '##[devmodel-capture-complete] exit=0');
     };
     const run = (id: string, commit: string, files: [string, number][], conclusion = 'success') => {
       writeFileSync(join(fixtures, `${id}.json`), JSON.stringify({ conclusion, headSha: commit, jobs: [{ name: 'test (1, 2)', conclusion }] }));
@@ -622,7 +622,7 @@ it('a refresh from several GitHub runs takes each file\'s median, so one fast or
 });
 
 it('a merging source drops the existing entry of a test file git no longer tracks (#8103)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-merge-prune-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-mine-merge-prune-'));
   try {
     const out = join(dir, 'weights.json');
     const input = join(dir, 'serial.log');

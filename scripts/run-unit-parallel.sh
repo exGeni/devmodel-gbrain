@@ -13,18 +13,18 @@
 #
 # Env overrides:
 #   SHARDS=N                     same as --shards
-#   GBRAIN_TEST_SHARD_TIMEOUT    per-shard wallclock cap, seconds (default 3000)
-#   GBRAIN_TEST_SHARD_KILL_AFTER grace after TERM before KILL (default 30)
-#   GBRAIN_TEST_MAX_CONCURRENCY  passed through to bun test (default 4)
-#   GBRAIN_TEST_MEM_PER_FILE_MB  memory budget per concurrent test file used by
+#   DEVMODEL_TEST_SHARD_TIMEOUT    per-shard wallclock cap, seconds (default 3000)
+#   DEVMODEL_TEST_SHARD_KILL_AFTER grace after TERM before KILL (default 30)
+#   DEVMODEL_TEST_MAX_CONCURRENCY  passed through to bun test (default 4)
+#   DEVMODEL_TEST_MEM_PER_FILE_MB  memory budget per concurrent test file used by
 #                                the adaptive sizing below (default 1536)
-#   GBRAIN_TEST_NO_MEM_ADAPT=1   disable memory-aware concurrency reduction
-#   GBRAIN_TEST_NO_OOM_FALLBACK=1 disable the serial OOM-rescue pass
+#   DEVMODEL_TEST_NO_MEM_ADAPT=1   disable memory-aware concurrency reduction
+#   DEVMODEL_TEST_NO_OOM_FALLBACK=1 disable the serial OOM-rescue pass
 #
 # Memory safety (two layers; both default-on):
 #   1. ADAPTIVE SIZING — before spawning, total concurrency (shards ×
 #      intra-shard --max-concurrency) is capped to what available memory can
-#      hold at GBRAIN_TEST_MEM_PER_FILE_MB per concurrent file. Concurrent
+#      hold at DEVMODEL_TEST_MEM_PER_FILE_MB per concurrent file. Concurrent
 #      Conductor workspaces running their own suites shrink the budget
 #      automatically instead of OOMing each other.
 #   2. SERIAL PHANTOM RESCUE — two phantom classes are re-run serially
@@ -99,7 +99,7 @@ if [ -z "${SHARDS_OVERRIDE:-}" ] && [ -z "${SHARDS:-}" ] && [ "$N" -gt 4 ]; then
   N=4
 fi
 
-INTRA_CONC="${MAX_CONCURRENCY_OVERRIDE:-${GBRAIN_TEST_MAX_CONCURRENCY:-4}}"
+INTRA_CONC="${MAX_CONCURRENCY_OVERRIDE:-${DEVMODEL_TEST_MAX_CONCURRENCY:-4}}"
 # Per-shard cap: 3000s. The split balances file COUNT, not weight — the
 # heaviest count-balanced shard is still making steady per-test progress
 # under 4-way contention while its siblings finish much earlier. 3000s keeps
@@ -107,9 +107,9 @@ INTRA_CONC="${MAX_CONCURRENCY_OVERRIDE:-${GBRAIN_TEST_MAX_CONCURRENCY:-4}}"
 # still die at bun's per-test timeout, mid-run stalls still hit this cap, and
 # post-completion exit-hangs are classified separately (see the EXIT-HANG
 # block below). The cap must track suite growth. Override via
-# GBRAIN_TEST_SHARD_TIMEOUT=N.
-SHARD_TIMEOUT="${GBRAIN_TEST_SHARD_TIMEOUT:-3000}"
-SHARD_KILL_AFTER="${GBRAIN_TEST_SHARD_KILL_AFTER:-30}"
+# DEVMODEL_TEST_SHARD_TIMEOUT=N.
+SHARD_TIMEOUT="${DEVMODEL_TEST_SHARD_TIMEOUT:-3000}"
+SHARD_KILL_AFTER="${DEVMODEL_TEST_SHARD_KILL_AFTER:-30}"
 if ! printf '%s' "$SHARD_KILL_AFTER" | grep -qE '^[0-9]+$' || [ "$SHARD_KILL_AFTER" -lt 1 ]; then
   echo "ERROR: invalid shard kill-after: $SHARD_KILL_AFTER" >&2; exit 2
 fi
@@ -121,11 +121,11 @@ fi
 # ran their suites at the same time. Cap total concurrency to what's
 # actually available, keeping a 4GB reserve for the OS + bun itself.
 # Applies to explicit --shards overrides too (an operator who wants an
-# over-committed run sets GBRAIN_TEST_NO_MEM_ADAPT=1).
+# over-committed run sets DEVMODEL_TEST_NO_MEM_ADAPT=1).
 # ──────────────────────────────────────────────────────────────────────────
-MEM_PER_FILE_MB="${GBRAIN_TEST_MEM_PER_FILE_MB:-1536}"
+MEM_PER_FILE_MB="${DEVMODEL_TEST_MEM_PER_FILE_MB:-1536}"
 MEM_NOTE=""
-if [ "${GBRAIN_TEST_NO_MEM_ADAPT:-0}" != "1" ]; then
+if [ "${DEVMODEL_TEST_NO_MEM_ADAPT:-0}" != "1" ]; then
   AVAIL_MB=$(detect_available_mem_mb)
   if [ "${AVAIL_MB:-0}" -gt 0 ] 2>/dev/null; then
     BUDGET_MB=$((AVAIL_MB - 4096))
@@ -169,9 +169,9 @@ if mkdir -p .context/test-shards 2>/dev/null; then
   FAILURES_LOG=".context/test-failures.log"
   SUMMARY_FILE=".context/test-summary.txt"
 else
-  LOG_DIR="/tmp/gbrain-test-shards-$$"
-  FAILURES_LOG="/tmp/gbrain-test-failures.log"
-  SUMMARY_FILE="/tmp/gbrain-test-summary.txt"
+  LOG_DIR="/tmp/devmodel-test-shards-$$"
+  FAILURES_LOG="/tmp/devmodel-test-failures.log"
+  SUMMARY_FILE="/tmp/devmodel-test-summary.txt"
   mkdir -p "$LOG_DIR" || { echo "ERROR: cannot create log dir" >&2; exit 2; }
 fi
 # Clear from prior run.
@@ -179,12 +179,12 @@ rm -f "$LOG_DIR"/shard-*.log "$LOG_DIR"/shard-*.exit "$LOG_DIR"/shard-*.wedged "
 : > "$FAILURES_LOG"
 : > "$SUMMARY_FILE"
 # Executed-test receipts (X2): on by default for this loop, under
-# .context/test-receipts (cleared per run) unless GBRAIN_TEST_RECEIPT_DIR names
+# .context/test-receipts (cleared per run) unless DEVMODEL_TEST_RECEIPT_DIR names
 # another directory. `bun scripts/ci-executed-counts.ts --head-dir <dir>`
 # reads them; the shard and serial runners each write their own.
-if [ "$DRY_RUN" = "0" ] && [ -z "${GBRAIN_TEST_RECEIPT_DIR:-}" ] && [ "$LOG_DIR" = ".context/test-shards" ]; then
+if [ "$DRY_RUN" = "0" ] && [ -z "${DEVMODEL_TEST_RECEIPT_DIR:-}" ] && [ "$LOG_DIR" = ".context/test-shards" ]; then
   rm -rf .context/test-receipts
-  GBRAIN_TEST_RECEIPT_DIR=.context/test-receipts
+  DEVMODEL_TEST_RECEIPT_DIR=.context/test-receipts
 fi
 receipts_init unit || exit 2
 
@@ -280,12 +280,12 @@ for i in $(seq 1 "$N"); do
     date +%s > "$LOG_DIR/shard-$i.start"
     if [ -n "$TIMEOUT_BIN" ]; then
       "$TIMEOUT_BIN" --signal=TERM --kill-after="${SHARD_KILL_AFTER}s" "${SHARD_TIMEOUT}s" \
-        env SHARD="$i/$N" GBRAIN_TEST_RECEIPT_DIR="$TEST_RECEIPT_DIR" \
+        env SHARD="$i/$N" DEVMODEL_TEST_RECEIPT_DIR="$TEST_RECEIPT_DIR" \
         bash scripts/run-unit-shard.sh --max-concurrency="$INTRA_CONC" \
         > "$SHARD_LOG" 2>&1
       rc=$?
     else
-      env SHARD="$i/$N" GBRAIN_TEST_RECEIPT_DIR="$TEST_RECEIPT_DIR" \
+      env SHARD="$i/$N" DEVMODEL_TEST_RECEIPT_DIR="$TEST_RECEIPT_DIR" \
         bash scripts/run-unit-shard.sh --max-concurrency="$INTRA_CONC" \
         > "$SHARD_LOG" 2>&1 &
       pid=$!
@@ -363,7 +363,7 @@ bun_summary_count() {
   local label="$1"; local file="$2"
   if [ ! -f "$file" ]; then echo 0; return; fi
   strip_ansi "$file" | awk -v label="$label" '
-    /^__gbrain_unit_shard__ / {
+    /^__devmodel_unit_shard__ / {
       for (i = 2; i <= NF; i++) {
         split($i, pair, "=")
         if (pair[1] == label) { aggregate = pair[2]; have_aggregate = 1 }
@@ -625,7 +625,7 @@ for i in $(seq 1 "$N"); do
   TOTAL_SKIP=$((TOTAL_SKIP + skip_count))
 
   shard_oom=0
-  if [ "$rc" != "0" ] && [ "${GBRAIN_TEST_NO_OOM_FALLBACK:-0}" != "1" ] \
+  if [ "$rc" != "0" ] && [ "${DEVMODEL_TEST_NO_OOM_FALLBACK:-0}" != "1" ] \
      && [ -f "$SHARD_LOG" ] && oom_signature_in_log "$SHARD_LOG"; then
     shard_oom=1
   fi
@@ -638,7 +638,7 @@ for i in $(seq 1 "$N"); do
   # killed BY the runner at ~SHARD_TIMEOUT and stays red. Externally-killed
   # shards are phantoms: queue for the serial rescue lane like OOM.
   shard_external_kill=0
-  if [ "$shard_oom" = "0" ] && [ "${GBRAIN_TEST_NO_OOM_FALLBACK:-0}" != "1" ] \
+  if [ "$shard_oom" = "0" ] && [ "${DEVMODEL_TEST_NO_OOM_FALLBACK:-0}" != "1" ] \
      && { [ "$rc" = "143" ] || [ "$rc" = "137" ]; }; then
     s_start=$(cat "$LOG_DIR/shard-$i.start" 2>/dev/null) || s_start=""
     s_end=$(cat "$LOG_DIR/shard-$i.end" 2>/dev/null) || s_end=""
@@ -675,7 +675,7 @@ for i in $(seq 1 "$N"); do
     # are excluded so they reach the serial rescue queue below instead of
     # being absolved without a re-run.
     grouped_incomplete=0
-    if grep -q '^__gbrain_unit_group_start__ ' "$SHARD_LOG" && ! grep -q '^__gbrain_unit_shard__ .* rc=0$' "$SHARD_LOG"; then
+    if grep -q '^__devmodel_unit_group_start__ ' "$SHARD_LOG" && ! grep -q '^__devmodel_unit_shard__ .* rc=0$' "$SHARD_LOG"; then
       grouped_incomplete=1
     fi
     if [ "$grouped_incomplete" = "0" ] && [ "$fail_count" = "0" ] && [ "$inline_fails" = "0" ] && [ "$idle_secs" -ge 300 ] \
@@ -792,12 +792,12 @@ SERIAL_FILES_COUNT=0
 SERIAL_FILES_COUNT=$(find test -name '*.serial.test.ts' -not -path 'test/e2e/*' 2>/dev/null | wc -l | tr -d ' ')
 if [ "$SERIAL_FILES_COUNT" -gt 0 ]; then
   echo "════════════ serial pass ($SERIAL_FILES_COUNT files) ════════════"
-  GBRAIN_TEST_RECEIPT_DIR="$TEST_RECEIPT_DIR" bash scripts/run-serial-tests.sh > "$LOG_DIR/serial.log" 2>&1
+  DEVMODEL_TEST_RECEIPT_DIR="$TEST_RECEIPT_DIR" bash scripts/run-serial-tests.sh > "$LOG_DIR/serial.log" 2>&1
   SERIAL_RC=$?
   cat "$LOG_DIR/serial.log"
   if [ "$SERIAL_RC" != "0" ]; then
     TOTAL_RC=1
-    if [ "${GBRAIN_TEST_NO_OOM_FALLBACK:-0}" != "1" ] \
+    if [ "${DEVMODEL_TEST_NO_OOM_FALLBACK:-0}" != "1" ] \
        && { grep -qE "$OOM_RE" "$LOG_DIR/serial.log" || [ "$EXTERNAL_KILL_ANY" = "1" ]; }; then
       # Serial failures are rescue-eligible ONLY with their own OOM signature
       # or when an externally-killed shard ran earlier in this invocation

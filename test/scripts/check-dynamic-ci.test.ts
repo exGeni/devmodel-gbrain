@@ -20,30 +20,30 @@ const filterStep = (doc: Doc) => doc.jobs['dynamic-ci']!.steps.find((s: { uses?:
 
 describe('check-dynamic-ci.ts', () => {
   test('the real workflows pass', () => {
-    const r = spawnSync(process.execPath, [join(REPO, 'scripts/check-dynamic-ci.ts')], { encoding: 'utf8', env: { ...process.env, GBRAIN_GUARD_ROOT: '' } });
+    const r = spawnSync(process.execPath, [join(REPO, 'scripts/check-dynamic-ci.ts')], { encoding: 'utf8', env: { ...process.env, DEVMODEL_GUARD_ROOT: '' } });
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(r.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
     expect(checkWorkflow('test.yml', real('test.yml'))).toEqual([]);
   });
 
   test('a tree with no workflow file reports a skip, not a pass', () => {
-    const root = mkdtempSync(join(tmpdir(), 'gbrain-dynamic-ci-'));
+    const root = mkdtempSync(join(tmpdir(), 'devmodel-dynamic-ci-'));
     try {
-      const guard = () => spawnSync(process.execPath, [join(REPO, 'scripts/check-dynamic-ci.ts')], { encoding: 'utf8', env: { ...process.env, GBRAIN_GUARD_ROOT: root } });
+      const guard = () => spawnSync(process.execPath, [join(REPO, 'scripts/check-dynamic-ci.ts')], { encoding: 'utf8', env: { ...process.env, DEVMODEL_GUARD_ROOT: root } });
       const absent = guard();
       expect(absent.status, absent.stderr).toBe(0);
-      expect(absent.stdout).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
+      expect(absent.stdout).toMatch(/^DEVMODEL_CHECK_SKIPPED: \S/m);
       expect(absent.stdout).not.toContain('check-dynamic-ci: ok');
       mkdirSync(join(root, '.github/workflows'), { recursive: true });
       writeFileSync(join(root, '.github/workflows/notes.txt'), 'not a workflow\n');
       const empty = guard();
       expect(empty.status, empty.stderr).toBe(0);
-      expect(empty.stdout).toContain('GBRAIN_CHECK_SKIPPED: no workflow files under .github/workflows');
+      expect(empty.stdout).toContain('DEVMODEL_CHECK_SKIPPED: no workflow files under .github/workflows');
       writeFileSync(join(root, '.github/workflows/ci.yml'), 'on: push\njobs: {}\n');
       const present = guard();
       expect(present.status, present.stderr).toBe(0);
       expect(present.stdout).toContain('check-dynamic-ci: ok (1 workflows)');
-      expect(present.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+      expect(present.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

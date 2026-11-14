@@ -7,9 +7,9 @@
 # UNIT_SHARDS shards on one 4-vCPU runner: a shard is one bun process that
 # keeps 1.1-1.5 cores busy, so a lone shard leaves most of the runner idle.
 # The partition, the coverage lanes and the artifacts stay per shard. Shard s
-# writes everything under $GBRAIN_SHARD_PACK_DIR/<s>/:
+# writes everything under $DEVMODEL_SHARD_PACK_DIR/<s>/:
 #   coverage/    its COVERAGE_DIR (lcov and lane-manifest.json, lane shard-<s>)
-#   receipts/    its GBRAIN_TEST_RECEIPT_DIR
+#   receipts/    its DEVMODEL_TEST_RECEIPT_DIR
 #   unit.log     its timing capture as job "test (<s>)" (scripts/capture-test-log.ts)
 #   console.txt  its console output, printed as soon as the shard ends so two
 #                shards never interleave their lines or Bun's annotations
@@ -25,7 +25,7 @@ if [ "$#" -lt 2 ]; then
   echo "usage: scripts/test-shard-pack.sh <total-shards> <shard-index>..." >&2
   exit 2
 fi
-: "${GBRAIN_SHARD_PACK_DIR:?set GBRAIN_SHARD_PACK_DIR to the directory for the per-shard outputs}"
+: "${DEVMODEL_SHARD_PACK_DIR:?set DEVMODEL_SHARD_PACK_DIR to the directory for the per-shard outputs}"
 
 cd "$(dirname "$0")/.."
 
@@ -39,12 +39,12 @@ for s in "$@"; do
 done
 
 for s in "$@"; do
-  dir="$GBRAIN_SHARD_PACK_DIR/$s"
+  dir="$DEVMODEL_SHARD_PACK_DIR/$s"
   mkdir -p "$dir"
   rm -f "$dir/exit"
   (
     rc=0
-    COVERAGE_DIR="$dir/coverage" GBRAIN_TEST_RECEIPT_DIR="$dir/receipts" \
+    COVERAGE_DIR="$dir/coverage" DEVMODEL_TEST_RECEIPT_DIR="$dir/receipts" \
       bun scripts/capture-test-log.ts --job "test ($s)" --out "$dir/unit.log" -- \
       bash scripts/test-shard.sh "$s" "$total" > "$dir/console.txt" 2>&1 || rc=$?
     echo "$rc" > "$dir/exit"
@@ -56,7 +56,7 @@ pending=("$@")
 while [ "${#pending[@]}" -gt 0 ]; do
   running=()
   for s in "${pending[@]}"; do
-    dir="$GBRAIN_SHARD_PACK_DIR/$s"
+    dir="$DEVMODEL_SHARD_PACK_DIR/$s"
     if [ ! -f "$dir/exit" ]; then
       running+=("$s")
       continue

@@ -40,7 +40,7 @@ beforeAll(() => {
   // Build a tiny repo-shaped tempdir with the wrapper scripts copied in
   // and 4 fixture test files (3 pass, 1 fail). The wrapper's `find test`
   // expression will pick them up via cwd.
-  TMPROOT = mkdtempSync(join(tmpdir(), 'gbrain-parallel-test-'));
+  TMPROOT = mkdtempSync(join(tmpdir(), 'devmodel-parallel-test-'));
   mkdirSync(join(TMPROOT, 'scripts', 'lib'), { recursive: true });
   mkdirSync(join(TMPROOT, 'test'), { recursive: true });
   copyFileSync(TESTENV_SH_SRC, join(TMPROOT, 'scripts', 'lib', 'test-env.sh'));
@@ -81,7 +81,7 @@ function runWrapper(extraArgs: string[] = [], env: Record<string, string> = {}):
     // Shard-mechanics tests pin explicit --shards behavior with tiny
     // synthetic files; disable mem-adaptation so a RAM-limited runner (CI's
     // ~7GB) can't collapse 2 shards -> 1 and break the shard 1/2 expectations.
-    { cwd: TMPROOT, encoding: 'utf-8', env: { ...process.env, GBRAIN_TEST_NO_MEM_ADAPT: '1', ...env } },
+    { cwd: TMPROOT, encoding: 'utf-8', env: { ...process.env, DEVMODEL_TEST_NO_MEM_ADAPT: '1', ...env } },
   );
   return {
     code: result.status ?? -1,
@@ -172,7 +172,7 @@ describe('failing-on-purpose', () => {
 describe('run-unit-parallel.sh timeout escalation contract', () => {
   it('gives a timed-out shard 30 seconds after TERM, then forces KILL', () => {
     const source = readFileSync(PARALLEL_SH_SRC, 'utf-8');
-    expect(source).toContain('SHARD_KILL_AFTER="${GBRAIN_TEST_SHARD_KILL_AFTER:-30}"');
+    expect(source).toContain('SHARD_KILL_AFTER="${DEVMODEL_TEST_SHARD_KILL_AFTER:-30}"');
     expect(source).toContain('--signal=TERM --kill-after="${SHARD_KILL_AFTER}s"');
     expect(source).toContain('sleep "$SHARD_KILL_AFTER" && kill -KILL "$pid"');
   });
@@ -185,7 +185,7 @@ describe('run-unit-parallel.sh timeout escalation contract', () => {
 
 describe('run-unit-parallel.sh operator-interrupt cleanup', () => {
   it('kills an interrupt-resistant shard when its terminal group receives SIGINT', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gbrain-parallel-interrupt-'));
+    const root = mkdtempSync(join(tmpdir(), 'devmodel-parallel-interrupt-'));
     let child: ReturnType<typeof spawn> | undefined;
     let bunPid = 0;
     try {
@@ -214,8 +214,8 @@ while true; do sleep 1; done
         env: {
           ...process.env,
           PATH: `${join(root, 'bin')}:${process.env.PATH ?? ''}`,
-          GBRAIN_TEST_NO_MEM_ADAPT: '1',
-          GBRAIN_TEST_SHARD_TIMEOUT: '300',
+          DEVMODEL_TEST_NO_MEM_ADAPT: '1',
+          DEVMODEL_TEST_SHARD_TIMEOUT: '300',
         },
         detached: true,
         stdio: 'ignore',
@@ -274,7 +274,7 @@ describe('run-unit-parallel.sh no-timeout-binary fallback (rc from shard wait, n
   let FENV: Record<string, string>;
 
   beforeAll(() => {
-    FROOT = mkdtempSync(join(tmpdir(), 'gbrain-parallel-fallback-'));
+    FROOT = mkdtempSync(join(tmpdir(), 'devmodel-parallel-fallback-'));
     mkdirSync(join(FROOT, 'scripts'), { recursive: true });
     mkdirSync(join(FROOT, 'test'), { recursive: true });
     for (const s of ['sharding.ts', 'run-unit-parallel.sh', 'run-unit-shard.sh', 'run-serial-tests.sh', 'lib/test-env.sh']) {
@@ -299,9 +299,9 @@ describe('passing', () => {
       PATH: bin,
       HOME: process.env.HOME ?? FROOT,
       TMPDIR: process.env.TMPDIR ?? '/tmp',
-      GBRAIN_TEST_SHARD_TIMEOUT: '300',
+      DEVMODEL_TEST_SHARD_TIMEOUT: '300',
       // Same rationale as runWrapper: explicit-shard mechanics under test.
-      GBRAIN_TEST_NO_MEM_ADAPT: '1',
+      DEVMODEL_TEST_NO_MEM_ADAPT: '1',
     };
   });
 
@@ -360,7 +360,7 @@ describe('run-unit-parallel.sh OOM rescue lane', () => {
   let OROOT: string;
 
   beforeAll(() => {
-    OROOT = mkdtempSync(join(tmpdir(), 'gbrain-parallel-oom-'));
+    OROOT = mkdtempSync(join(tmpdir(), 'devmodel-parallel-oom-'));
     mkdirSync(join(OROOT, 'scripts'), { recursive: true });
     mkdirSync(join(OROOT, 'test'), { recursive: true });
     for (const s of ['sharding.ts', 'run-unit-parallel.sh', 'run-unit-shard.sh', 'run-serial-tests.sh', 'lib/test-env.sh']) {
@@ -399,7 +399,7 @@ describe('oom-once', () => {
     const result = spawnSync(
       'bash',
       [join(OROOT, 'scripts', 'run-unit-parallel.sh'), '--shards', '2'],
-      { cwd: OROOT, encoding: 'utf-8', env: { ...process.env, GBRAIN_TEST_NO_MEM_ADAPT: '1', ...env } },
+      { cwd: OROOT, encoding: 'utf-8', env: { ...process.env, DEVMODEL_TEST_NO_MEM_ADAPT: '1', ...env } },
     );
     return { code: result.status ?? -1, stdout: result.stdout || '', stderr: result.stderr || '' };
   }
@@ -423,8 +423,8 @@ describe('oom-once', () => {
     expect(side.lanes.get('unit')).toMatchObject({ executed: 2, failed: 0, superseded: 1 });
   }, 120_000);
 
-  it('GBRAIN_TEST_NO_OOM_FALLBACK=1 disables the rescue lane (stays red)', () => {
-    const r = runOom({ GBRAIN_TEST_NO_OOM_FALLBACK: '1' });
+  it('DEVMODEL_TEST_NO_OOM_FALLBACK=1 disables the rescue lane (stays red)', () => {
+    const r = runOom({ DEVMODEL_TEST_NO_OOM_FALLBACK: '1' });
     expect(r.code).not.toBe(0);
     expect(r.stdout + r.stderr).not.toContain('OOM rescue pass');
   }, 120_000);
@@ -433,7 +433,7 @@ describe('oom-once', () => {
     // The one test that needs adaptation ON â€” override the harness-wide
     // NO_MEM_ADAPT base (which keeps the shard-mechanics tests deterministic
     // on RAM-limited CI runners).
-    const r = runOom({ GBRAIN_TEST_NO_MEM_ADAPT: '0' });
+    const r = runOom({ DEVMODEL_TEST_NO_MEM_ADAPT: '0' });
     expect(r.stderr).toMatch(/mem-(ok|adapted)/);
   }, 120_000);
 
@@ -527,8 +527,8 @@ describe('run-unit-parallel.sh mem-adapt shed order (intra before shards)', () =
           // Old policy landed at 1x3; the fix must land at 3x1.
           env: {
             ...process.env,
-            GBRAIN_TEST_NO_MEM_ADAPT: '0',
-            GBRAIN_TEST_MAX_CONCURRENCY: '4',
+            DEVMODEL_TEST_NO_MEM_ADAPT: '0',
+            DEVMODEL_TEST_MAX_CONCURRENCY: '4',
             FAKE_AVAIL_MB: '8704',
           },
         },
@@ -550,7 +550,7 @@ describe('run-unit-parallel.sh no-timeout-binary wedge sentinel (rc 143 at cap â
   let WROOT: string;
 
   beforeAll(() => {
-    WROOT = mkdtempSync(join(tmpdir(), 'gbrain-parallel-wedge-'));
+    WROOT = mkdtempSync(join(tmpdir(), 'devmodel-parallel-wedge-'));
     mkdirSync(join(WROOT, 'scripts'), { recursive: true });
     mkdirSync(join(WROOT, 'test'), { recursive: true });
     for (const s of ['sharding.ts', 'run-unit-parallel.sh', 'run-unit-shard.sh', 'run-serial-tests.sh', 'lib/test-env.sh']) {
@@ -592,9 +592,9 @@ describe('hanging', () => { it('sleeps past the shard cap', async () => { await 
           PATH: join(WROOT, 'bin'),
           HOME: process.env.HOME ?? WROOT,
           TMPDIR: process.env.TMPDIR ?? '/tmp',
-          GBRAIN_TEST_SHARD_TIMEOUT: '6',
-          GBRAIN_TEST_SHARD_KILL_AFTER: '2',
-          GBRAIN_TEST_NO_MEM_ADAPT: '1',
+          DEVMODEL_TEST_SHARD_TIMEOUT: '6',
+          DEVMODEL_TEST_SHARD_KILL_AFTER: '2',
+          DEVMODEL_TEST_NO_MEM_ADAPT: '1',
         },
       },
     );

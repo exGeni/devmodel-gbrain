@@ -141,7 +141,7 @@ receipt_begin primary "s${SHARD_INDEX}of${TOTAL_SHARDS}" "$SHARD_INDEX" "$TOTAL_
 # order given. Bun still reports them as `test/x.test.ts`, so the log and
 # JUnit parsers see the same names.
 rc=0
-printf '%s\n' "$SHARD_FILES" | sed 's#^#./#' | xargs ${XARGS_FLAGS[@]+"${XARGS_FLAGS[@]}"} bun test --timeout=60000 --max-concurrency="${GBRAIN_TEST_MAX_CONCURRENCY:-4}" ${COVERAGE_ARGS[@]+"${COVERAGE_ARGS[@]}"} ${RECEIPT_ARGS[@]+"${RECEIPT_ARGS[@]}"} || rc=$?
+printf '%s\n' "$SHARD_FILES" | sed 's#^#./#' | xargs ${XARGS_FLAGS[@]+"${XARGS_FLAGS[@]}"} bun test --timeout=60000 --max-concurrency="${DEVMODEL_TEST_MAX_CONCURRENCY:-4}" ${COVERAGE_ARGS[@]+"${COVERAGE_ARGS[@]}"} ${RECEIPT_ARGS[@]+"${RECEIPT_ARGS[@]}"} || rc=$?
 receipt_end "$rc"
 
 # Lane manifest: written ONLY on a fully green run (complete:true means the

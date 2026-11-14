@@ -7,7 +7,7 @@
  * The predicate is checked at least once even with timeoutMs <= 0.
  */
 export interface WaitForOpts {
-  /** Deadline. Default 5000ms. Scaled by GBRAIN_TEST_WAIT_MULTIPLIER (see testWaitMs). */
+  /** Deadline. Default 5000ms. Scaled by DEVMODEL_TEST_WAIT_MULTIPLIER (see testWaitMs). */
   timeoutMs?: number;
   /** Poll interval. Default 10ms. */
   intervalMs?: number;
@@ -16,20 +16,20 @@ export interface WaitForOpts {
 }
 
 /**
- * GBRAIN_TEST_WAIT_MULTIPLIER (default 1) scales every test deadline for
+ * DEVMODEL_TEST_WAIT_MULTIPLIER (default 1) scales every test deadline for
  * instrumented lanes: scripts/lib/test-env.sh sets 2 when COVERAGE_DIR is
  * set, because coverage slows the code under test while the deadlines stay
  * wall-clock. Accepted range 1..4; anything else fails the test loudly.
  */
 export function testWaitMultiplier(): number {
-  const raw = process.env.GBRAIN_TEST_WAIT_MULTIPLIER;
+  const raw = process.env.DEVMODEL_TEST_WAIT_MULTIPLIER;
   if (raw === undefined || raw === '') return 1;
   const value = Number(raw);
   if (!Number.isFinite(value) || value < 1 || value > 4) {
     throw new Error(
-      `GBRAIN_TEST_WAIT_MULTIPLIER=${JSON.stringify(raw)} is not a number from 1 to 4.\n`
+      `DEVMODEL_TEST_WAIT_MULTIPLIER=${JSON.stringify(raw)} is not a number from 1 to 4.\n`
       + 'Why: it scales test wait deadlines (test/helpers/wait-for.ts); a bad value would make every deadline meaningless.\n'
-      + 'Fix: unset GBRAIN_TEST_WAIT_MULTIPLIER, or set it to a value from 1 to 4 (coverage lanes use 2).\n'
+      + 'Fix: unset DEVMODEL_TEST_WAIT_MULTIPLIER, or set it to a value from 1 to 4 (coverage lanes use 2).\n'
       + 'Docs: docs/TESTING.md#speed--environment-helpers-testhelpers',
     );
   }
@@ -43,7 +43,7 @@ export function testWaitMultiplier(): number {
  */
 const SCALED_DEADLINE_CEILING_MS = 50_000;
 
-/** `ms` scaled by GBRAIN_TEST_WAIT_MULTIPLIER, capped below bun's per-test timeout. */
+/** `ms` scaled by DEVMODEL_TEST_WAIT_MULTIPLIER, capped below bun's per-test timeout. */
 export function testWaitMs(ms: number): number {
   const multiplier = testWaitMultiplier();
   if (multiplier === 1) return ms;
@@ -63,7 +63,7 @@ export async function waitFor(
     const elapsed = Date.now() - start;
     if (elapsed >= timeoutMs) {
       const label = opts.label ? `${opts.label}: ` : '';
-      const scaled = timeoutMs === baseTimeoutMs ? '' : ` scaled to ${timeoutMs}ms by GBRAIN_TEST_WAIT_MULTIPLIER`;
+      const scaled = timeoutMs === baseTimeoutMs ? '' : ` scaled to ${timeoutMs}ms by DEVMODEL_TEST_WAIT_MULTIPLIER`;
       throw new Error(
         `waitFor: ${label}condition still false after ${elapsed}ms (timeout ${baseTimeoutMs}ms${scaled})`,
       );

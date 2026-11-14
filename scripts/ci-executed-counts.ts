@@ -634,7 +634,7 @@ export function downloadRun(repo: string, runId: string, into: string): { receip
 interface Args { baseRuns: string[]; headRuns: string[]; baseDirs: string[]; headDirs: string[]; deltas?: string; summary?: string; json?: string; reportOnly: boolean; failOnAdditions: boolean; expect: Map<string, number>; missingKeys?: string[]; repo: string }
 
 export function parseArgs(argv: string[]): Args {
-  const args: Args = { baseRuns: [], headRuns: [], baseDirs: [], headDirs: [], reportOnly: false, failOnAdditions: false, expect: new Map(), repo: process.env.GITHUB_REPOSITORY || 'garrytan/gbrain' };
+  const args: Args = { baseRuns: [], headRuns: [], baseDirs: [], headDirs: [], reportOnly: false, failOnAdditions: false, expect: new Map(), repo: process.env.GITHUB_REPOSITORY || '' };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
     const value = () => {
@@ -666,6 +666,7 @@ export function parseArgs(argv: string[]): Args {
     }
   }
   if (!args.headRuns.length && !args.headDirs.length) throw new UsageError('pass --head-run <id> or --head-dir <dir>');
+  if ((args.baseRuns.length || args.headRuns.length) && !args.repo) throw new UsageError('a run id needs its repository: pass --repo <owner>/<name> or set GITHUB_REPOSITORY');
   return args;
 }
 
@@ -706,7 +707,7 @@ export function main(argv: string[]): number {
     return message === 'help' ? 0 : 2;
   }
   try {
-    const scratch = mkdtempSync(join(tmpdir(), 'gbrain-receipts-'));
+    const scratch = mkdtempSync(join(tmpdir(), 'devmodel-receipts-'));
     const loaded = loadSide(args.headRuns, args.headDirs, args, scratch)!;
     const head = loaded.side;
     const base = loadSide(args.baseRuns, args.baseDirs, args, scratch)?.side;

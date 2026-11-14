@@ -111,7 +111,7 @@ if (import.meta.main) {
 
   const before = dirtyState();
   const steps = [...ARTIFACTS.map(a => ({ name: a.name, argv: a.regen, env })),
-    ...(args.includes('--goldens') ? CONTRACT_GOLDENS.map(f => ({ name: `golden ${f}`, argv: goldenArgv(f), env: { ...env, GBRAIN_TEST_UPDATE_GOLDENS: '1' } })) : [])];
+    ...(args.includes('--goldens') ? CONTRACT_GOLDENS.map(f => ({ name: `golden ${f}`, argv: goldenArgv(f), env: { ...env, DEVMODEL_TEST_UPDATE_GOLDENS: '1' } })) : [])];
   for (const step of steps) {
     const r = await run(step.argv, step.env);
     if (r.code !== 0) {

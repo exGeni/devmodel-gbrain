@@ -25,7 +25,7 @@ function write(root: string, file: string, content: string) {
 }
 
 function fixture(source = 'export const answer: number = 42;\n', strict = true) {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-typecheck-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-typecheck-'));
   roots.push(root);
   write(root, 'tsconfig.base.json', JSON.stringify({ compilerOptions: {
     target: 'ESNext', module: 'ESNext', moduleResolution: 'bundler', lib: ['ES5'],
@@ -48,7 +48,7 @@ function check(root: string) {
   const result = spawnSync(Bun.which('node') ?? process.execPath, [heapFlag!, tsc, ...args], { cwd: root, encoding: 'utf8', timeout: 30_000 });
   expect(result.error).toBeUndefined();
   expect(result.signal).toBeNull();
-  expect(existsSync(join(root, 'node_modules/.cache/gbrain-typecheck.tsbuildinfo'))).toBe(true);
+  expect(existsSync(join(root, 'node_modules/.cache/devmodel-typecheck.tsbuildinfo'))).toBe(true);
   return { status: result.status ?? -1, output: result.stdout + result.stderr };
 }
 
@@ -127,7 +127,7 @@ describe('native incremental typecheck', () => {
     const root = fixture('export const answer: string = 42;\n');
     const first = rejects(root, 'TS2322');
     expect(rejects(root, 'TS2322')).toEqual(first);
-    const cache = join(root, 'node_modules/.cache/gbrain-typecheck.tsbuildinfo');
+    const cache = join(root, 'node_modules/.cache/devmodel-typecheck.tsbuildinfo');
     const info = JSON.parse(readFileSync(cache, 'utf8'));
     info.version = '0.0.0-incompatible';
     writeFileSync(cache, JSON.stringify(info));

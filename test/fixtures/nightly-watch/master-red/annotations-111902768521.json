@@ -15,7 +15,7 @@
   "annotation_level": "failure",
   "path": "test/managed-lint.test.ts",
   "title": "",
-  "message": "PostgreSQL arm failed. Reproduce: DATABASE_URL=<pgvector test database> GBRAIN_TEST_ALLOW_DATABASE_URL=1 bun test --timeout=120000 test/managed-lint.test.ts"
+  "message": "PostgreSQL arm failed. Reproduce: DATABASE_URL=<pgvector test database> DEVMODEL_TEST_ALLOW_DATABASE_URL=1 bun test --timeout=120000 test/managed-lint.test.ts"
  },
  {
   "annotation_level": "failure",

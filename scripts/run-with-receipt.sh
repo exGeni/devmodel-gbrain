@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/run-with-receipt.sh — run one named `bun test` invocation and record
-# its executed-test receipt (X2) when GBRAIN_TEST_RECEIPT_DIR is set.
+# its executed-test receipt (X2) when DEVMODEL_TEST_RECEIPT_DIR is set.
 #
 # CI jobs that call `bun test` directly (the slow lanes, Tier 1, Tier 2, the
 # JSONB parity guard) go through this wrapper so every bun invocation leaves a
@@ -12,7 +12,7 @@
 #
 # <lane> names the identity lane (unit, slow, tier1, ...); <tag> must be unique
 # per invocation inside that lane. Test files are the *.test.ts arguments.
-# Without GBRAIN_TEST_RECEIPT_DIR the command runs unchanged. Exit code: the
+# Without DEVMODEL_TEST_RECEIPT_DIR the command runs unchanged. Exit code: the
 # command's.
 
 set -euo pipefail
@@ -31,7 +31,7 @@ tag="$2"
 shift 4
 
 cd "$(dirname "$0")/.."
-GBRAIN_TEST_RECEIPT_LANE="$lane"
+DEVMODEL_TEST_RECEIPT_LANE="$lane"
 . scripts/lib/test-env.sh
 receipts_init "$lane" || exit 2
 

@@ -42,7 +42,7 @@ describe('check-test-isolation.sh R8: no scratch directory inside the source tre
 
   it('good fixtures: a tmpdir scratch directory and fixture paths beside the test pass', () => {
     for (const line of [
-      "const TMP = mkdtempSync(join(tmpdir(), 'gbrain-import-file-test-'));",
+      "const TMP = mkdtempSync(join(tmpdir(), 'devmodel-import-file-test-'));",
       "const FIXTURE = join(import.meta.dir, 'fixtures', 'tmpl.md');",
       "const TEMPLATES = join(import.meta.dir, 'templates');",
     ]) {

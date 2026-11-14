@@ -20,7 +20,7 @@
 # for this guard.
 #
 # Usage: scripts/check-test-real-names.sh
-# Exit:  0 clean (or nothing to scan: it then prints `GBRAIN_CHECK_SKIPPED:
+# Exit:  0 clean (or nothing to scan: it then prints `DEVMODEL_CHECK_SKIPPED:
 #        <reason>`, which `bun run verify` records as a skip, not a pass),
 #        1 banned reference found, 2 setup error (rg + grep missing).
 
@@ -100,7 +100,7 @@ if [ -z "$matches" ]; then
   # No match is a pass only when something was scanned; the runner counts the
   # marker as a skip, not a pass.
   if [ -z "$(find test evals -type f \( "${SUBJECT_NAMES[@]}" \) 2>/dev/null | head -n 1 || true)" ]; then
-    echo "GBRAIN_CHECK_SKIPPED: no TypeScript files under test/ or evals/ to scan"
+    echo "DEVMODEL_CHECK_SKIPPED: no TypeScript files under test/ or evals/ to scan"
   fi
   exit 0
 fi

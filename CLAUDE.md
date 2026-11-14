@@ -23,7 +23,7 @@ would otherwise ship.
 - **Every guard is registered and self-tested.** A `scripts/check-*` without a row in
   `scripts/guards-manifest.tsv` fails `check:guard-self-test`, which also runs each `selftest yes`
   guard against its `bad` and `good` fixtures ([guard registry](docs/TESTING.md#guard-registry-and-self-test)).
-- **A skip is not a pass.** A check with nothing to check prints `GBRAIN_CHECK_SKIPPED:
+- **A skip is not a pass.** A check with nothing to check prints `DEVMODEL_CHECK_SKIPPED:
   <reason>`, and `bun run verify` records it as a skip. The module-size, function-size and
   orphan-module ratchets skip while `src/` is empty and measure it once it exists.
 - **Module-size ratchet.** `scripts/module-size-limits.tsv` pins per-file line ceilings
@@ -34,7 +34,7 @@ would otherwise ship.
   (`scripts/function-size-baseline.tsv`): no new function over 300 lines.
 - **Tests are hermetic.** Every `bun test` loads the preloads in `bunfig.toml`: no database
   URL, no operator or provider variables, a temporary home, hermetic git
-  ([test preloads](docs/TESTING.md#test-preloads)). Test opt-ins are named `GBRAIN_TEST_*`.
+  ([test preloads](docs/TESTING.md#test-preloads)). Test opt-ins are named `DEVMODEL_TEST_*`.
 - **Coverage is measured, honestly.** CI merges per-lane lcov (`scripts/merge-lcov.ts`) into a
   report on every full run, advisory until `COVERAGE_GATE_ENFORCE` turns the gates on. Bun
   facts: a unique `--coverage-dir` per process (reuse overwrites `lcov.info`), line records

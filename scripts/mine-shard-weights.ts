@@ -13,7 +13,7 @@
  * Every mode drops entries for files git no longer tracks, so a deleted or
  * renamed test leaves the map whatever the runs measured.
  * Refresh after large test additions or sustained shard imbalance.
- * Seam: GBRAIN_MINE_ROOT (the checkout whose tracked files bound the map).
+ * Seam: DEVMODEL_MINE_ROOT (the checkout whose tracked files bound the map).
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, renameSync, rmSync, existsSync, mkdtempSync, mkdirSync } from "node:fs";
@@ -23,7 +23,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { loadWeights } from "./sharding.ts";
 
-const ROOT = process.env.GBRAIN_MINE_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = process.env.DEVMODEL_MINE_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export type Lane = "unit" | "serial" | "e2e";
 const OUTPUTS = { unit: "test-weights", serial: "serial-weights", e2e: "e2e-weights" };
 interface TimingEvent { job: string; timestampMs: number; file: string; summaryCount?: number; failures?: number }
@@ -106,12 +106,12 @@ export function mineWeights(raw: string, lane: Lane, opts: { expectedJobs?: read
     if (missing.length || unexpected.length) throw new Error(`${lane}: timing job set differs from run metadata (missing: ${missing.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'})`);
   }
   for (const [job, records] of byJob) {
-    const captured = records.filter(line => line.step === 'capture' || line.text.startsWith('##[gbrain-capture-'));
+    const captured = records.filter(line => line.step === 'capture' || line.text.startsWith('##[devmodel-capture-'));
     if (!captured.length && !opts.requireCapture) continue;
-    if (!captured.length || captured[0]!.text !== '##[gbrain-capture-start]' ||
-        captured.at(-1)!.text !== '##[gbrain-capture-complete] exit=0' ||
-        captured.filter(line => line.text === '##[gbrain-capture-start]').length !== 1 ||
-        captured.filter(line => line.text.startsWith('##[gbrain-capture-complete]')).length !== 1) {
+    if (!captured.length || captured[0]!.text !== '##[devmodel-capture-start]' ||
+        captured.at(-1)!.text !== '##[devmodel-capture-complete] exit=0' ||
+        captured.filter(line => line.text === '##[devmodel-capture-start]').length !== 1 ||
+        captured.filter(line => line.text.startsWith('##[devmodel-capture-complete]')).length !== 1) {
       throw new Error(`${job}: missing or unsuccessful capture completion`);
     }
   }
@@ -220,7 +220,7 @@ function gh(args: string[]): string {
 function capturedUnitLog(run: string, job: string): string {
   const shard = /^test \((\d+)\)$/.exec(job)?.[1];
   if (!shard) throw new Error(`unit: unexpected job name ${job}`);
-  const dir = mkdtempSync(join(tmpdir(), "gbrain-mine-unit-"));
+  const dir = mkdtempSync(join(tmpdir(), "devmodel-mine-unit-"));
   try {
     gh(["run", "download", run, "--name", `timings-unit-${shard}`, "--dir", dir]);
     return readFileSync(join(dir, "unit.log"), "utf8");
@@ -234,7 +234,7 @@ function git(args: string[]): string {
 export function sourceE2ECorpus(commit: string): string[] {
   if (commit !== git(["rev-parse", "HEAD"])) throw new Error("full E2E source SHA differs from checkout HEAD");
   const tracked = git(["ls-tree", "-r", "--name-only", commit]).split("\n").filter(file => file.endsWith(".test.ts"));
-  const root = mkdtempSync(join(tmpdir(), "gbrain-full-e2e-source-"));
+  const root = mkdtempSync(join(tmpdir(), "devmodel-full-e2e-source-"));
   try {
     mkdirSync(join(root, "scripts/lib"), { recursive: true });
     writeFileSync(join(root, "scripts/run-e2e.sh"), git(["show", `${commit}:scripts/run-e2e.sh`]));

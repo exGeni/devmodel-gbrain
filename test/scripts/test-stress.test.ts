@@ -1,5 +1,5 @@
 /**
- * scripts/stress/run.ts end to end against fixture trees (GBRAIN_STRESS_ROOT):
+ * scripts/stress/run.ts end to end against fixture trees (DEVMODEL_STRESS_ROOT):
  * per-iteration receipts, seeded replay, failure detection with the
  * reproduce line, zero-executed and unexpected-skip failures, and the
  * platform-only "not stressed" path.
@@ -16,17 +16,17 @@ const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
 function tree(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-test-stress-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-test-stress-'));
   dirs.push(root);
   for (const [rel, body] of Object.entries(files)) { mkdirSync(join(root, rel, '..'), { recursive: true }); writeFileSync(join(root, rel), body); }
   return root;
 }
 function stress(root: string, ...args: string[]) {
-  const env: Record<string, string | undefined> = { ...process.env, GBRAIN_STRESS_ROOT: root };
+  const env: Record<string, string | undefined> = { ...process.env, DEVMODEL_STRESS_ROOT: root };
   delete env.DATABASE_URL;
   delete env.GITHUB_SHA;
   // CI writes receipts outside the checkout ($RUNNER_TEMP); so does this test.
-  const out = mkdtempSync(join(tmpdir(), 'gbrain-test-stress-out-'));
+  const out = mkdtempSync(join(tmpdir(), 'devmodel-test-stress-out-'));
   dirs.push(out);
   const r = spawnSync(process.execPath, [RUNNER, ...args, '--out', out], { encoding: 'utf8', env, timeout: 120_000 });
   const manifestPath = join(out, 'stress-manifest.json');
@@ -50,7 +50,7 @@ describe('test:stress runner', () => {
   });
 
   test('a seed-dependent failure fails the run with its iteration, signature and a replayable reproduce line', () => {
-    const root = tree({ 'test/flaky.test.ts': "import { test, expect } from 'bun:test';\ntest('odd seeds only', () => { expect(Number(process.env.GBRAIN_TEST_SEED) % 2).toBe(1); });\n" });
+    const root = tree({ 'test/flaky.test.ts': "import { test, expect } from 'bun:test';\ntest('odd seeds only', () => { expect(Number(process.env.DEVMODEL_TEST_SEED) % 2).toBe(1); });\n" });
     const r = stress(root, 'test/flaky.test.ts', '--iterations', '4', '--seed', '1');
     expect(r.code, r.out).toBe(1);
     expect(r.manifest.failures.map((f: { iteration: number }) => f.iteration)).toEqual([2, 4]);
@@ -78,7 +78,7 @@ describe('test:stress runner', () => {
   });
 
   test('a test that ran in the first iteration and skips later is an unexpected skip', () => {
-    const root = tree({ 'test/vanish.test.ts': "import { test } from 'bun:test';\nif (Number(process.env.GBRAIN_TEST_SEED) % 2 === 1) test('sometimes', () => {});\ntest('always', () => {});\n" });
+    const root = tree({ 'test/vanish.test.ts': "import { test } from 'bun:test';\nif (Number(process.env.DEVMODEL_TEST_SEED) % 2 === 1) test('sometimes', () => {});\ntest('always', () => {});\n" });
     const r = stress(root, 'test/vanish.test.ts', '--iterations', '2', '--seed', '1');
     expect(r.code, r.out).toBe(1);
     expect(r.manifest.failures[0]).toMatchObject({ iteration: 2, signature: 'unexpected skip' });
@@ -114,6 +114,6 @@ describe('arguments, reports and signatures', () => {
   });
 
   test('signatures mask numbers, temp paths and UUIDs', () => {
-    expect(failureSignature('ENOENT: /tmp/gbrain-x123/a.md at line 42 id 0f8fad5b-d9cb-469f-a165-70867728950e')).toBe('ENOENT: <tmp> at line N id <uuid>');
+    expect(failureSignature('ENOENT: /tmp/devmodel-x123/a.md at line 42 id 0f8fad5b-d9cb-469f-a165-70867728950e')).toBe('ENOENT: <tmp> at line N id <uuid>');
   });
 });

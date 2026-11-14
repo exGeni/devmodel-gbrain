@@ -4,7 +4,7 @@
 #
 # Usage: scripts/ci-typecheck.sh <command>...   (test.yml: bun run typecheck)
 #
-# The job restores node_modules/.cache/gbrain-typecheck.tsbuildinfo from this
+# The job restores node_modules/.cache/devmodel-typecheck.tsbuildinfo from this
 # head's cache entry or, failing that, from the newest entry of any head with
 # the same bun.lock and tsconfig.json. Seeded from a distant head, an
 # incremental tsc holds the old and the new program at once and dies at the
@@ -22,14 +22,14 @@
 # cache-save step saves only on true; saving the restored file under this
 # head's key would make every rerun restore it again.
 #
-# GBRAIN_TYPECHECK_ATTEMPT_SECONDS bounds each attempt (default 360, the
+# DEVMODEL_TYPECHECK_ATTEMPT_SECONDS bounds each attempt (default 360, the
 # measured bound test.yml's step had before the retry), through timeout(1)
 # or, on macOS, gtimeout. With neither, only the step's own timeout applies.
 set -uo pipefail
 
 [ "$#" -gt 0 ] || { echo "usage: scripts/ci-typecheck.sh <command>..." >&2; exit 64; }
-BUILDINFO=node_modules/.cache/gbrain-typecheck.tsbuildinfo
-SECONDS_PER_ATTEMPT="${GBRAIN_TYPECHECK_ATTEMPT_SECONDS:-360}"
+BUILDINFO=node_modules/.cache/devmodel-typecheck.tsbuildinfo
+SECONDS_PER_ATTEMPT="${DEVMODEL_TYPECHECK_ATTEMPT_SECONDS:-360}"
 
 record() {
   local written=true

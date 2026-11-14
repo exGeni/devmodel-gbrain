@@ -22,13 +22,13 @@
 // entry whose file or test is gone, or whose count is above the actual count,
 // fails as stale.
 //
-// Self-test seam: argv[2] (or GBRAIN_GUARD_ROOT) points at a fixture tree with
+// Self-test seam: argv[2] (or DEVMODEL_GUARD_ROOT) points at a fixture tree with
 // its own test/ directory; in fixture mode the allowlist is disabled and files
 // named *.test.fixture.ts are scanned too (fixtures under the repo's test/ tree
 // must not end in .test.ts, or the unit runner would execute them).
 //
 // Exit: 0 clean (or no test files to scan: it then prints
-// `GBRAIN_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a skip,
+// `DEVMODEL_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a skip,
 // not a pass) · 1 violations or stale allowlist entries · 2 infra error.
 
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
@@ -36,8 +36,8 @@ import { join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
-const root = process.argv[2] || process.env.GBRAIN_GUARD_ROOT || '.';
-const fixtureMode = !!(process.argv[2] || process.env.GBRAIN_GUARD_ROOT);
+const root = process.argv[2] || process.env.DEVMODEL_GUARD_ROOT || '.';
+const fixtureMode = !!(process.argv[2] || process.env.DEVMODEL_GUARD_ROOT);
 
 const RULE = 'test-placeholder-assertion';
 const RERUN = 'bun run check:test-placeholders';
@@ -197,7 +197,7 @@ function main() {
   }
   if (scan.files.length === 0) {
     // Nothing to scan: the runner counts the marker as a skip, not a pass.
-    console.log('GBRAIN_CHECK_SKIPPED: no *.test.ts files under test/ to scan');
+    console.log('DEVMODEL_CHECK_SKIPPED: no *.test.ts files under test/ to scan');
     process.exit(0);
   }
   console.log(`check-test-placeholders: OK (${scan.files.length} test files, ${allowedSites} allowlisted placeholder site(s))`);

@@ -18,9 +18,9 @@
 # error — a negative estimate would drive the ledger backwards. Both are
 # normalized to %.6f before they are compared or written.
 #
-# Ledger: $GBRAIN_EVAL_SPEND_LEDGER (default ~/gbrain-lme-receipts/spend.jsonl),
+# Ledger: $DEVMODEL_EVAL_SPEND_LEDGER (default ~/devmodel-eval-receipts/spend.jsonl),
 # one JSON object per line with a numeric `cost_usd` field. The file MUST
-# already exist: the first run sets GBRAIN_EVAL_SPEND_LEDGER_INIT=1 (or
+# already exist: the first run sets DEVMODEL_EVAL_SPEND_LEDGER_INIT=1 (or
 # pre-creates the file), which prints a loud NEW LEDGER line — a ledger that
 # silently starts at $0 because a path was mistyped is how a cap gets blown.
 # Every non-empty line must parse (`{…"cost_usd":<number>…}`); otherwise the
@@ -38,15 +38,15 @@
 # Ledger total = every row that is not a reservation + every reservation whose
 # run_id has no reconciliation (a run still in flight, or one whose guard died
 # before it could reconcile). Rows without run_id/status (older ledgers) are
-# final rows. C comes from $GBRAIN_EVAL_ACTUAL_COST_FILE when the command wrote
+# final rows. C comes from $DEVMODEL_EVAL_ACTUAL_COST_FILE when the command wrote
 # one (a bare unsigned number, or a JSON object carrying `cost_usd`) AND it is
 # positive; a malformed, signed, or non-positive cost falls back to the
 # estimate (over-stating spend is the safe direction). When
-# GBRAIN_EVAL_ACTUAL_COST_FILE is unset, a temp path is exported to the child
+# DEVMODEL_EVAL_ACTUAL_COST_FILE is unset, a temp path is exported to the child
 # so harnesses can report usage-derived cost without operator setup.
 #
 # Signals: on INT/TERM/HUP the guard sends SIGTERM to the command, waits up to
-# $GBRAIN_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS (default 10) for it to exit, then
+# $DEVMODEL_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS (default 10) for it to exit, then
 # SIGKILLs it, reconciles at the ESTIMATE with exit_code 128+N, and exits
 # 128+N. An EXIT trap reconciles at the estimate on any other early exit. The
 # traps are installed BEFORE the reservation row is appended (a RESERVED flag
@@ -106,15 +106,15 @@ is_number "$EST" || { echo "eval-spend-guard: estimate_usd '$EST' is not an unsi
 CAP="$(norm6 "$CAP")"
 EST="$(norm6 "$EST")"
 
-LEDGER="${GBRAIN_EVAL_SPEND_LEDGER:-$HOME/gbrain-lme-receipts/spend.jsonl}"
+LEDGER="${DEVMODEL_EVAL_SPEND_LEDGER:-$HOME/devmodel-eval-receipts/spend.jsonl}"
 if [ ! -f "$LEDGER" ]; then
-  if [ "${GBRAIN_EVAL_SPEND_LEDGER_INIT:-}" = "1" ]; then
+  if [ "${DEVMODEL_EVAL_SPEND_LEDGER_INIT:-}" = "1" ]; then
     mkdir -p "$(dirname "$LEDGER")" || { echo "eval-spend-guard: cannot create ledger dir for $LEDGER" >&2; exit 2; }
     : > "$LEDGER" || { echo "eval-spend-guard: cannot create ledger $LEDGER" >&2; exit 2; }
-    echo "eval-spend-guard: NEW LEDGER — created $LEDGER (spend history starts at \$0.000000; GBRAIN_EVAL_SPEND_LEDGER_INIT=1)" >&2
+    echo "eval-spend-guard: NEW LEDGER — created $LEDGER (spend history starts at \$0.000000; DEVMODEL_EVAL_SPEND_LEDGER_INIT=1)" >&2
   else
     echo "eval-spend-guard: REFUSED — ledger does not exist: $LEDGER" >&2
-    echo "eval-spend-guard: a missing ledger is NOT a \$0 ledger. Pre-create the file, or set GBRAIN_EVAL_SPEND_LEDGER_INIT=1 for the first run only." >&2
+    echo "eval-spend-guard: a missing ledger is NOT a \$0 ledger. Pre-create the file, or set DEVMODEL_EVAL_SPEND_LEDGER_INIT=1 for the first run only." >&2
     echo "eval-spend-guard: command NOT run: $*" >&2
     exit 3
   fi
@@ -296,12 +296,12 @@ append_row() {  # <status> <cost> <exit_code|null>; non-zero when the append fai
 
 # Cost file: honor the operator's path or hand the child a scratch one.
 CLEANUP_COST_FILE=0
-if [ -z "${GBRAIN_EVAL_ACTUAL_COST_FILE:-}" ]; then
-  GBRAIN_EVAL_ACTUAL_COST_FILE="$(mktemp "${TMPDIR:-/tmp}/gbrain-eval-cost.XXXXXX")"
-  rm -f "$GBRAIN_EVAL_ACTUAL_COST_FILE"
+if [ -z "${DEVMODEL_EVAL_ACTUAL_COST_FILE:-}" ]; then
+  DEVMODEL_EVAL_ACTUAL_COST_FILE="$(mktemp "${TMPDIR:-/tmp}/devmodel-eval-cost.XXXXXX")"
+  rm -f "$DEVMODEL_EVAL_ACTUAL_COST_FILE"
   CLEANUP_COST_FILE=1
 fi
-export GBRAIN_EVAL_ACTUAL_COST_FILE
+export DEVMODEL_EVAL_ACTUAL_COST_FILE
 
 # Reconcile exactly once (normal exit, signal, or EXIT-trap backstop), and
 # only once there is a reservation to reconcile (RESERVED).
@@ -310,7 +310,7 @@ RECONCILED=0
 reconcile() {  # <cost> <exit_code>; returns 1 when the ledger append fails
   [ "$RECONCILED" = "1" ] && return 0
   RECONCILED=1
-  [ "$CLEANUP_COST_FILE" = "1" ] && rm -f "$GBRAIN_EVAL_ACTUAL_COST_FILE"
+  [ "$CLEANUP_COST_FILE" = "1" ] && rm -f "$DEVMODEL_EVAL_ACTUAL_COST_FILE"
   [ -n "$LEASE" ] && rm -f "$LEASE"
   if ! append_row done "$1" "$2"; then
     echo "eval-spend-guard: FAILED to append the reconciliation row to $LEDGER — the \$${EST} reservation for run $RUN_ID stays on the books" >&2
@@ -323,11 +323,11 @@ reconcile() {  # <cost> <exit_code>; returns 1 when the ledger append fails
 }
 
 # Stop the command's process group: SIGTERM, then up to KILL_GRACE seconds (10
-# by default; GBRAIN_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS overrides) before
+# by default; DEVMODEL_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS overrides) before
 # SIGKILL, so a command (or a grandchild) that ignores SIGTERM cannot keep the
 # guard — and its reservation — hanging forever, nor outlive it. Polled in
 # 0.1 s steps; `wait` reaps the leader either way.
-KILL_GRACE="${GBRAIN_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS:-10}"
+KILL_GRACE="${DEVMODEL_EVAL_SPEND_GUARD_KILL_GRACE_SECONDS:-10}"
 case "$KILL_GRACE" in ''|*[!0-9]*) KILL_GRACE=10 ;; esac
 CHILD=""
 stop_child() {
@@ -421,13 +421,13 @@ trap - INT TERM HUP
 # Actual cost: bare unsigned number or JSON with unsigned cost_usd, and it
 # must be POSITIVE; anything else (malformed, signed, zero) → the estimate.
 COST="$EST"
-if [ -f "$GBRAIN_EVAL_ACTUAL_COST_FILE" ]; then
-  RAW="$(tr -d '[:space:]' < "$GBRAIN_EVAL_ACTUAL_COST_FILE")"
+if [ -f "$DEVMODEL_EVAL_ACTUAL_COST_FILE" ]; then
+  RAW="$(tr -d '[:space:]' < "$DEVMODEL_EVAL_ACTUAL_COST_FILE")"
   CANDIDATE=""
   if is_number "$RAW"; then
     CANDIDATE="$RAW"
   else
-    FROM_JSON="$(grep -oE '"cost_usd"[[:space:]]*:[[:space:]]*([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?[[:space:]]*[,}]' "$GBRAIN_EVAL_ACTUAL_COST_FILE" 2>/dev/null \
+    FROM_JSON="$(grep -oE '"cost_usd"[[:space:]]*:[[:space:]]*([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?[[:space:]]*[,}]' "$DEVMODEL_EVAL_ACTUAL_COST_FILE" 2>/dev/null \
       | head -1 | sed -E 's/^"cost_usd"[[:space:]]*:[[:space:]]*//; s/[[:space:]]*[,}]$//')"
     if [ -n "$FROM_JSON" ] && is_number "$FROM_JSON"; then CANDIDATE="$FROM_JSON"; fi
   fi
@@ -437,10 +437,10 @@ if [ -f "$GBRAIN_EVAL_ACTUAL_COST_FILE" ]; then
     if [ "$POSITIVE" = "1" ]; then
       COST="$CANDIDATE"
     else
-      echo "eval-spend-guard: cost file $GBRAIN_EVAL_ACTUAL_COST_FILE reports non-positive cost \$${CANDIDATE}; recording the estimate instead" >&2
+      echo "eval-spend-guard: cost file $DEVMODEL_EVAL_ACTUAL_COST_FILE reports non-positive cost \$${CANDIDATE}; recording the estimate instead" >&2
     fi
   else
-    echo "eval-spend-guard: cost file $GBRAIN_EVAL_ACTUAL_COST_FILE unreadable (need an unsigned number or {\"cost_usd\":<number>}); recording the estimate" >&2
+    echo "eval-spend-guard: cost file $DEVMODEL_EVAL_ACTUAL_COST_FILE unreadable (need an unsigned number or {\"cost_usd\":<number>}); recording the estimate" >&2
   fi
 fi
 

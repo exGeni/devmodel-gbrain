@@ -8,7 +8,7 @@ import { BUN_SPAWNSYNC_POISONED, FailureCollector, captureTestLog } from '../../
 const SCRIPT = resolve(import.meta.dir, '../../scripts/capture-test-log.ts');
 const roots: string[] = [];
 function fixture(source: string) {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-capture-log-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-capture-log-'));
   roots.push(root);
   const script = join(root, 'fixture.ts');
   const output = join(root, 'timings', 'execution.log');
@@ -51,8 +51,8 @@ process.stderr.write('stderr tail');
       timestamps.push(timestamp);
       messages.push(match![2]!);
     }
-    expect(messages[0]).toBe('##[gbrain-capture-start]');
-    expect(messages.at(-1)).toBe('##[gbrain-capture-complete] exit=0');
+    expect(messages[0]).toBe('##[devmodel-capture-start]');
+    expect(messages.at(-1)).toBe('##[devmodel-capture-complete] exit=0');
     expect(messages.slice(1, -1).sort()).toEqual(['##[group]test/fixture.test.ts:', '', 'diagnostic', 'stdout tail', 'stderr tail'].sort());
     expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
   });
@@ -167,7 +167,7 @@ describe('failure step summary (B13)', () => {
   // Real Bun runs through the capture wrapper: the summary must carry the
   // file, the test, the first error block and a command that reproduces it.
   async function failing(name: string, source: string) {
-    const root = mkdtempSync(join(tmpdir(), 'gbrain-capture-summary-'));
+    const root = mkdtempSync(join(tmpdir(), 'devmodel-capture-summary-'));
     roots.push(root);
     writeFileSync(join(root, name), source);
     const summary = join(root, 'summary.md');
@@ -208,7 +208,7 @@ test('waits forever', async () => { await new Promise(() => {}); });`);
   }, 30000);
 
   it('green runs and runs outside Actions write no summary', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gbrain-capture-summary-'));
+    const root = mkdtempSync(join(tmpdir(), 'devmodel-capture-summary-'));
     roots.push(root);
     const summary = join(root, 'summary.md');
     const proc = Bun.spawn([process.execPath, SCRIPT, '--job', 'test (1)', '--out', join(root, 'unit.log'), '--', process.execPath, '-e', '0'], {

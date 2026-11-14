@@ -40,12 +40,12 @@ set -euo pipefail
 
 . "$(dirname "$0")/lib/guard-candidates.sh"
 
-# GBRAIN_GUARD_ROOT (guard self-test): lint a fixture tree, whose unit files
+# DEVMODEL_GUARD_ROOT (guard self-test): lint a fixture tree, whose unit files
 # end in .test.fixture.ts so the real lint and `bun test` never collect them.
-ROOT="${GBRAIN_GUARD_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+ROOT="${DEVMODEL_GUARD_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 cd "$ROOT"
 TEST_SUFFIX='.test.ts'
-[ -n "${GBRAIN_GUARD_ROOT:-}" ] && TEST_SUFFIX='.test.fixture.ts'
+[ -n "${DEVMODEL_GUARD_ROOT:-}" ] && TEST_SUFFIX='.test.fixture.ts'
 
 AS_PARALLEL=0
 if [ "${1:-}" = "--as-parallel" ]; then
@@ -155,7 +155,7 @@ fi
 
 # Nothing to lint: the runner counts the marker as a skip, not a pass.
 if [ "$file_count" -eq 0 ]; then
-  echo "GBRAIN_CHECK_SKIPPED: no non-serial unit test files under $TARGET_DIR${EXTRA_DIRS:+ or $EXTRA_DIRS}"
+  echo "DEVMODEL_CHECK_SKIPPED: no non-serial unit test files under $TARGET_DIR${EXTRA_DIRS:+ or $EXTRA_DIRS}"
   exit 0
 fi
 echo "check-test-isolation: OK ($file_count non-serial unit files scanned)"

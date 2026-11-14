@@ -20,7 +20,7 @@ own, and every other agent reads it next.
 ## Agent operator protocol
 
 Every tool here prints its failures as a headline, then `Why:`, `Fix:` and `Docs:`. The exit
-status is the verdict; a `GBRAIN_CHECK_SKIPPED:` line is a skip, not a pass; save a command's
+status is the verdict; a `DEVMODEL_CHECK_SKIPPED:` line is a skip, not a pass; save a command's
 whole output before reading it. The full contract:
 [`docs/protocol/AGENT_OPERATOR_v1.md`](./docs/protocol/AGENT_OPERATOR_v1.md).
 

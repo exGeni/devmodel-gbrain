@@ -59,18 +59,18 @@ detect_available_mem_mb() {
 # ──────────────────────────────────────────────────────────────────────────
 # Coverage wait multiplier: bun's lcov instrumentation slows the code under
 # test while test deadlines stay wall-clock, so a coverage lane (COVERAGE_DIR
-# set) exports GBRAIN_TEST_WAIT_MULTIPLIER=2 unless the caller chose a value.
+# set) exports DEVMODEL_TEST_WAIT_MULTIPLIER=2 unless the caller chose a value.
 # test/helpers/wait-for.ts scales every waitFor deadline by it and keeps the
-# result below bun's 60s per-test timeout. The bun preload keeps GBRAIN_TEST_*
+# result below bun's 60s per-test timeout. The bun preload keeps DEVMODEL_TEST_*
 # and run-e2e.sh's env scrub keep-lists the name. Runs when this file is
 # sourced, so every runner that sources it gets the same default.
 # ──────────────────────────────────────────────────────────────────────────
-if [ -n "${COVERAGE_DIR:-}" ] && [ -z "${GBRAIN_TEST_WAIT_MULTIPLIER:-}" ]; then
-  export GBRAIN_TEST_WAIT_MULTIPLIER=2
+if [ -n "${COVERAGE_DIR:-}" ] && [ -z "${DEVMODEL_TEST_WAIT_MULTIPLIER:-}" ]; then
+  export DEVMODEL_TEST_WAIT_MULTIPLIER=2
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
-# Executed-test receipts (X2). With GBRAIN_TEST_RECEIPT_DIR set, every bun
+# Executed-test receipts (X2). With DEVMODEL_TEST_RECEIPT_DIR set, every bun
 # invocation a runner makes records one receipt in that directory:
 #   <id>.receipt     key=value lines: lane, kind (primary|rerun|rescue),
 #                    shard/of, arm, sha, run_id, run_attempt, started, and
@@ -84,20 +84,20 @@ fi
 # receipts_init captures the directory and lane, then UNSETS both variables so
 # test processes (and the nested runners some tests start) never inherit
 # them; a runner that starts another runner passes
-# GBRAIN_TEST_RECEIPT_DIR="$TEST_RECEIPT_DIR" explicitly.
-#   GBRAIN_TEST_RECEIPT_DIR   receipt directory (unset = receipts off)
-#   GBRAIN_TEST_RECEIPT_LANE  overrides the runner's default lane name
+# DEVMODEL_TEST_RECEIPT_DIR="$TEST_RECEIPT_DIR" explicitly.
+#   DEVMODEL_TEST_RECEIPT_DIR   receipt directory (unset = receipts off)
+#   DEVMODEL_TEST_RECEIPT_LANE  overrides the runner's default lane name
 # ──────────────────────────────────────────────────────────────────────────
 receipts_init() {
-  TEST_RECEIPT_LANE="${GBRAIN_TEST_RECEIPT_LANE:-$1}"
-  TEST_RECEIPT_DIR="${GBRAIN_TEST_RECEIPT_DIR:-}"
-  unset GBRAIN_TEST_RECEIPT_DIR GBRAIN_TEST_RECEIPT_LANE
+  TEST_RECEIPT_LANE="${DEVMODEL_TEST_RECEIPT_LANE:-$1}"
+  TEST_RECEIPT_DIR="${DEVMODEL_TEST_RECEIPT_DIR:-}"
+  unset DEVMODEL_TEST_RECEIPT_DIR DEVMODEL_TEST_RECEIPT_LANE
   RECEIPT_ID=""
   RECEIPT_ARGS=()
   [ -n "$TEST_RECEIPT_DIR" ] || return 0
   case "$TEST_RECEIPT_DIR" in /*) ;; *) TEST_RECEIPT_DIR="$PWD/$TEST_RECEIPT_DIR" ;; esac
   mkdir -p "$TEST_RECEIPT_DIR" || {
-    echo "[receipts] cannot create $TEST_RECEIPT_DIR; receipts are required when GBRAIN_TEST_RECEIPT_DIR is set" >&2
+    echo "[receipts] cannot create $TEST_RECEIPT_DIR; receipts are required when DEVMODEL_TEST_RECEIPT_DIR is set" >&2
     return 1
   }
   TEST_RECEIPT_SHA="${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"

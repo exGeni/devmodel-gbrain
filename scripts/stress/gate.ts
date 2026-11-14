@@ -126,10 +126,10 @@ export interface GhIssue { number: number; html_url?: string; title?: string; bo
 interface GhComment { body?: string; user?: { login: string }; author_association?: string }
 interface GhEvent { event: string; label?: { name: string }; actor?: { login: string } }
 
-const MARKER = '<!-- gbrain-stress-exemption -->';
+const MARKER = '<!-- devmodel-stress-exemption -->';
 
 /**
- * Every exemption block (`<!-- gbrain-stress-exemption -->` then a ```json object or array) in a text.
+ * Every exemption block (`<!-- devmodel-stress-exemption -->` then a ```json object or array) in a text.
  * A row may carry a `backend` key (older records name one); it is ignored: a run has one backend.
  */
 export function parseExemptionBlocks(text: string): Array<Omit<Exemption, 'issue' | 'url'>> {

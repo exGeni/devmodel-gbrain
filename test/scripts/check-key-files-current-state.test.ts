@@ -34,7 +34,7 @@ function writeDoc(rel: string, content: string) {
 function run(extraEnv: Record<string, string> = {}) {
   return spawnSync("bash", [SCRIPT], {
     encoding: "utf8",
-    env: { ...process.env, GBRAIN_DOC_GUARD_ROOT: root, ...extraEnv },
+    env: { ...process.env, DEVMODEL_DOC_GUARD_ROOT: root, ...extraEnv },
   });
 }
 
@@ -55,13 +55,13 @@ describe("check-key-files-current-state.sh", () => {
     const r = run();
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("ok");
-    expect(r.stdout).not.toContain("GBRAIN_CHECK_SKIPPED");
+    expect(r.stdout).not.toContain("DEVMODEL_CHECK_SKIPPED");
   });
 
   it("reports a skip, not a pass, when none of the docs it reads exists", () => {
     const r = run();
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
+    expect(r.stdout).toMatch(/^DEVMODEL_CHECK_SKIPPED: \S/m);
     expect(r.stdout).not.toContain("ok (reference docs");
   });
 
@@ -70,7 +70,7 @@ describe("check-key-files-current-state.sh", () => {
     const r = run();
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("ok");
-    expect(r.stdout).not.toContain("GBRAIN_CHECK_SKIPPED");
+    expect(r.stdout).not.toContain("DEVMODEL_CHECK_SKIPPED");
   });
 
   it("FAILS when a reference doc carries a bolded release-clause marker", () => {
@@ -98,7 +98,7 @@ describe("check-key-files-current-state.sh", () => {
   it("FAILS when CLAUDE.md exceeds the size cap", () => {
     seedClean();
     writeDoc("CLAUDE.md", "x".repeat(200_000));
-    const r = run({ GBRAIN_CLAUDE_MD_MAX_BYTES: "90000" });
+    const r = run({ DEVMODEL_CLAUDE_MD_MAX_BYTES: "90000" });
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("over the");
   });
@@ -106,18 +106,18 @@ describe("check-key-files-current-state.sh", () => {
   it("size cap is configurable via env", () => {
     seedClean();
     writeDoc("CLAUDE.md", "x".repeat(5_000));
-    expect(run({ GBRAIN_CLAUDE_MD_MAX_BYTES: "1000" }).status).toBe(1);
-    expect(run({ GBRAIN_CLAUDE_MD_MAX_BYTES: "10000" }).status).toBe(0);
+    expect(run({ DEVMODEL_CLAUDE_MD_MAX_BYTES: "1000" }).status).toBe(1);
+    expect(run({ DEVMODEL_CLAUDE_MD_MAX_BYTES: "10000" }).status).toBe(0);
   });
 
   it("FAILS when docs/TESTING.md exceeds its ratchet cap, naming file, size, cap and the trimming rule", () => {
     seedClean();
     writeDoc("docs/TESTING.md", "# Testing\n\n" + "x".repeat(5_000) + "\n");
-    const over = run({ GBRAIN_TESTING_MD_MAX_BYTES: "1000" });
+    const over = run({ DEVMODEL_TESTING_MD_MAX_BYTES: "1000" });
     expect(over.status).toBe(1);
     expect(over.stderr).toContain("docs/TESTING.md is 5012 bytes, over the 1000 cap");
     expect(over.stderr).toContain("move subsystem detail next to its code");
-    expect(run({ GBRAIN_TESTING_MD_MAX_BYTES: "10000" }).status).toBe(0);
+    expect(run({ DEVMODEL_TESTING_MD_MAX_BYTES: "10000" }).status).toBe(0);
   });
 
   it("soft-warns (non-fatal) on prose history markers", () => {

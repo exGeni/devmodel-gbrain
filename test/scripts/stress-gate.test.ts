@@ -18,7 +18,7 @@ const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
 function repo(files: Record<string, string>): { root: string; base: string } {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-stress-gate-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-stress-gate-'));
   dirs.push(root);
   const git = (...args: string[]) => spawnSync('git', args, { cwd: root, encoding: 'utf8' }).stdout.trim();
   git('init', '-q', '-b', 'main'); git('config', 'user.email', 's@example.invalid'); git('config', 'user.name', 's'); git('config', 'commit.gpgsign', 'false');
@@ -145,7 +145,7 @@ describe('report', () => {
 });
 
 describe('exemption trust', () => {
-  const block = (row: Record<string, string>) => `<!-- gbrain-stress-exemption -->\n\`\`\`json\n${JSON.stringify(row)}\n\`\`\``;
+  const block = (row: Record<string, string>) => `<!-- devmodel-stress-exemption -->\n\`\`\`json\n${JSON.stringify(row)}\n\`\`\``;
   const row = { file: 'test/a.test.ts', test: 'suite > counts', signature: 'sig', owner: '@duty', expires: '2026-10-20' };
   function client(issues: Record<string, GhIssue[]>, extras: Record<string, unknown> = {}): GitHubClient {
     return { async request<T>(_m: string, path: string): Promise<T> {
@@ -157,7 +157,7 @@ describe('exemption trust', () => {
   }
 
   test('blocks parse from issue bodies; malformed or incomplete rows grant nothing; a legacy backend key is ignored', () => {
-    expect(parseExemptionBlocks(`x\n${block(row)}\n${block({ ...row, expires: 'soon' })}\n<!-- gbrain-stress-exemption -->\n\`\`\`json\n{oops\n\`\`\``)).toEqual([row]);
+    expect(parseExemptionBlocks(`x\n${block(row)}\n${block({ ...row, expires: 'soon' })}\n<!-- devmodel-stress-exemption -->\n\`\`\`json\n{oops\n\`\`\``)).toEqual([row]);
     expect(parseExemptionBlocks(block({ ...row, backend: 'legacy' }))).toEqual([row]);
   });
 

@@ -17,7 +17,7 @@ const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
 function repo(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-stress-plan-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-stress-plan-'));
   dirs.push(root);
   const git = (...args: string[]) => { const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' }); if (r.status !== 0) throw new Error(r.stderr); return r.stdout.trim(); };
   git('init', '-q', '-b', 'main');

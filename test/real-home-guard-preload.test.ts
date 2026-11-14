@@ -14,12 +14,12 @@ const artifacts = [
 ];
 
 function fixture(run: (home: string, env: Record<string, string>) => void): void {
-  const home = mkdtempSync(join(tmpdir(), 'gbrain-home-sentinel-'));
+  const home = mkdtempSync(join(tmpdir(), 'devmodel-home-sentinel-'));
   const env = {
     PATH: process.env.PATH ?? '',
     HOME: home,
     GBRAIN_HOME: join(home, 'isolated'),
-    GBRAIN_TEST_EXPECTED_HOME: home,
+    DEVMODEL_TEST_EXPECTED_HOME: home,
     GBRAIN_NO_AUTOPILOT_INSTALL: '1',
   };
   for (const path of artifacts) {
@@ -41,7 +41,7 @@ function fixture(run: (home: string, env: Record<string, string>) => void): void
 function probe(body: string, options: { disarmed?: boolean; seed?: boolean } = {}) {
   let result!: { exitCode: number; output: string };
   fixture((home, env) => {
-    if (options.disarmed) env.GBRAIN_TEST_ALLOW_REAL_HOME_WRITES = '1';
+    if (options.disarmed) env.DEVMODEL_TEST_ALLOW_REAL_HOME_WRITES = '1';
     if (options.seed === false) rmSync(join(home, '.gbrain'), { recursive: true });
     writeFileSync(join(home, 'probe.test.ts'), `
 import { test, expect, beforeAll, afterAll } from 'bun:test';
@@ -49,7 +49,7 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 const home = homedir();
-if (home !== process.env.GBRAIN_TEST_EXPECTED_HOME) throw new Error('probe containment failed');
+if (home !== process.env.DEVMODEL_TEST_EXPECTED_HOME) throw new Error('probe containment failed');
 function touch(path) {
   const target = join(home, path);
   mkdirSync(dirname(target), { recursive: true });

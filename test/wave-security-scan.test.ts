@@ -53,7 +53,7 @@ function lastJson(stdout: string): any {
 
 /** Fixture repo with a base commit; returns its path. Caller adds commits. */
 function fixtureRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-wavescan-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-wavescan-'));
   const git = (cmd: string) => execSync(`git ${cmd}`, { cwd: dir, stdio: 'ignore' });
   git('init -q');
   git('config user.email t@example.invalid');

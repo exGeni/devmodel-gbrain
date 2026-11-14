@@ -27,7 +27,7 @@ let ENV: Record<string, string>;
 let hasTimeoutBin = false;
 
 function stageSandbox(): string {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-serial-pool-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-serial-pool-'));
   mkdirSync(join(root, 'scripts', 'lib'), { recursive: true });
   mkdirSync(join(root, 'test'), { recursive: true });
   for (const s of ['run-serial-tests.sh', 'lib/test-env.sh', 'sharding.ts']) {
@@ -90,7 +90,7 @@ beforeAll(() => {
     PATH: join(ROOT, 'bin'),
     HOME: process.env.HOME ?? ROOT,
     TMPDIR: process.env.TMPDIR ?? '/tmp',
-    GBRAIN_SERIAL_POOL: '2',
+    DEVMODEL_SERIAL_POOL: '2',
   };
 });
 
@@ -190,7 +190,7 @@ it('passes after one external SIGTERM', () => {
   it('a hung file is killed by the per-file wall-clock timeout', () => {
     if (!hasTimeoutBin) return; // macOS without coreutils: no wrapper, documented
     writeFileSync(join(ROOT, 'test', 'h-hang.serial.test.ts'), HANGING);
-    const r = runScript({ GBRAIN_SERIAL_FILE_TIMEOUT: '3' });
+    const r = runScript({ DEVMODEL_SERIAL_FILE_TIMEOUT: '3' });
     expect(r.code).toBe(1);
     expect(r.out).toContain('per-file timeout');
     expect(r.out).toContain('test/h-hang.serial.test.ts');

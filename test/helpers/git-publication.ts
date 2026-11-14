@@ -47,7 +47,7 @@ export function durableGitRepo(root: string, committed: string[]): void {
 export interface GitFixture { home: string; root: string; requestedRoot: string; remote: string; caseInsensitive: boolean; cleanup: () => void }
 
 function gitFixtureDirs() {
-  const requestedHome = mkdtempSync(join(tmpdir(), 'gbrain-git-publication-'));
+  const requestedHome = mkdtempSync(join(tmpdir(), 'devmodel-git-publication-'));
   const home = realpathSync.native(requestedHome);
   const root = join(home, 'worktree'), remote = join(home, 'remote.git');
   mkdirSync(root); mkdirSync(remote);

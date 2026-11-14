@@ -58,12 +58,12 @@ A pull request runs only the cheap tier. The lanes above run on the full profile
 
 | Command | What it runs | When to use |
 |---|---|---|
-| `bun run test` | The parallel unit loop (`scripts/run-unit-parallel.sh`): weighted shards, each a sequence of one Bun process per file (`scripts/run-unit-shard.sh`), then the serial pass. It leaves out `*.slow.test.ts` and `test/e2e/` and does no typecheck. The shard count is the CPU count, at most 4 unless `--shards N` or `SHARDS=N` says otherwise (cap 8). Total concurrency is capped to available memory at `GBRAIN_TEST_MEM_PER_FILE_MB` (default 1536) per slot, shedding intra-shard width before shards. A shard that fails with the WebAssembly out-of-memory signature or is killed externally gets one serial rescue pass ([rescues](protocol/AGENT_OPERATOR_v1.md#rescues-and-warnings)). Knobs: `--shards N`, `--max-concurrency N`, `--dry-run`, `GBRAIN_TEST_NO_MEM_ADAPT=1`, `GBRAIN_TEST_NO_OOM_FALLBACK=1`, `GBRAIN_TEST_MAX_CONCURRENCY` (default 4), `GBRAIN_TEST_SHARD_TIMEOUT`, `GBRAIN_TEST_SHARD_KILL_AFTER`. | The inner edit loop. |
-| `bun run verify` | The guard battery, fanned out by `scripts/run-verify-parallel.sh` through a bounded pool (`GBRAIN_VERIFY_MAX_PARALLEL`, default the CPU count). The heavy checks start first, then the self-timed `SOLO_CHECKS` run alone ([why](operations/verify-and-nightly-e2e.md#verify-solo-checks)). Each check is capped at `GBRAIN_VERIFY_TIMEOUT` seconds (default 120). Its `CHECKS` and `SOLO_CHECKS` arrays list what runs; `--dry-list` prints both. CI's `verify` job runs it with the typecheck left out (`GBRAIN_VERIFY_SKIP_TYPECHECK=1`) because the `typecheck` job runs it. | Before pushing and before `/ship`. |
+| `bun run test` | The parallel unit loop (`scripts/run-unit-parallel.sh`): weighted shards, each a sequence of one Bun process per file (`scripts/run-unit-shard.sh`), then the serial pass. It leaves out `*.slow.test.ts` and `test/e2e/` and does no typecheck. The shard count is the CPU count, at most 4 unless `--shards N` or `SHARDS=N` says otherwise (cap 8). Total concurrency is capped to available memory at `DEVMODEL_TEST_MEM_PER_FILE_MB` (default 1536) per slot, shedding intra-shard width before shards. A shard that fails with the WebAssembly out-of-memory signature or is killed externally gets one serial rescue pass ([rescues](protocol/AGENT_OPERATOR_v1.md#rescues-and-warnings)). Knobs: `--shards N`, `--max-concurrency N`, `--dry-run`, `DEVMODEL_TEST_NO_MEM_ADAPT=1`, `DEVMODEL_TEST_NO_OOM_FALLBACK=1`, `DEVMODEL_TEST_MAX_CONCURRENCY` (default 4), `DEVMODEL_TEST_SHARD_TIMEOUT`, `DEVMODEL_TEST_SHARD_KILL_AFTER`. | The inner edit loop. |
+| `bun run verify` | The guard battery, fanned out by `scripts/run-verify-parallel.sh` through a bounded pool (`DEVMODEL_VERIFY_MAX_PARALLEL`, default the CPU count). The heavy checks start first, then the self-timed `SOLO_CHECKS` run alone ([why](operations/verify-and-nightly-e2e.md#verify-solo-checks)). Each check is capped at `DEVMODEL_VERIFY_TIMEOUT` seconds (default 120). Its `CHECKS` and `SOLO_CHECKS` arrays list what runs; `--dry-list` prints both. CI's `verify` job runs it with the typecheck left out (`DEVMODEL_VERIFY_SKIP_TYPECHECK=1`) because the `typecheck` job runs it. | Before pushing and before `/ship`. |
 | `bun run test:full` | `verify`, then `scripts/run-unit-parallel.sh`, then `bun run test:slow`, then `bash scripts/run-e2e.sh`. A failing step stops the chain and its status is the command's status. | Before opening a pull request. |
-| `bun run ci:local` | The CI lanes on this machine: gitleaks scans (`scripts/test-gitleaks-config.sh`, `scripts/scan-worktree-secrets.sh` and `gitleaks git` over `origin/main..HEAD`), a smoke test of `run-e2e.sh`'s arguments, `scripts/check-bun-test-timeout.sh`, `bun run verify`, the serial and slow lanes, then four unit shards, each followed by its E2E shard (`SHARD=N/4`), run in parallel with `xargs -P4`. The sharded lane sets `GBRAIN_TEST_TIMEOUT_MULTIPLIER` to 6 unless the caller set it. `--no-shard` runs unit and E2E without shards. Complete shard logs are in `.context/ci-local-shards/`. `ci:local:diff` (`--diff`) runs only gitleaks and `scripts/ci-doc-checks.sh` on a doc-only diff and the whole gate otherwise ([E2E selection](#e2e-selection)). It stops at once without `gitleaks`. | The full local gate before shipping. |
+| `bun run ci:local` | The CI lanes on this machine: gitleaks scans (`scripts/test-gitleaks-config.sh`, `scripts/scan-worktree-secrets.sh` and `gitleaks git` over `origin/main..HEAD`), a smoke test of `run-e2e.sh`'s arguments, `scripts/check-bun-test-timeout.sh`, `bun run verify`, the serial and slow lanes, then four unit shards, each followed by its E2E shard (`SHARD=N/4`), run in parallel with `xargs -P4`. The sharded lane sets `DEVMODEL_TEST_TIMEOUT_MULTIPLIER` to 6 unless the caller set it. `--no-shard` runs unit and E2E without shards. Complete shard logs are in `.context/ci-local-shards/`. `ci:local:diff` (`--diff`) runs only gitleaks and `scripts/ci-doc-checks.sh` on a doc-only diff and the whole gate otherwise ([E2E selection](#e2e-selection)). It stops at once without `gitleaks`. | The full local gate before shipping. |
 | `bun run test:slow` | `scripts/run-slow-tests.sh`: every `*.slow.test.ts` file in one Bun process, per-test timeout 120 s. File arguments replace discovery. With no slow file it prints that and exits 0. | After touching slow-path code. |
-| `bun run test:serial` | `scripts/run-serial-tests.sh`: the `*.serial.test.ts` files, one Bun process per file, through a pool of `min(CPU count, 4)` processes (memory-adapted, `GBRAIN_SERIAL_POOL=N` overrides) that takes the heaviest file first from `scripts/serial-weights.json`. Per-test timeout 120 s; a pooled file is killed at 300 s (`GBRAIN_SERIAL_FILE_TIMEOUT`). The `EXCLUSIVE_FILES` of that script (machine-global state or timing, at most 4) run one at a time after the pool, on shard 1 only. `SHARD=N/M` partitions the pooled files. An externally killed file gets one sequential rescue run. It writes `.context/serial-timings.json` and `.context/serial-durations.txt`. | Debugging quarantined files; the CI serial workers. |
+| `bun run test:serial` | `scripts/run-serial-tests.sh`: the `*.serial.test.ts` files, one Bun process per file, through a pool of `min(CPU count, 4)` processes (memory-adapted, `DEVMODEL_SERIAL_POOL=N` overrides) that takes the heaviest file first from `scripts/serial-weights.json`. Per-test timeout 120 s; a pooled file is killed at 300 s (`DEVMODEL_SERIAL_FILE_TIMEOUT`). The `EXCLUSIVE_FILES` of that script (machine-global state or timing, at most 4) run one at a time after the pool, on shard 1 only. `SHARD=N/M` partitions the pooled files. An externally killed file gets one sequential rescue run. It writes `.context/serial-timings.json` and `.context/serial-durations.txt`. | Debugging quarantined files; the CI serial workers. |
 | `bun run test:e2e` | `bash scripts/run-e2e.sh` ([E2E lane](#e2e-lane)). | Before shipping; every full run. |
 | `bun run test:stress` | Runs test files repeatedly to prove they are deterministic ([Stress gate](#stress-gate)). | Before pushing a new or changed test file. |
 | `bun run test:heavy` | `scripts/run-heavy.sh`: every `*.sh` under `tests/heavy/` in turn, skipping files that start with `_`. Every script runs even after one fails; the exit status is the first failure's. With no script it prints that and exits 0. | Ops-shape scripts that do not belong in a Bun test. |
@@ -83,7 +83,7 @@ is `scripts/guards-manifest.tsv` ([Guard registry and
 self-test](#guard-registry-and-self-test)).
 
 `bun run typecheck` ([heap ceiling](operations/verify-and-nightly-e2e.md#typecheck-heap)) keeps
-TypeScript's incremental state in `node_modules/.cache/gbrain-typecheck.tsbuildinfo`. Every
+TypeScript's incremental state in `node_modules/.cache/devmodel-typecheck.tsbuildinfo`. Every
 invocation still runs the compiler; source, configuration and dependency changes invalidate the
 affected analysis, and cached diagnostics stay failures. CI's `typecheck` job restores that file and
 saves it after the check, also when the check finds type errors; it saves nothing when `tsc` aborted
@@ -127,10 +127,10 @@ the summary are cleared at the start of a run:
 | `.context/test-shards/shard-N.log` | Shard N's whole output, with `shard-N.exit`, `.start` and `.end` beside it. The serial pass and the rescue pass write `serial.log` and `oom-rescue.log` there too, overwritten only when that pass runs. |
 | `.context/test-failures.log` | Failure blocks, described below. |
 | `.context/test-summary.txt` | One line per shard: `shard N/M: pass=X fail=Y skip=Z rc=W`. A serial pass adds `serial: pass=N rc=0` or `serial: rc=R fail=N`. A shard that did not run normally has its own line: `EXIT-HANG ... warn-pass`, `WEDGED after Ns`, `KILLED externally ...` or `oom-rescue: ...`. |
-| `.context/test-receipts/` | [Executed-test receipts](#executed-test-receipts), unless `GBRAIN_TEST_RECEIPT_DIR` names another directory. |
+| `.context/test-receipts/` | [Executed-test receipts](#executed-test-receipts), unless `DEVMODEL_TEST_RECEIPT_DIR` names another directory. |
 
 Without a writable `.context/` the log, summary and shard directory go to `/tmp` instead
-(`gbrain-test-failures.log`, `gbrain-test-summary.txt`, `gbrain-test-shards-<pid>`). `.context/` is
+(`devmodel-test-failures.log`, `devmodel-test-summary.txt`, `devmodel-test-shards-<pid>`). `.context/` is
 gitignored.
 
 A failure block starts at a `(fail)` or `✗` line, is prefixed
@@ -150,7 +150,7 @@ full details:`, the absolute path of the failure log, the last 30 lines of that 
 stdout does not hide it. While shards run, one `[heartbeat]` line every 10 seconds carries a `[sN: ...]` entry per shard.
 The exit status is 0 or 1 (2 for a usage error).
 
-A shard that outlives `GBRAIN_TEST_SHARD_TIMEOUT` (default 3000 s; `GBRAIN_TEST_SHARD_KILL_AFTER`
+A shard that outlives `DEVMODEL_TEST_SHARD_TIMEOUT` (default 3000 s; `DEVMODEL_TEST_SHARD_KILL_AFTER`
 is the grace after TERM, default 30 s) is classified as one of two things:
 
 - **EXIT-HANG, warn-pass.** Its log had been silent for 300 s or more, shows no `(fail)` marker and
@@ -209,12 +209,12 @@ What the runner does around each file:
   `HOME` is killed and named; a `HOME` that cannot be removed fails that file by name. After the
   run the runner compares the operator's real config file before and after and exits 2 when it
   changed (an isolation breach).
-- Every `CONDUCTOR_`, `MCP_`, `OPENCLAW_`, `HERMES_`, `GROK_`, `OPENCODE_` and `GBRAIN_` variable is
-  dropped, except `GBRAIN_HOME`, `GBRAIN_TEST_KEEP_PROVIDER_KEYS`, `GBRAIN_CI_DISABLE_TEST_ENV_FILE`,
-  `GBRAIN_TEST_WAIT_MULTIPLIER` and `GBRAIN_E2E_FILE_TIMEOUT`. `DATABASE_URL` and
-  `GBRAIN_DATABASE_URL` are unset. Provider keys are kept (`GBRAIN_TEST_KEEP_PROVIDER_KEYS=1`),
+- Every `CONDUCTOR_`, `MCP_`, `OPENCLAW_`, `HERMES_`, `GROK_`, `OPENCODE_`, `GBRAIN_` and `DEVMODEL_` variable is
+  dropped, except `GBRAIN_HOME`, `DEVMODEL_TEST_KEEP_PROVIDER_KEYS`, `DEVMODEL_CI_DISABLE_TEST_ENV_FILE`,
+  `DEVMODEL_TEST_WAIT_MULTIPLIER` and `DEVMODEL_E2E_FILE_TIMEOUT`. `DATABASE_URL` and
+  `GBRAIN_DATABASE_URL` are unset. Provider keys are kept (`DEVMODEL_TEST_KEEP_PROVIDER_KEYS=1`),
   because an E2E file is where a real key is deliberate.
-- Each file runs under a hard outer timeout, 180 s by default (`GBRAIN_E2E_FILE_TIMEOUT` or
+- Each file runs under a hard outer timeout, 180 s by default (`DEVMODEL_E2E_FILE_TIMEOUT` or
   `E2E_FILE_TIMEOUT_SECS`), because a call that blocks the event loop outlives Bun's timer-based
   `--timeout`. Bun runs with `--timeout=60000` and a JUnit reporter.
 - A file counts as passed only when `python3` finds a complete native Bun report for exactly that
@@ -285,21 +285,21 @@ fails, is cancelled or is skipped. Merge-queue entry is inert until the queue is
 ### Executed-test receipts
 
 A green job proves only that nothing failed; receipts prove which tests ran. With
-`GBRAIN_TEST_RECEIPT_DIR` set, every Bun invocation a runner makes writes one receipt: the
+`DEVMODEL_TEST_RECEIPT_DIR` set, every Bun invocation a runner makes writes one receipt: the
 `<id>.receipt` file (key=value lines: lane, kind `primary|rerun|rescue`, shard, commit, run id and
 attempt, and `exit=` once the invocation returns), `<id>.files` (the assigned files) and
 `<id>.junit.xml` (Bun's native JUnit report). The writers are `scripts/test-shard.sh`,
 `scripts/run-unit-shard.sh` (per file), the parallel wrapper's rescue pass,
 `scripts/run-serial-tests.sh` (pooled runs and rescues), `scripts/run-slow-tests.sh`,
 `scripts/run-e2e.sh`, `scripts/run-verify-parallel.sh` and `scripts/run-with-receipt.sh <lane> <tag>
--- bun test …` for a bare `bun test` CI step. `GBRAIN_TEST_RECEIPT_LANE` overrides the runner's lane
+-- bun test …` for a bare `bun test` CI step. `DEVMODEL_TEST_RECEIPT_LANE` overrides the runner's lane
 name. `scripts/lib/test-env.sh` (`receipts_init`) reads both variables and unsets them, so tests and
 nested runners never inherit them. `bun run test` writes receipts to `.context/test-receipts/` by
 default.
 
 `bun run verify` records each check as pass, fail, timeout or skip in `<log dir>/outcomes.tsv` and in
 a JUnit receipt (one testcase per check). A check whose subject is absent prints
-`GBRAIN_CHECK_SKIPPED: <reason>` and exits 0; the recorder counts it as a skip, never a pass.
+`DEVMODEL_CHECK_SKIPPED: <reason>` and exits 0; the recorder counts it as a skip, never a pass.
 
 `scripts/ci-executed-counts.ts` is the ledger. It accounts for every executed test by identity,
 (lane, file, test name, arm); repeated names inside a file are numbered by order
@@ -382,7 +382,7 @@ committed weight maps: `scripts/test-weights.json` (unit, milliseconds), `script
 (serial, seconds) and `scripts/e2e-weights.json` (E2E, milliseconds), each with a
 `*-weights.metadata.json` beside it. A file with no weight is packed at the lane's p75 weight, so a
 new test file works at once. `test.yml` runs unit shards as `bash scripts/test-shard-pack.sh 4 <a>
-<b>`; shard `s` writes its coverage, receipts and timing log under `$GBRAIN_SHARD_PACK_DIR/<s>/`,
+<b>`; shard `s` writes its coverage, receipts and timing log under `$DEVMODEL_SHARD_PACK_DIR/<s>/`,
 and `test/scripts/ci-gates.test.ts` pins the matrix, the shard step and the coverage manifest to
 `UNIT_SHARDS` and `UNIT_SHARDS_PER_JOB` in `scripts/sharding.ts`.
 
@@ -449,7 +449,7 @@ runner pins `xargs` to one batch so an argument overflow fails loudly. `run-e2e.
 `COVERAGE_DIR` to an absolute path before it moves `HOME` and refuses a directory that already
 exists. A green lane writes `$COVERAGE_DIR/lane-manifest.json` (`{lane, sha, lcovCount, complete}`);
 a red run writes none, which merging treats as an incomplete lane. The E2E lane also writes
-`executed-files.txt`, also on a red run. Coverage lanes set `GBRAIN_TEST_WAIT_MULTIPLIER` to 2 unless
+`executed-files.txt`, also on a red run. Coverage lanes set `DEVMODEL_TEST_WAIT_MULTIPLIER` to 2 unless
 the caller chose a value ([helpers](#speed--environment-helpers-testhelpers)).
 
 **The corpus.** `prCorpus` is the eight coverage-collecting lanes in `test.yml`: four unit shards
@@ -626,19 +626,19 @@ included, as if they ran in the parallel pool.
 
 #### Opt-in naming rule
 
-`test/helpers/operator-env-preload.ts` deletes every `GBRAIN_*` variable outside the keep-list in
-`test/helpers/operator-env-policy.ts`, and every `CONDUCTOR_*`, `MCP_*` and `OPENCLAW_*` variable,
+`test/helpers/operator-env-preload.ts` deletes every `DEVMODEL_*` and `GBRAIN_*` variable outside the
+keep-list in `test/helpers/operator-env-policy.ts`, and every `CONDUCTOR_*`, `MCP_*` and `OPENCLAW_*` variable,
 before any test file loads, so an opt-in under any other name is a silent no-op. Name test opt-ins
-`GBRAIN_TEST_<AREA>_<WHAT>`, and paid ones `GBRAIN_TEST_LIVE_<WHAT>`. The keep-list is the
-`GBRAIN_TEST_`, `GBRAIN_CI_` and `GBRAIN_E2E_` prefixes plus `GBRAIN_HOME`, `GBRAIN_DATABASE_URL`,
-`GBRAIN_MODEL_DISCOVERY` and `GBRAIN_DEBUG_PRELOAD`. Renamed opt-ins are listed in the policy's
-`RENAMED` map (its one entry maps `GBRAIN_BASH32_REQUIRE` to `GBRAIN_TEST_BASH32_REQUIRE`); setting
-an old name stops the run with the rename command. `GBRAIN_TEST_KEEP_AMBIENT_ENV=1` turns the scrub
-off and `GBRAIN_DEBUG_PRELOAD=1` logs the names it removed, never the values.
+`DEVMODEL_TEST_<AREA>_<WHAT>`, and paid ones `DEVMODEL_TEST_LIVE_<WHAT>`. The keep-list is the
+`DEVMODEL_TEST_`, `DEVMODEL_CI_` and `DEVMODEL_E2E_` prefixes plus `GBRAIN_HOME`, `GBRAIN_DATABASE_URL`,
+`GBRAIN_MODEL_DISCOVERY` and `DEVMODEL_DEBUG_PRELOAD`. An old name of an opt-in stops the run with the rename command:
+`GBRAIN_TEST_*`, `GBRAIN_CI_*` and `GBRAIN_E2E_*` map to the same name under `DEVMODEL_`, and the
+policy's `RENAMED` map adds `GBRAIN_BASH32_REQUIRE` (now `DEVMODEL_TEST_BASH32_REQUIRE`). `DEVMODEL_TEST_KEEP_AMBIENT_ENV=1` turns the scrub
+off and `DEVMODEL_DEBUG_PRELOAD=1` logs the names it removed, never the values.
 
 `bun run check:test-env-opt-ins` (in `verify`) parses every test file under `test/` and `evals/` and
 fails on an execution-gating read (`describe.skipIf`, `if (...) return`, a constant used that way) of
-a `GBRAIN_*` name the preload strips, unless the same file assigns that name itself.
+a `DEVMODEL_*` or `GBRAIN_*` name the preload strips, unless the same file assigns that name itself.
 
 #### `withEnv` pattern
 
@@ -671,12 +671,12 @@ Reach for these before hand-rolling one:
 
 - `wait-for.ts`: `waitFor(predicate, {timeoutMs, intervalMs, label})` and `waitForValue` poll until
   the condition holds and fail with a labeled error, instead of a fixed `setTimeout` sleep.
-  `testWaitMs(ms)` scales a deadline by `GBRAIN_TEST_WAIT_MULTIPLIER` (1 to 4, default 1; any other
+  `testWaitMs(ms)` scales a deadline by `DEVMODEL_TEST_WAIT_MULTIPLIER` (1 to 4, default 1; any other
   value fails the test loudly), capped at 50 s so a slow condition fails as a labeled `waitFor` error
   and never as an anonymous Bun timeout. `waitFor` applies it to its own deadline.
   `scripts/lib/test-env.sh` sets the multiplier to 2 whenever `COVERAGE_DIR` is set, and
   `run-e2e.sh` keeps it through its environment scrub. It is separate from
-  `GBRAIN_TEST_TIMEOUT_MULTIPLIER`, which scales Bun's `--timeout` in `run-unit-shard.sh`.
+  `DEVMODEL_TEST_TIMEOUT_MULTIPLIER`, which scales Bun's `--timeout` in `run-unit-shard.sh`.
 - `with-env.ts`: `withEnv` (above) and `emptyHome()`, a fresh empty temporary directory for
   `GBRAIN_HOME`.
 - `git-fixture.ts`: `await makeGitFixture(dir)` builds a git repository once; `reset()` and
@@ -692,7 +692,7 @@ Reach for these before hand-rolling one:
   counter moved, or alternate two shapes so a short stall hits both.
 - `large-worktree.ts`: writes many small Markdown files and commits them as a fixture repository.
 - `golden.ts`: `expectGolden` compares an output with a stored golden through a named normalizer;
-  regenerate deliberately with `GBRAIN_TEST_UPDATE_GOLDENS=1 bun test <file>`, and justify the
+  regenerate deliberately with `DEVMODEL_TEST_UPDATE_GOLDENS=1 bun test <file>`, and justify the
   changed golden in the pull request.
 
 #### When to quarantine instead of fix
@@ -730,25 +730,25 @@ order:
    start while `DATABASE_URL` or `GBRAIN_DATABASE_URL` is set, because a test may run destructive
    statements against whatever those URLs name: `TEST-RUN GUARD: refusing to start — DATABASE_URL is
    set.`, exit 1. It fails with instructions instead of unsetting, which would turn gated tests into
-   green skips. `GBRAIN_TEST_ALLOW_DATABASE_URL=1` opts in for one run; avoid exporting it from a shell
+   green skips. `DEVMODEL_TEST_ALLOW_DATABASE_URL=1` opts in for one run; avoid exporting it from a shell
    profile. The unit, slow and serial wrappers and `run-e2e.sh` unset both variables at their own
    boundary.
 2. **Operator-env scrub** (`operator-env-preload.ts`): [Opt-in naming rule](#opt-in-naming-rule).
 3. **Provider-key strip** (`provider-keys-preload.ts`): removes the ambient provider credentials
    listed in `test/helpers/provider-env.ts`, so a run behaves as in keyless CI, and defaults
    `GBRAIN_MODEL_DISCOVERY` to `off`. A test that wants a key injects it itself (`withEnv`).
-   `GBRAIN_TEST_KEEP_PROVIDER_KEYS=1` keeps the ambient keys; `run-e2e.sh` sets it.
+   `DEVMODEL_TEST_KEEP_PROVIDER_KEYS=1` keeps the ambient keys; `run-e2e.sh` sets it.
 4. **Real-home guard** (`real-home-guard-preload.ts`): compares metadata (size, modification time,
    inode, mode) of a fixed list of install files under the operator's real home before and after
    each test and fails the test that changed one. It detects; it does not intercept, and it never
-   reads file contents. `GBRAIN_TEST_ALLOW_REAL_HOME_WRITES=1` disarms it, with a warning, for a
+   reads file contents. `DEVMODEL_TEST_ALLOW_REAL_HOME_WRITES=1` disarms it, with a warning, for a
    deliberate one-shot test inside an isolated child home. `test/real-home-guard-preload.test.ts`
    checks the guard.
 5. **`GBRAIN_HOME` isolation** (`gbrain-home-preload.ts`): points `GBRAIN_HOME` at a fresh temporary
    directory per run unless it is already set, so tests never read or change the operator's real
    configuration. A test that spawns a child sets both `HOME` and `GBRAIN_HOME` in the child's
    environment: `HOME` alone loses to the inherited value, and an in-process `HOME` change loses to
-   Bun's cached `os.homedir()`. `GBRAIN_DEBUG_PRELOAD=1` prints the allocated home.
+   Bun's cached `os.homedir()`. `DEVMODEL_DEBUG_PRELOAD=1` prints the allocated home.
 6. **Hermetic git** (`git-hermetic-preload.ts`): drops the git variables that locate a repository
    (`GIT_DIR`, `GIT_WORK_TREE`, ...), so a run started from a git hook never writes into the
    caller's repository, and turns off commit and tag signing for every git process in the run
@@ -786,14 +786,14 @@ diagnostics.
 `scripts/guard-self-test.sh` (`bun run check:guard-self-test`, a solo check in `bun run verify`)
 proves every `selftest yes` scanner can fail: it runs each against a known-bad tree (must exit
 non-zero) and a known-good tree (must pass) under `test/fixtures/guards/<guard>/{bad,good}/`, through
-the `GBRAIN_GUARD_ROOT` seam. Guards run four at a time (`GUARD_SELF_TEST_JOBS` overrides), results
+the `DEVMODEL_GUARD_ROOT` seam. Guards run four at a time (`GUARD_SELF_TEST_JOBS` overrides), results
 print in manifest order, and the whole pass must finish inside its 30 s budget. The self-test also
 enforces manifest completeness: a new `scripts/check-*` script with no manifest row fails. A guard
 whose pattern rots into a permanently green no-op fails CI instead of passing as coverage. A guard
 may carry extra known-bad trees named `bad-<variant>/`; each must fail on its own. A green
 self-test does not prove that a guard that skipped measured anything.
 
-**Skips.** A guard whose subject is absent prints `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0:
+**Skips.** A guard whose subject is absent prints `DEVMODEL_CHECK_SKIPPED: <reason>` and exits 0:
 nothing to scan, nothing to measure. `bun run verify` records it as `skip`, lists it under
 `self-skipped (recorded as skip, not pass)` and still exits 0. The size and orphan ratchets
 (`check:module-size`, `check:function-size`, `check:orphan-modules`) skip while `src/` has no source
@@ -827,15 +827,15 @@ macOS ships GNU bash 3.2.57 as `/bin/bash`, and its parser rejects shapes bash 5
 that broke every Mac is a heredoc inside `$(...)` whose body holds an odd quote.
 `scripts/check-bash32.sh` (`bun run check:bash32`) runs the real 3.2 parser, `bash -n`, over every
 tracked `*.sh` except the guard fixtures under `test/fixtures/guards/`. It uses the first parser
-available: `GBRAIN_BASH32=<path>` (a bash 3.x binary), `/bin/bash` when it is bash 3.x (stock
-macOS), or the digest-pinned `bash:3.2` Docker image (`GBRAIN_BASH32=docker` forces the image). With
-none it prints one skip line and exits 0; `GBRAIN_TEST_BASH32_REQUIRE=1` makes that exit 2. Each
+available: `DEVMODEL_BASH32=<path>` (a bash 3.x binary), `/bin/bash` when it is bash 3.x (stock
+macOS), or the digest-pinned `bash:3.2` Docker image (`DEVMODEL_BASH32=docker` forces the image). With
+none it prints one skip line and exits 0; `DEVMODEL_TEST_BASH32_REQUIRE=1` makes that exit 2. Each
 failure prints `FAIL: <file:line>`, `Why:` (macOS `/bin/bash` is 3.2), `Fix:` (read heredoc text with
 `IFS= read -r -d '' VAR <<'EOF' || true`) and `See:`. To reproduce one file by hand:
 `docker run --rm -v "$PWD":/w -w /w bash:3.2 bash -n <file>`.
 
 The guard checks parsing only. It is not in `bun run verify`, which must not need Docker. The
-`test.yml` `verify` job runs it with `GBRAIN_TEST_BASH32_REQUIRE=1`, together with
+`test.yml` `verify` job runs it with `DEVMODEL_TEST_BASH32_REQUIRE=1`, together with
 `test/scripts/check-bash32.test.ts`, whose real-parser cases feed it the
 `test/fixtures/guards/check-bash32.sh/{bad,good}` trees.
 
@@ -896,7 +896,7 @@ disposition:
 
 Each failure prints the rule, the module, the tests that import it, the reason, the remedy, the
 rerun command and this anchor. The entrypoint list, the allowlist and the permitted set are empty
-while `src/` is, and then the guard skips. Fixture mode (`GBRAIN_GUARD_ROOT`) reads the permitted set
+while `src/` is, and then the guard skips. Fixture mode (`DEVMODEL_GUARD_ROOT`) reads the permitted set
 from `<root>/permitted-test-only.json`; `test/scripts/check-orphan-modules.test.ts` proves every rule
 fails on a bad tree.
 

@@ -47,15 +47,15 @@ describe('CI execution evidence', () => {
     const tsc = job.steps.find(step => step.run === 'bash scripts/ci-typecheck.sh bun run typecheck')! as Job['steps'][number] & { id?: string };
     expect(tsc.id).toBe('tsc');
     expect(tsc['timeout-minutes']).toBe(12);
-    const restore = job.steps.find(step => step.uses?.startsWith('actions/cache/restore@') && step.with?.path === 'node_modules/.cache/gbrain-typecheck.tsbuildinfo')!;
+    const restore = job.steps.find(step => step.uses?.startsWith('actions/cache/restore@') && step.with?.path === 'node_modules/.cache/devmodel-typecheck.tsbuildinfo')!;
     const save = job.steps.find(step => step.uses?.startsWith('actions/cache/save@'))!;
     expect(save.if).toBe("always() && steps.tsc.outputs.state_written == 'true'");
     expect(save.with).toEqual({ path: restore.with!.path, key: restore.with!.key });
     expect(job.steps.indexOf(save)).toBeGreaterThan(job.steps.indexOf(tsc));
     const verify = unit.jobs.verify.steps.find(step => step.run === 'bun run verify')!;
-    expect(verify.env?.GBRAIN_VERIFY_SKIP_TYPECHECK).toBe('1');
-    expect(JSON.stringify(unit.jobs.verify.steps)).not.toContain('gbrain-typecheck.tsbuildinfo');
-    const skipped = spawnSync('bash', [join(root, 'scripts/run-verify-parallel.sh'), '--dry-list'], { cwd: root, encoding: 'utf8', env: { ...process.env, GBRAIN_VERIFY_SKIP_TYPECHECK: '1' } });
+    expect(verify.env?.DEVMODEL_VERIFY_SKIP_TYPECHECK).toBe('1');
+    expect(JSON.stringify(unit.jobs.verify.steps)).not.toContain('devmodel-typecheck.tsbuildinfo');
+    const skipped = spawnSync('bash', [join(root, 'scripts/run-verify-parallel.sh'), '--dry-list'], { cwd: root, encoding: 'utf8', env: { ...process.env, DEVMODEL_VERIFY_SKIP_TYPECHECK: '1' } });
     const full = spawnSync('bash', [join(root, 'scripts/run-verify-parallel.sh'), '--dry-list'], { cwd: root, encoding: 'utf8' });
     expect(full.stdout.split('\n')).toContain('typecheck');
     expect(skipped.stdout.split('\n').filter(Boolean)).toEqual(full.stdout.split('\n').filter(line => line && line !== 'typecheck'));
@@ -100,7 +100,7 @@ describe('CI execution evidence', () => {
   test('each packed unit shard uploads its own receipts, coverage lane and timing log', () => {
     const job = unit.jobs.test as Job;
     const pack = job.steps.find(step => step.run?.includes('scripts/test-shard-pack.sh'))!;
-    expect(pack.env).toEqual({ GBRAIN_SHARD_PACK_DIR: '${{ runner.temp }}/shards' });
+    expect(pack.env).toEqual({ DEVMODEL_SHARD_PACK_DIR: '${{ runner.temp }}/shards' });
     const uploads = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@')).map(step => [step.with!.name, step.with!.path]);
     expect(uploads).toEqual(Array.from({ length: UNIT_SHARDS_PER_JOB }, (_, i) => `\${{ matrix.shards[${i}] }}`).flatMap(shard => [
       [`receipts-unit-${shard}`, `\${{ runner.temp }}/shards/${shard}/receipts`],
@@ -117,7 +117,7 @@ describe('test:full exit status', () => {
     { database: '', e2eExit: 7, expected: 7 },
     { database: 'fixture-test-db', e2eExit: 7, expected: 7 },
   ])('DATABASE_URL=$database E2E exit=$e2eExit', ({ database, e2eExit, expected }) => {
-    const home = mkdtempSync(join(tmpdir(), 'gbrain-test-full-'));
+    const home = mkdtempSync(join(tmpdir(), 'devmodel-test-full-'));
     try {
       mkdirSync(join(home, 'scripts'));
       mkdirSync(join(home, 'bin'));

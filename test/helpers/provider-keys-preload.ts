@@ -17,15 +17,15 @@
  * preload only removes ambient shell state, never test-set state (it runs
  * once, before any test file loads).
  *
- * Escape hatch: GBRAIN_TEST_KEEP_PROVIDER_KEYS=1 preserves the ambient keys.
+ * Escape hatch: DEVMODEL_TEST_KEEP_PROVIDER_KEYS=1 preserves the ambient keys.
  * The e2e wrapper (scripts/run-e2e.sh) sets it at its own subprocess boundary
  * so keyed e2e runs (live embed parity tests skip-gated on real keys) keep
- * today's behavior — same pattern as GBRAIN_TEST_ALLOW_DATABASE_URL.
+ * today's behavior — same pattern as DEVMODEL_TEST_ALLOW_DATABASE_URL.
  */
 
 import { PROVIDER_ENV_KEYS } from './provider-env.ts';
 
-if (process.env.GBRAIN_TEST_KEEP_PROVIDER_KEYS !== '1') {
+if (process.env.DEVMODEL_TEST_KEEP_PROVIDER_KEYS !== '1') {
   for (const key of PROVIDER_ENV_KEYS) {
     if (process.env[key] !== undefined) {
       delete process.env[key];

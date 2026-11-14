@@ -6,17 +6,17 @@
 # Wired into `bun run verify` (check:newlines).
 #
 # Guard fixtures under test/fixtures/guards/ are skipped: their known-bad
-# trees deliberately lack the newline. Seam: GBRAIN_GUARD_ROOT scans a fixture
+# trees deliberately lack the newline. Seam: DEVMODEL_GUARD_ROOT scans a fixture
 # tree with find instead of git ls-files.
 
 set -euo pipefail
 
-cd "${GBRAIN_GUARD_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+cd "${DEVMODEL_GUARD_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
 # Files to check: anything tracked under src/ + test/ that's a code/text file.
 # Also the top-level *.yml + *.md the repo controls. Portable to bash 3.2
 # (macOS default) — no mapfile, no associative arrays.
-if [ -n "${GBRAIN_GUARD_ROOT:-}" ]; then
+if [ -n "${DEVMODEL_GUARD_ROOT:-}" ]; then
   files=$(find . -type f \( -name '*.ts' -o -name '*.js' -o -name '*.json' -o -name '*.sql' -o -name '*.md' -o -name 'gbrain.yml' \) | sed 's#^\./##' | sort -u)
 else
   files=$(
@@ -51,7 +51,7 @@ fi
 
 # Nothing to check: the runner counts the marker as a skip, not a pass.
 if [ "$total" -eq 0 ]; then
-  echo "GBRAIN_CHECK_SKIPPED: no non-empty tracked text files (src/, test/, gbrain.yml, *.md) to check"
+  echo "DEVMODEL_CHECK_SKIPPED: no non-empty tracked text files (src/, test/, gbrain.yml, *.md) to check"
   exit 0
 fi
 echo "trailing-newline check: ok ($total files)"

@@ -313,9 +313,9 @@ jobs:
       # The typecheck job below runs tsc, so verify skips its own copy here.
       - run: bun run verify
         env:
-          GBRAIN_VERIFY_SKIP_TYPECHECK: '1'
-          GBRAIN_TEST_RECEIPT_DIR: ${{ runner.temp }}/receipts
-          GBRAIN_VERIFY_LOG_DIR: ${{ runner.temp }}/verify-logs
+          DEVMODEL_VERIFY_SKIP_TYPECHECK: '1'
+          DEVMODEL_TEST_RECEIPT_DIR: ${{ runner.temp }}/receipts
+          DEVMODEL_VERIFY_LOG_DIR: ${{ runner.temp }}/verify-logs
       - name: Upload verify logs
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -336,8 +336,8 @@ jobs:
       # test's real-parser fixture cases mandatory.
       - name: Shell scripts parse under bash 3.2
         env:
-          GBRAIN_TEST_BASH32_REQUIRE: '1'
-          GBRAIN_TEST_RECEIPT_DIR: ${{ runner.temp }}/receipts
+          DEVMODEL_TEST_BASH32_REQUIRE: '1'
+          DEVMODEL_TEST_RECEIPT_DIR: ${{ runner.temp }}/receipts
         run: |
           bun run check:bash32
           bash scripts/run-with-receipt.sh verify-tests bash32 -- bun test --timeout 60000 test/scripts/check-bash32.test.ts
@@ -394,7 +394,7 @@ jobs:
       # `bun install`, which (re)creates node_modules.
       - uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684  # v4.2.3
         with:
-          path: node_modules/.cache/gbrain-typecheck.tsbuildinfo
+          path: node_modules/.cache/devmodel-typecheck.tsbuildinfo
           key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('bun.lock', 'tsconfig.json') }}-${{ github.sha }}
           restore-keys: |
             tsbuildinfo-${{ runner.os }}-${{ hashFiles('bun.lock', 'tsconfig.json') }}-
@@ -412,7 +412,7 @@ jobs:
         if: always() && steps.tsc.outputs.state_written == 'true'
         uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684  # v4.2.3
         with:
-          path: node_modules/.cache/gbrain-typecheck.tsbuildinfo
+          path: node_modules/.cache/devmodel-typecheck.tsbuildinfo
           key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('bun.lock', 'tsconfig.json') }}-${{ github.sha }}
 
   # Event parity (docs/ci-event-parity.md#full-ci-on-pull-requests): full profile only. A
@@ -460,7 +460,7 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}/4
           COVERAGE_DIR: ${{ runner.temp }}/coverage
-          GBRAIN_TEST_RECEIPT_DIR: ${{ runner.temp }}/receipts
+          DEVMODEL_TEST_RECEIPT_DIR: ${{ runner.temp }}/receipts
       - name: Upload receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -525,7 +525,7 @@ jobs:
       - name: Run the E2E lane
         run: bash scripts/run-e2e.sh
         env:
-          GBRAIN_TEST_RECEIPT_DIR: ${{ runner.temp }}/receipts
+          DEVMODEL_TEST_RECEIPT_DIR: ${{ runner.temp }}/receipts
       - name: Upload receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -613,7 +613,7 @@ jobs:
         shell: bash
         run: bash scripts/test-shard-pack.sh 4 ${{ join(matrix.shards, ' ') }}
         env:
-          GBRAIN_SHARD_PACK_DIR: ${{ runner.temp }}/shards
+          DEVMODEL_SHARD_PACK_DIR: ${{ runner.temp }}/shards
       - name: Runner diagnostics (after shard)
         if: always()
         shell: bash

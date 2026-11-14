@@ -18,10 +18,10 @@
 //
 // While src/ holds no source file and the allowlist and permitted set are
 // empty there is nothing to walk: the guard prints
-// `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0, which the verify runner counts
+// `DEVMODEL_CHECK_SKIPPED: <reason>` and exits 0, which the verify runner counts
 // as a skip. A stale entry still fails.
 //
-// Self-test seam: argv[2] (or GBRAIN_GUARD_ROOT) points at a fixture tree;
+// Self-test seam: argv[2] (or DEVMODEL_GUARD_ROOT) points at a fixture tree;
 // in fixture mode the entries are the entry*.ts files under src, the
 // hard-orphan allowlist is empty, and the permitted test-only set is read from
 // `<root>/permitted-test-only.json` (absent = empty), so
@@ -34,8 +34,8 @@
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
 
-const root = process.argv[2] || process.env.GBRAIN_GUARD_ROOT || '.';
-const fixtureMode = !!(process.argv[2] || process.env.GBRAIN_GUARD_ROOT);
+const root = process.argv[2] || process.env.DEVMODEL_GUARD_ROOT || '.';
+const fixtureMode = !!(process.argv[2] || process.env.DEVMODEL_GUARD_ROOT);
 
 const RERUN = 'bun run check:orphan-modules';
 const DOCS = 'docs/TESTING.md#orphan-module-guard';
@@ -115,7 +115,7 @@ function main() {
   const allow = fixtureMode ? new Map() : ALLOWLIST;
   const permittedList = loadPermitted();
   if (srcFiles.length === 0 && allow.size === 0 && permittedList.length === 0) {
-    console.log('GBRAIN_CHECK_SKIPPED: no source files under src/ and no allowlist or permitted test-only entries');
+    console.log('DEVMODEL_CHECK_SKIPPED: no source files under src/ and no allowlist or permitted test-only entries');
     process.exit(0);
   }
 

@@ -16,9 +16,9 @@ export function failureSignature(message: string): string {
     .replace(/\b\d+(?:\.\d+)?\b/g, 'N').replace(/\s+/g, ' ').slice(0, 200);
 }
 
-const MARKER = '<!-- gbrain-stress-exemption -->';
+const MARKER = '<!-- devmodel-stress-exemption -->';
 
-/** Every exemption block (`<!-- gbrain-stress-exemption -->` then a ```json object or array) in a text. */
+/** Every exemption block (`<!-- devmodel-stress-exemption -->` then a ```json object or array) in a text. */
 export function parseExemptionBlocks(text: string): VendoredExemption[] {
   const out: VendoredExemption[] = [];
   let at = text.indexOf(MARKER);

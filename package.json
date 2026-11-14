@@ -1,6 +1,6 @@
 {
-  "name": "gbrain",
-  "description": "Postgres-native personal knowledge brain with hybrid RAG search",
+  "name": "devmodel-gbrain",
+  "description": "A development model cut from gbrain: test lanes, guards, CI workflows and contributor tools, shipped with gstack",
   "type": "module",
   "scripts": {
     "wave-security-scan": "bash scripts/wave-security-scan.sh",
@@ -22,7 +22,7 @@
     "ci:local": "bash scripts/ci-local.sh",
     "ci:local:diff": "bash scripts/ci-local.sh --diff",
     "ci:select-e2e": "bun run scripts/select-e2e.ts",
-    "typecheck": "node --max-old-space-size=8192 node_modules/typescript/bin/tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/gbrain-typecheck.tsbuildinfo",
+    "typecheck": "node --max-old-space-size=8192 node_modules/typescript/bin/tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/devmodel-typecheck.tsbuildinfo",
     "check:privacy": "bash scripts/check-privacy.sh",
     "check:proposal-pii": "bash scripts/check-proposal-pii.sh",
     "check:test-names": "bash scripts/check-test-real-names.sh",

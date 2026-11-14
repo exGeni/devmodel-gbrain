@@ -56,7 +56,7 @@ describe('verify-move-only CLI over a git commit', () => {
   const SCRIPT = resolve(import.meta.dir, '..', '..', 'scripts', 'verify-move-only.ts');
 
   function repo(): (args: string[]) => string {
-    const dir = mkdtempSync(join(tmpdir(), 'gbrain-move-only-'));
+    const dir = mkdtempSync(join(tmpdir(), 'devmodel-move-only-'));
     dirs.push(dir);
     const run = (args: string[]) => {
       const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } });

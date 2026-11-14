@@ -16,7 +16,7 @@ const SCRIPT = join(root, 'scripts/ci-manifest-diff.sh');
 const base = { name: 'gbrain', version: '0.60.48.0', scripts: { test: 'bun test' }, dependencies: { a: '1.0.0' } };
 
 function withDir<T>(fn: (dir: string) => T): T {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-manifest-diff-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-manifest-diff-'));
   try { return fn(dir); } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 

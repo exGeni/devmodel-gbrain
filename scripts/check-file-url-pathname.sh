@@ -12,14 +12,14 @@
 # `import.meta.url.pathname` and `pathToFileURL(...).pathname` on one line.
 #
 # Usage: bash scripts/check-file-url-pathname.sh
-# Self-test seam: GBRAIN_GUARD_ROOT points at a fixture tree.
+# Self-test seam: DEVMODEL_GUARD_ROOT points at a fixture tree.
 # Exit: 0 when clean (or when test/ holds no such file: it then prints
-# `GBRAIN_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a skip,
+# `DEVMODEL_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a skip,
 # not a pass), 1 with one line per finding.
 
 set -uo pipefail
 
-ROOT="${GBRAIN_GUARD_ROOT:-$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "$0")/.." && pwd))}"
+ROOT="${DEVMODEL_GUARD_ROOT:-$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "$0")/.." && pwd))}"
 cd "$ROOT" || exit 1
 if [ ! -d test ]; then
   echo "check-file-url-pathname: no test/ directory under $ROOT" >&2
@@ -38,7 +38,7 @@ fi
 # runner counts the marker as a skip, not a pass.
 scanned="$(find test -type f \( -name '*.ts' -o -name '*.mts' -o -name '*.js' -o -name '*.mjs' \) -not -path 'test/fixtures/guards/*' 2>/dev/null | head -n 1 || true)"
 if [ -z "$scanned" ]; then
-  echo "GBRAIN_CHECK_SKIPPED: no .ts, .mts, .js or .mjs files under test/ to scan"
+  echo "DEVMODEL_CHECK_SKIPPED: no .ts, .mts, .js or .mjs files under test/ to scan"
   exit 0
 fi
 echo "check-file-url-pathname: ok"

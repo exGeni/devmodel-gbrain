@@ -29,21 +29,21 @@
 #   bash scripts/check-key-files-current-state.sh
 #
 # Env overrides (for the guard's own test):
-#   GBRAIN_DOC_GUARD_ROOT        repo root to scan (default: script's ../)
-#   GBRAIN_CLAUDE_MD_MAX_BYTES   CLAUDE.md hard cap (default: 35000)
-#   GBRAIN_TESTING_MD_MAX_BYTES  docs/TESTING.md hard cap (default: 70000)
+#   DEVMODEL_DOC_GUARD_ROOT        repo root to scan (default: script's ../)
+#   DEVMODEL_CLAUDE_MD_MAX_BYTES   CLAUDE.md hard cap (default: 35000)
+#   DEVMODEL_TESTING_MD_MAX_BYTES  docs/TESTING.md hard cap (default: 70000)
 #
 # Exit codes:
 #   0   clean, or none of the docs it reads exists (then it prints
-#       `GBRAIN_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a
+#       `DEVMODEL_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a
 #       skip, not a pass)
 #   1   a hard gate failed
 
 set -uo pipefail
 
-ROOT="${GBRAIN_DOC_GUARD_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
-MAX_BYTES="${GBRAIN_CLAUDE_MD_MAX_BYTES:-35000}"
-TESTING_MAX_BYTES="${GBRAIN_TESTING_MD_MAX_BYTES:-70000}"
+ROOT="${DEVMODEL_DOC_GUARD_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+MAX_BYTES="${DEVMODEL_CLAUDE_MD_MAX_BYTES:-35000}"
+TESTING_MAX_BYTES="${DEVMODEL_TESTING_MD_MAX_BYTES:-70000}"
 
 # Reference docs that MUST stay current-state (history-free).
 REFERENCE_DOCS=(
@@ -155,7 +155,7 @@ for rel in "${REFERENCE_DOCS[@]}" CLAUDE.md; do
   [ -f "$ROOT/$rel" ] && checked=$((checked + 1))
 done
 if [ "$checked" -eq 0 ]; then
-  echo "GBRAIN_CHECK_SKIPPED: none of CLAUDE.md, docs/TESTING.md or the docs/architecture reference docs exist"
+  echo "DEVMODEL_CHECK_SKIPPED: none of CLAUDE.md, docs/TESTING.md or the docs/architecture reference docs exist"
   exit 0
 fi
 echo "check-key-files-current-state: ok (reference docs history-free; entry and subsystem docs within caps)"

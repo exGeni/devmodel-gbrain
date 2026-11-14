@@ -8,7 +8,7 @@
  * a release newer than the working tree's VERSION: since PRs carry no version, a
  * branch that lands without containing main is behind main's newest releases,
  * and its merged tree carries them.
- * Base ref: $GBRAIN_CHANGELOG_BASE_REF, default origin/main; unavailable: fails
+ * Base ref: $DEVMODEL_CHANGELOG_BASE_REF, default origin/main; unavailable: fails
  * under CI=true, skips locally; a base file with no release heading skips too
  * (nothing to compare). Exit 0 ok or skipped, 1 refused.
  * Docs: docs/RELEASING.md#changelog--version-are-branch-scoped
@@ -31,7 +31,7 @@ export function main(opts: { cwd?: string; env?: Record<string, string | undefin
   const root = opts.cwd ?? process.cwd();
   const env = opts.env ?? process.env;
   const log = opts.log ?? ((line: string) => console.log(line));
-  const ref = env.GBRAIN_CHANGELOG_BASE_REF || 'origin/main';
+  const ref = env.DEVMODEL_CHANGELOG_BASE_REF || 'origin/main';
   const base = spawnSync('git', ['show', `${ref}:CHANGELOG.md`], { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
   if (base.status !== 0) {
     if (env.CI === 'true') {
@@ -40,7 +40,7 @@ export function main(opts: { cwd?: string; env?: Record<string, string | undefin
       return 1;
     }
     log(`skip: check-changelog-headings: ${ref} is not available`);
-    log(`GBRAIN_CHECK_SKIPPED: base ref ${ref} unavailable`);
+    log(`DEVMODEL_CHECK_SKIPPED: base ref ${ref} unavailable`);
     return 0;
   }
   const file = join(root, 'CHANGELOG.md');
@@ -49,7 +49,7 @@ export function main(opts: { cwd?: string; env?: Record<string, string | undefin
   const baseHeadings = releaseHeadings(base.stdout);
   if (baseHeadings.length === 0) {
     // The base file lists no release, so there is nothing to compare against.
-    log(`GBRAIN_CHECK_SKIPPED: ${ref}:CHANGELOG.md has no release headings`);
+    log(`DEVMODEL_CHECK_SKIPPED: ${ref}:CHANGELOG.md has no release headings`);
     return 0;
   }
   const absent = baseHeadings.filter((heading) => !have.has(heading));

@@ -31,7 +31,7 @@ function junit(cases: Case[]): string {
 }
 
 let root: string;
-beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'gbrain-x2-')); });
+beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'devmodel-x2-')); });
 afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
 interface ReceiptSpec {
@@ -84,7 +84,7 @@ describe('parseJUnit', () => {
   });
 
   test('unstable fragments canonicalize so reruns keep one identity; fixed dates stay', () => {
-    expect(canonicalTestName('writes /tmp/gbrain-x-AbC123/out as 3f2b1c4d-1111-2222-3333-444455556666 on 2026-10-04T10:00:00Z'))
+    expect(canonicalTestName('writes /tmp/devmodel-x-AbC123/out as 3f2b1c4d-1111-2222-3333-444455556666 on 2026-10-04T10:00:00Z'))
       .toBe('writes <tmp> as <uuid> on 2026-10-04T10:00:00Z');
   });
 

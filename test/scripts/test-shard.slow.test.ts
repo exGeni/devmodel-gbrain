@@ -213,7 +213,7 @@ describe('test-shard.sh — execution order contract', () => {
     const { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('fs');
     const { tmpdir } = require('os');
     const { join } = require('path');
-    const root = mkdtempSync(join(tmpdir(), 'gbrain-test-shard-order-'));
+    const root = mkdtempSync(join(tmpdir(), 'devmodel-test-shard-order-'));
     try {
       for (const dir of ['scripts/lib', 'test', 'bin']) mkdirSync(join(root, dir), { recursive: true });
       copyFileSync(SHARD_SH, join(root, 'scripts/test-shard.sh'));
@@ -241,7 +241,7 @@ exec "$REAL_BUN" "$@"
         REAL_BUN: process.execPath,
         ORDER_LOG: join(root, 'order.log'),
         ARGV_LOG: join(root, 'argv.log'),
-        GBRAIN_TEST_RECEIPT_DIR: join(root, 'receipts'),
+        DEVMODEL_TEST_RECEIPT_DIR: join(root, 'receipts'),
         COVERAGE_DIR: '',
       };
       const planned = execFileSync('bash', [join(root, 'scripts/test-shard.sh'), '--dry-run-list', '1', '1'], { cwd: root, encoding: 'utf-8', env })

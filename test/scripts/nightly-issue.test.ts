@@ -1097,7 +1097,7 @@ describe('stress-gate exemption records (lane D contract: scripts/stress/README.
   test('the manifest signature is the gate\'s failureSignature of the JUnit message (numbers, temp paths, UUIDs, ANSI masked)', () => {
     for (const msg of [
       'expected 8 dimensions, not 1536',
-      '\x1b[31merror\x1b[0m: ENOENT /tmp/gbrain-abc123/x.md\n  at foo (src/a.ts:12:3)\n\n  at bar\n  at baz\n  at qux',
+      '\x1b[31merror\x1b[0m: ENOENT /tmp/devmodel-abc123/x.md\n  at foo (src/a.ts:12:3)\n\n  at bar\n  at baz\n  at qux',
       'job 3f2b8c1a-1111-2222-3333-444455556666 took 12.5s, limit 10s',
       'x'.repeat(400),
     ]) expect(failureSignature(msg)).toBe(gateSignature(msg));

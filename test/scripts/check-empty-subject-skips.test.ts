@@ -4,11 +4,11 @@
  * check-trailing-newline.sh and check-file-url-pathname.sh.
  *
  * scripts/run-verify-parallel.sh records a check that exits 0 as a pass unless
- * its output has a line starting with `GBRAIN_CHECK_SKIPPED: <reason>`. A guard
+ * its output has a line starting with `DEVMODEL_CHECK_SKIPPED: <reason>`. A guard
  * with nothing to scan must print that line, so a tree that lost its subject
  * reads as a skip, and a guard that scanned something must not print it.
  * Each case builds a throwaway tree and runs the guard against it
- * (GBRAIN_GUARD_ROOT where the guard has that seam, otherwise a git repo as
+ * (DEVMODEL_GUARD_ROOT where the guard has that seam, otherwise a git repo as
  * the working directory).
  */
 import { afterEach, describe, expect, test } from 'bun:test';
@@ -19,7 +19,7 @@ import { dirname, join, resolve } from 'node:path';
 
 const REPO = resolve(import.meta.dir, '..', '..');
 const BASH = Bun.which('bash')!;
-const SKIP_LINE = /^GBRAIN_CHECK_SKIPPED: \S/m;
+const SKIP_LINE = /^DEVMODEL_CHECK_SKIPPED: \S/m;
 // Built in two pieces so this file is not itself a hit of check-file-url-pathname.sh.
 const PATHNAME_HIT = `new URL('x', import.meta${'.url'}).pathname`;
 const roots: string[] = [];
@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 function tree(files: Record<string, string> = {}, dirs: string[] = []): string {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-empty-subject-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-empty-subject-'));
   roots.push(root);
   for (const dir of dirs) mkdirSync(join(root, dir), { recursive: true });
   for (const [rel, body] of Object.entries(files)) {
@@ -43,13 +43,13 @@ function guard(script: string, root: string, env: Record<string, string> = {}) {
   const r = spawnSync(BASH, [join(REPO, 'scripts', script)], {
     cwd: root,
     encoding: 'utf8',
-    env: { ...process.env, GBRAIN_GUARD_ROOT: root, ...env },
+    env: { ...process.env, DEVMODEL_GUARD_ROOT: root, ...env },
   });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
 describe('check-test-real-names.sh', () => {
-  // Without GBRAIN_GUARD_ROOT the guard works in the git toplevel, else the cwd.
+  // Without DEVMODEL_GUARD_ROOT the guard works in the git toplevel, else the cwd.
   const realNames = (root: string, env: Record<string, string> = {}) => {
     spawnSync('git', ['init', '-q'], { cwd: root });
     return guard('check-test-real-names.sh', root, env);
@@ -71,7 +71,7 @@ describe('check-test-real-names.sh', () => {
     const r = realNames(tree({ 'README.md': 'x\n' }));
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(SKIP_LINE);
-    expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: no TypeScript files under test/ or evals/ to scan');
+    expect(r.stdout).toContain('DEVMODEL_CHECK_SKIPPED: no TypeScript files under test/ or evals/ to scan');
   });
 
   test('a test/ without a test file reports a skip', () => {
@@ -83,10 +83,10 @@ describe('check-test-real-names.sh', () => {
   test('a scanned clean test file passes without a skip; a banned name still fails', () => {
     const clean = realNames(tree({ 'test/a.test.ts': "test('ok', () => {});\n" }));
     expect(clean.status).toBe(0);
-    expect(clean.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(clean.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
     const dirty = realNames(tree({ 'test/a.test.ts': `// ${bannedName}\n` }));
     expect(dirty.status).toBe(1);
-    expect(dirty.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(dirty.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
     expect(dirty.stderr).toContain('banned real-name references');
   });
 
@@ -97,7 +97,7 @@ describe('check-test-real-names.sh', () => {
     expect(viaGrep.stdout).toMatch(SKIP_LINE);
     const viaRg = realNames(tree(helperOnly), { PATH: toolPath(true) });
     expect(viaRg.status).toBe(0);
-    expect(viaRg.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(viaRg.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 });
 
@@ -107,14 +107,14 @@ describe('check-fixture-privacy.sh', () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('[check-fixture-privacy] no fixture dirs exist; nothing to check');
     expect(r.stdout).toMatch(SKIP_LINE);
-    expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: none of the fixture, eval or audit paths exist');
+    expect(r.stdout).toContain('DEVMODEL_CHECK_SKIPPED: none of the fixture, eval or audit paths exist');
     expect(r.stdout).not.toContain('OK: no banned tokens');
   });
 
   test('fixture directories with no file report a skip', () => {
     const r = guard('check-fixture-privacy.sh', tree({}, ['test/fixtures/transcripts', 'evals', 'docs/test-audit']));
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: the fixture, eval and audit paths hold no files');
+    expect(r.stdout).toContain('DEVMODEL_CHECK_SKIPPED: the fixture, eval and audit paths hold no files');
     expect(r.stdout).not.toContain('OK: no banned tokens');
   });
 
@@ -122,10 +122,10 @@ describe('check-fixture-privacy.sh', () => {
     const clean = guard('check-fixture-privacy.sh', tree({ 'test/fixtures/transcripts/a.json': '{"name":"alice-example"}\n' }));
     expect(clean.status).toBe(0);
     expect(clean.stdout).toContain('OK: no banned tokens found');
-    expect(clean.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(clean.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
     const dirty = guard('check-fixture-privacy.sh', tree({ 'test/fixtures/transcripts/a.json': '{"fund":"Sequoia"}\n' }));
     expect(dirty.status).toBe(1);
-    expect(dirty.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(dirty.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 });
 
@@ -136,7 +136,7 @@ describe('check-trailing-newline.sh', () => {
       const r = guard('check-trailing-newline.sh', tree(files));
       expect(r.status).toBe(0);
       expect(r.stdout).toMatch(SKIP_LINE);
-      expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: no non-empty tracked text files');
+      expect(r.stdout).toContain('DEVMODEL_CHECK_SKIPPED: no non-empty tracked text files');
       expect(r.stdout).not.toContain('trailing-newline check: ok');
     }
   });
@@ -145,10 +145,10 @@ describe('check-trailing-newline.sh', () => {
     const clean = guard('check-trailing-newline.sh', tree({ 'src/a.ts': 'export const a = 1;\n' }));
     expect(clean.status).toBe(0);
     expect(clean.stdout).toContain('trailing-newline check: ok (1 files)');
-    expect(clean.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(clean.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
     const dirty = guard('check-trailing-newline.sh', tree({ 'src/a.ts': 'export const a = 1;' }));
     expect(dirty.status).toBe(1);
-    expect(dirty.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(dirty.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 });
 
@@ -162,7 +162,7 @@ describe('check-file-url-pathname.sh', () => {
       const r = guard('check-file-url-pathname.sh', tree(files, ['test']));
       expect(r.status).toBe(0);
       expect(r.stdout).toMatch(SKIP_LINE);
-      expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: no .ts, .mts, .js or .mjs files under test/ to scan');
+      expect(r.stdout).toContain('DEVMODEL_CHECK_SKIPPED: no .ts, .mts, .js or .mjs files under test/ to scan');
       expect(r.stdout).not.toContain('check-file-url-pathname: ok');
     }
   });
@@ -170,16 +170,16 @@ describe('check-file-url-pathname.sh', () => {
   test('a tree with no test/ stays a failure, not a skip', () => {
     const r = guard('check-file-url-pathname.sh', tree({ 'README.md': 'x\n' }));
     expect(r.status).toBe(1);
-    expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(r.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 
   test('a scanned clean file passes without a skip; a .pathname hit still fails', () => {
     const clean = guard('check-file-url-pathname.sh', tree({ 'test/a.test.ts': "import { fileURLToPath } from 'node:url';\n" }));
     expect(clean.status).toBe(0);
     expect(clean.stdout).toContain('check-file-url-pathname: ok');
-    expect(clean.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(clean.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
     const dirty = guard('check-file-url-pathname.sh', tree({ 'test/a.test.ts': `const p = ${PATHNAME_HIT};\n` }));
     expect(dirty.status).toBe(1);
-    expect(dirty.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(dirty.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 });

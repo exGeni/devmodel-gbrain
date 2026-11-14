@@ -30,7 +30,7 @@ function evaluate(expression: string, context: Context): unknown {
     cancelled: () => false,
     contains: (list: unknown[], item: unknown) => list.includes(item),
     format: (f: string, ...a: unknown[]) => f.replace(/\{(\d+)\}/g, (_, i) => String(a[Number(i)])),
-    vars: { GBRAIN_PAID_LANES: '' },
+    vars: { DEVMODEL_PAID_LANES: '' },
     github: { event_name: context.event, repository: 'acme-example/gbrain',
       event: { action: context.action, label: { name: context.label }, pull_request: context.pr ?? {} } },
     inputs: context.inputs ?? {},
@@ -97,7 +97,7 @@ describe('full CI on pull requests', () => {
     });
 
   test('the full-suite artifact records the tree the run checked out', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gbrain-full-suite-tree-'));
+    const dir = mkdtempSync(join(tmpdir(), 'devmodel-full-suite-tree-'));
     try {
       const git = (...args: string[]) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: dir, encoding: 'utf8' });
       git('init', '-q');
@@ -123,7 +123,7 @@ describe('full CI on pull requests', () => {
   });
 
   test('tree.json lists the executed test files only from a complete manifest of the same run, attempt and commit', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gbrain-full-suite-files-'));
+    const dir = mkdtempSync(join(tmpdir(), 'devmodel-full-suite-files-'));
     try {
       const git = (...args: string[]) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: dir, encoding: 'utf8' });
       git('init', '-q');
@@ -132,7 +132,7 @@ describe('full CI on pull requests', () => {
       git('commit', '-qm', 'a');
       const sha = git('rev-parse', 'HEAD').stdout.trim();
       const manifest = (over: Record<string, unknown> = {}) => ({
-        schema: 'gbrain-ci-manifest/v1', workflow: 'Test', event: 'workflow_dispatch', sha, run_id: 42, run_attempt: 2, complete: true, problems: [],
+        schema: 'devmodel-ci-manifest/v1', workflow: 'Test', event: 'workflow_dispatch', sha, run_id: 42, run_attempt: 2, complete: true, problems: [],
         files: [
           { file: 'test/b.test.ts', lane: 'unit', arm: '', executed: 3, failed: 0, skipped: 1 },
           { file: 'test/a.test.ts', lane: 'unit', arm: '', executed: 2, failed: 0, skipped: 0 },
@@ -210,7 +210,7 @@ describe('full CI on pull requests', () => {
   describe('cheap-tier aggregator', () => {
     const green = { CHANGES: 'success', GITLEAKS: 'success', AUDIT: 'success', VERIFY: 'success', TYPECHECK: 'success', STRESS: 'success' };
     const aggregate = (env: Record<string, string>) => {
-      const dir = mkdtempSync(join(tmpdir(), 'gbrain-cheap-tier-'));
+      const dir = mkdtempSync(join(tmpdir(), 'devmodel-cheap-tier-'));
       try {
         const summary = join(dir, 'summary.md');
         const result = bash(`bash ${join(root, 'scripts/ci-cheap-tier.sh')}`, { ...env, GITHUB_STEP_SUMMARY: summary });

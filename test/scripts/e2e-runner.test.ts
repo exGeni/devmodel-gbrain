@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 
 const repo = join(import.meta.dir, '../..');
 function setup() {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-e2e-runner-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-e2e-runner-'));
   for (const dir of ['scripts/lib', 'test/e2e', 'bin']) mkdirSync(join(root, dir), { recursive: true });
   for (const file of ['run-e2e.sh', 'sharding.ts', 'lib/test-env.sh']) copyFileSync(join(repo, 'scripts', file), join(root, 'scripts', file));
   for (const name of ['a', 'b']) writeFileSync(join(root, `test/e2e/${name}.test.ts`), `import {test,expect} from 'bun:test'; test('isolated routing',()=>{ expect(process.env.SHARD).toBeUndefined(); expect(process.env.COVERAGE_DIR ?? '').toBe(''); });`);
@@ -136,15 +136,15 @@ test('fresh process',()=>{
       for (const [file, contents] of Object.entries(prior)) expect(readFileSync(join(coverage, file), 'utf8')).toBe(contents);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
-  test('coverage runs default GBRAIN_TEST_WAIT_MULTIPLIER to 2 and keep an explicit value through the env scrub', () => {
+  test('coverage runs default DEVMODEL_TEST_WAIT_MULTIPLIER to 2 and keep an explicit value through the env scrub', () => {
     const root = setup();
     try {
       writeFileSync(join(root, 'bin/git'), '#!/bin/sh\nprintf fixture-commit\n', { mode: 0o755 });
-      writeFileSync(join(root, 'test/e2e/a.test.ts'), "import {test,expect} from 'bun:test'; test('multiplier',()=>expect(process.env.GBRAIN_TEST_WAIT_MULTIPLIER).toBe(process.env.EXPECTED_MULTIPLIER));");
+      writeFileSync(join(root, 'test/e2e/a.test.ts'), "import {test,expect} from 'bun:test'; test('multiplier',()=>expect(process.env.DEVMODEL_TEST_WAIT_MULTIPLIER).toBe(process.env.EXPECTED_MULTIPLIER));");
       const path = `${join(root, 'bin')}:${process.env.PATH}`;
       for (const [coverage, multiplier, expected] of [['coverage-a', '', '2'], ['coverage-b', '3', '3'], ['', '1.5', '1.5']]) {
         const result = spawnSync('bash', ['scripts/run-e2e.sh', 'test/e2e/a.test.ts'], {
-          cwd: root, encoding: 'utf8', env: { ...env, COVERAGE_DIR: coverage, GBRAIN_TEST_WAIT_MULTIPLIER: multiplier, EXPECTED_MULTIPLIER: expected, PATH: path },
+          cwd: root, encoding: 'utf8', env: { ...env, COVERAGE_DIR: coverage, DEVMODEL_TEST_WAIT_MULTIPLIER: multiplier, EXPECTED_MULTIPLIER: expected, PATH: path },
         });
         expect(result.status, result.stdout + result.stderr).toBe(0);
       }
@@ -370,7 +370,7 @@ test('leaks a detached child',()=>{
     try {
       writeFileSync(join(root, files[1]), "import {test,expect} from 'bun:test';test('breaks',()=>expect(1).toBe(2));");
       const receipts = join(root, 'receipts');
-      const r = spawnSync('bash', ['scripts/run-e2e.sh', ...files], { cwd: root, encoding: 'utf8', env: { ...env, GBRAIN_TEST_RECEIPT_DIR: receipts, GBRAIN_TEST_RECEIPT_LANE: 'tier9' } });
+      const r = spawnSync('bash', ['scripts/run-e2e.sh', ...files], { cwd: root, encoding: 'utf8', env: { ...env, DEVMODEL_TEST_RECEIPT_DIR: receipts, DEVMODEL_TEST_RECEIPT_LANE: 'tier9' } });
       expect(r.status).toBe(1);
       const ids = readdirSync(receipts).filter(n => n.endsWith('.receipt')).sort();
       expect(ids).toEqual(['tier9--run-f1--primary.receipt', 'tier9--run-f2--primary.receipt']);

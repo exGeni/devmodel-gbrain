@@ -21,9 +21,9 @@ afterEach(() => {
 const FAKE_SHARD = String.raw`#!/usr/bin/env bash
 set -euo pipefail
 s=$1
-mkdir -p "$COVERAGE_DIR" "$GBRAIN_TEST_RECEIPT_DIR"
+mkdir -p "$COVERAGE_DIR" "$DEVMODEL_TEST_RECEIPT_DIR"
 echo "lane shard-$s" > "$COVERAGE_DIR/lane-manifest.json"
-echo "receipt $s of $2" > "$GBRAIN_TEST_RECEIPT_DIR/unit.receipt"
+echo "receipt $s of $2" > "$DEVMODEL_TEST_RECEIPT_DIR/unit.receipt"
 echo "start $s"
 touch "$FIXTURE_SYNC/$s"
 for _ in $(seq 1 200); do
@@ -38,7 +38,7 @@ exit "$(printenv "FIXTURE_EXIT_$s" || echo 0)"
 `;
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-shard-pack-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-shard-pack-'));
   roots.push(root);
   mkdirSync(join(root, 'scripts'));
   for (const file of ['scripts/test-shard-pack.sh', 'scripts/capture-test-log.ts']) copyFileSync(join(REPO, file), join(root, file));
@@ -54,7 +54,7 @@ function pack(root: string, args: string[], env: Record<string, string> = {}) {
     cwd: root,
     env: {
       PATH: `${dirname(process.execPath)}:${process.env.PATH ?? '/usr/bin:/bin'}`,
-      GBRAIN_SHARD_PACK_DIR: out,
+      DEVMODEL_SHARD_PACK_DIR: out,
       FIXTURE_SYNC: join(root, 'sync'),
       FIXTURE_EXPECT: String(args.length - 1),
       ...env,
@@ -75,7 +75,7 @@ describe('scripts/test-shard-pack.sh', () => {
       expect(readFileSync(join(r.out, s, 'receipts/unit.receipt'), 'utf8')).toBe(`receipt ${s} of 18\n`);
       const capture = readFileSync(join(r.out, s, 'unit.log'), 'utf8').trimEnd().split('\n');
       expect(capture.every(line => line.startsWith(`test (${s})\tcapture\t`))).toBe(true);
-      expect(capture.at(-1)).toEndWith('##[gbrain-capture-complete] exit=0');
+      expect(capture.at(-1)).toEndWith('##[devmodel-capture-complete] exit=0');
       const block = `=== unit shard ${s}/18 exited 0 ===\nstart ${s}\nmiddle ${s}\nend ${s}\n=== end of unit shard ${s}/18 ===\n`;
       expect(r.stdout).toContain(block);
     }
@@ -90,7 +90,7 @@ describe('scripts/test-shard-pack.sh', () => {
     expect(r.stdout).toContain('=== unit shard 6/18 exited 3 ===');
     expect(r.stdout).toContain('::error title=unit shard 6/18 failed::exit 3; reproduce with: bash scripts/test-shard.sh 6 18');
     expect(r.stdout).not.toContain('unit shard 5/18 failed');
-    expect(readFileSync(join(r.out, '5', 'unit.log'), 'utf8').trimEnd()).toEndWith('##[gbrain-capture-complete] exit=0');
+    expect(readFileSync(join(r.out, '5', 'unit.log'), 'utf8').trimEnd()).toEndWith('##[devmodel-capture-complete] exit=0');
     expect(existsSync(join(r.out, '6', 'receipts/unit.receipt'))).toBe(true);
   });
 
@@ -106,8 +106,8 @@ describe('scripts/test-shard-pack.sh', () => {
     const outside = pack(root, ['18', '18', '19']);
     expect(outside.code).toBe(2);
     expect(outside.stderr).toContain('shard index 19 out of range 1..18');
-    const noDir = pack(root, ['18', '1', '2'], { GBRAIN_SHARD_PACK_DIR: '' });
+    const noDir = pack(root, ['18', '1', '2'], { DEVMODEL_SHARD_PACK_DIR: '' });
     expect(noDir.code).not.toBe(0);
-    expect(noDir.stderr).toContain('GBRAIN_SHARD_PACK_DIR');
+    expect(noDir.stderr).toContain('DEVMODEL_SHARD_PACK_DIR');
   });
 });

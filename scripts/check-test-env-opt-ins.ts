@@ -2,13 +2,13 @@
 /**
  * Test env opt-in guard (docs/TESTING.md#test-isolation-lint-and-helpers).
  *
- * test/helpers/operator-env-preload.ts deletes every GBRAIN_* variable outside
+ * test/helpers/operator-env-preload.ts deletes every GBRAIN_* and DEVMODEL_* variable outside
  * its keep-lists before any test file loads. A test that gates execution on a
- * stripped name (`describe.skipIf(!process.env.GBRAIN_X)`, `if (env) return`,
+ * stripped name (`describe.skipIf(!process.env.DEVMODEL_X)`, `if (env) return`,
  * a top-level constant used that way) can never see it set, so the gate is a
  * silent no-op: six opt-ins, including `bun run test:compile-smoke`, were dead
  * this way. This guard parses every test file under test/ and evals/ with the
- * TypeScript AST and fails on an execution-gating read of a GBRAIN_* name the
+ * TypeScript AST and fails on an execution-gating read of a GBRAIN_* or DEVMODEL_* name the
  * scrub strips, unless the same file assigns that name itself. Names that
  * src/ reads are product configuration, not test opt-ins: the scrub removing
  * them is the hermeticity it exists for, so a test asserting their absence is
@@ -18,17 +18,17 @@
  * test/helpers/operator-env-policy.ts, the module the preload applies.
  *
  * With no TypeScript file under test/ or evals/ it prints
- * `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0, which `bun run verify` records
+ * `DEVMODEL_CHECK_SKIPPED: <reason>` and exits 0, which `bun run verify` records
  * as a skip, not a pass.
  *
- * Seam: GBRAIN_GUARD_ROOT (fixture tree root).
+ * Seam: DEVMODEL_GUARD_ROOT (fixture tree root).
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { isStripped } from '../test/helpers/operator-env-policy';
 
-const ROOT = process.env.GBRAIN_GUARD_ROOT ?? join(import.meta.dir, '..');
+const ROOT = process.env.DEVMODEL_GUARD_ROOT ?? join(import.meta.dir, '..');
 const ANCHOR = 'docs/TESTING.md#test-isolation-lint-and-helpers';
 const SCAN_DIRS = ['test', 'evals'];
 const SKIP_DIRS = new Set(['node_modules', 'guards']);
@@ -171,7 +171,7 @@ interface Finding { file: string; line: number; name: string }
 
 function scanFile(path: string): Finding[] {
   const text = readFileSync(path, 'utf8');
-  if (!text.includes('GBRAIN_')) return [];
+  if (!/\b(GBRAIN|DEVMODEL)_/.test(text)) return [];
   const sf = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
   const file = relative(ROOT, path);
   const assigned = new Set<string>();
@@ -180,7 +180,7 @@ function scanFile(path: string): Finding[] {
   const lineOf = (node: ts.Node): number => sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
   const visit = (node: ts.Node): void => {
     const name = envName(node);
-    if (name && name.startsWith('GBRAIN_')) {
+    if (name && /^(GBRAIN|DEVMODEL)_/.test(name)) {
       if (isAssignmentTarget(node)) {
         assigned.add(name);
       } else {
@@ -201,7 +201,7 @@ function scanFile(path: string): Finding[] {
 function productNames(): Set<string> {
   const names = new Set<string>();
   for (const file of tsFiles(join(ROOT, 'src'))) {
-    for (const m of readFileSync(file, 'utf8').matchAll(/\bGBRAIN_[A-Z0-9_]+/g)) names.add(m[0]);
+    for (const m of readFileSync(file, 'utf8').matchAll(/\b(?:GBRAIN|DEVMODEL)_[A-Z0-9_]+/g)) names.add(m[0]);
   }
   return names;
 }
@@ -211,17 +211,17 @@ const files = SCAN_DIRS.flatMap(dir => tsFiles(join(ROOT, dir)));
 const findings = files.flatMap(scanFile);
 if (files.length === 0) {
   // Nothing to scan: the runner counts the marker as a skip, not a pass.
-  console.log('GBRAIN_CHECK_SKIPPED: no TypeScript files under test/ or evals/ to scan');
+  console.log('DEVMODEL_CHECK_SKIPPED: no TypeScript files under test/ or evals/ to scan');
   process.exit(0);
 }
 if (findings.length === 0) {
-  console.log('✓ test env opt-ins: no test gates execution on a GBRAIN_* name the operator-env scrub strips');
+  console.log('✓ test env opt-ins: no test gates execution on a GBRAIN_* or DEVMODEL_* name the operator-env scrub strips');
   process.exit(0);
 }
 for (const f of findings) {
   console.error(`FAIL [test_env_opt_in_stripped]: ${f.file}:${f.line} gates execution on ${f.name}, which the operator-env scrub deletes before tests run, so this gate can never fire.`);
 }
-console.error('Why: test/helpers/operator-env-preload.ts strips every GBRAIN_* name outside its keep-lists (test/helpers/operator-env-policy.ts); an opt-in under such a name is a silent skip.');
-console.error('Fix: rename the opt-in to GBRAIN_TEST_<AREA>_<WHAT> (paid: GBRAIN_TEST_LIVE_<WHAT>) and add the old name to RENAMED in test/helpers/operator-env-policy.ts, or add a KEEP_EXACT row there with its reason. GBRAIN_TEST_KEEP_AMBIENT_ENV=1 disables the scrub for local debugging only.');
+console.error('Why: test/helpers/operator-env-preload.ts strips every GBRAIN_* and DEVMODEL_* name outside its keep-lists (test/helpers/operator-env-policy.ts); an opt-in under such a name is a silent skip.');
+console.error('Fix: rename the opt-in to DEVMODEL_TEST_<AREA>_<WHAT> (paid: DEVMODEL_TEST_LIVE_<WHAT>) and add the old name to RENAMED in test/helpers/operator-env-policy.ts, or add a KEEP_EXACT row there with its reason. DEVMODEL_TEST_KEEP_AMBIENT_ENV=1 disables the scrub for local debugging only.');
 console.error(`Docs: ${ANCHOR}`);
 process.exit(1);

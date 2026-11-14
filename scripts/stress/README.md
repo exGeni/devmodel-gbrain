@@ -63,8 +63,8 @@ Every iteration writes an executed-test receipt (`<out>/receipts/<file>--i<n>/`:
 the receipt, its file list and Bun's JUnit report). The first iteration's
 executed tests are the expected set: a later iteration that does not run one
 of them is an unexpected skip and fails. Each iteration has a 15-minute wall
-cap (`GBRAIN_STRESS_ITERATION_TIMEOUT_MS`).
-Seeds: iteration `n` exports `GBRAIN_TEST_SEED=<base>+n-1`; the base is
+cap (`DEVMODEL_STRESS_ITERATION_TIMEOUT_MS`).
+Seeds: iteration `n` exports `DEVMODEL_TEST_SEED=<base>+n-1`; the base is
 `--seed` or a hash of the commit and file, and `--randomize` passes it to
 Bun's test-order randomizer.
 
@@ -102,7 +102,7 @@ step. Otherwise every changed test file runs 10 times in shards.
   do); it is ignored. Record format:
 
   ````
-  <!-- gbrain-stress-exemption -->
+  <!-- devmodel-stress-exemption -->
   ```json
   {"file":"test/a.test.ts","test":"suite > case","signature":"<from the manifest>","owner":"@release-duty","expires":"2026-10-20"}
   ```

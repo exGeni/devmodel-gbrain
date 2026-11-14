@@ -21,13 +21,13 @@
 #
 # Knobs:
 #   SHARD=N/M                    weighted shard; unset runs every file
-#   GBRAIN_SERIAL_POOL=N          pool width (default min(detect_cpus, 4),
+#   DEVMODEL_SERIAL_POOL=N          pool width (default min(detect_cpus, 4),
 #                                 then memory-adapted; 1 restores the old
 #                                 fully-sequential behavior)
-#   GBRAIN_SERIAL_FILE_TIMEOUT=S  wall-clock kill per file (default 300;
+#   DEVMODEL_SERIAL_FILE_TIMEOUT=S  wall-clock kill per file (default 300;
 #                                 needs timeout/gtimeout on PATH, else no wrap)
-#   GBRAIN_TEST_MEM_PER_FILE_MB   per-process memory budget (default 1536)
-#   GBRAIN_TEST_NO_MEM_ADAPT=1    skip the memory clamp
+#   DEVMODEL_TEST_MEM_PER_FILE_MB   per-process memory budget (default 1536)
+#   DEVMODEL_TEST_NO_MEM_ADAPT=1    skip the memory clamp
 
 set -euo pipefail
 
@@ -156,12 +156,12 @@ fi
 # ~1.5GB — then clamped by available memory (same
 # layer-1 doctrine as run-unit-parallel.sh, 4GB OS reserve).
 # ──────────────────────────────────────────────────────────────────────────
-POOL="${GBRAIN_SERIAL_POOL:-}"
+POOL="${DEVMODEL_SERIAL_POOL:-}"
 if [ -z "$POOL" ]; then
   POOL=$(detect_cpus)
   [ "$POOL" -gt 4 ] && POOL=4
-  if [ "${GBRAIN_TEST_NO_MEM_ADAPT:-0}" != "1" ]; then
-    MEM_PER_FILE_MB="${GBRAIN_TEST_MEM_PER_FILE_MB:-1536}"
+  if [ "${DEVMODEL_TEST_NO_MEM_ADAPT:-0}" != "1" ]; then
+    MEM_PER_FILE_MB="${DEVMODEL_TEST_MEM_PER_FILE_MB:-1536}"
     AVAIL_MB=$(detect_available_mem_mb)
     if [ "${AVAIL_MB:-0}" -gt 0 ] 2>/dev/null; then
       BUDGET_MB=$((AVAIL_MB - 4096))
@@ -181,12 +181,12 @@ fi
 # process that finishes its tests but never exits). SIGTERM first, SIGKILL
 # after a grace period (`timeout -k`). macOS without coreutils has neither
 # binary — run unwrapped there (CI is Linux and always wraps).
-PER_FILE_TIMEOUT="${GBRAIN_SERIAL_FILE_TIMEOUT:-300}"
+PER_FILE_TIMEOUT="${DEVMODEL_SERIAL_FILE_TIMEOUT:-300}"
 TIMEOUT_BIN=""
 command -v timeout >/dev/null 2>&1 && TIMEOUT_BIN="timeout"
 [ -z "$TIMEOUT_BIN" ] && command -v gtimeout >/dev/null 2>&1 && TIMEOUT_BIN="gtimeout"
 
-LOG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/gbrain-serial.XXXXXX")
+LOG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/devmodel-serial.XXXXXX")
 RUN_SHA=$(git rev-parse HEAD 2>/dev/null || echo "${GITHUB_SHA:-unknown}")
 if [ "${#ordered_files[@]}" -gt 0 ]; then
   printf '%s\n' "${ordered_files[@]}" > "$LOG_DIR/selected.txt"

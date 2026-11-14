@@ -16,14 +16,14 @@
  * HARD-FAIL, never silently unset: silently clearing the var would turn
  * DATABASE_URL-gated e2e tests into green skips, hiding the exact class of
  * bug (#2339) those tests exist to catch. The e2e wrappers (scripts/
- * run-e2e.sh, the e2e/heavy workflows) set GBRAIN_TEST_ALLOW_DATABASE_URL=1
+ * run-e2e.sh, the e2e/heavy workflows) set DEVMODEL_TEST_ALLOW_DATABASE_URL=1
  * at their own subprocess boundary; nothing sets it globally.
  *
  * Registered FIRST in bunfig.toml's [test].preload so it runs before any
  * other preload does work.
  */
 
-const ALLOW = process.env.GBRAIN_TEST_ALLOW_DATABASE_URL === '1';
+const ALLOW = process.env.DEVMODEL_TEST_ALLOW_DATABASE_URL === '1';
 
 if (!ALLOW) {
   const offending = (['DATABASE_URL', 'GBRAIN_DATABASE_URL'] as const).filter(
@@ -48,7 +48,7 @@ if (!ALLOW) {
         `  - run the e2e suite through its wrapper: \`bun run test:e2e\``,
         `    (the wrapper opts in at its own boundary), or`,
         `  - if you really mean to run tests against this database, opt in`,
-        `    ONE-SHOT: \`GBRAIN_TEST_ALLOW_DATABASE_URL=1 bun test ...\` — avoid a`,
+        `    ONE-SHOT: \`DEVMODEL_TEST_ALLOW_DATABASE_URL=1 bun test ...\` — avoid a`,
         `    shell-profile export, which would permanently disarm this guard. The`,
         `    per-file guard (test/helpers/db-guard.ts) still requires a test-shaped`,
         `    database name after that.`,

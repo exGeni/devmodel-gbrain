@@ -70,7 +70,7 @@ A `flake` issue records one intermittent failure: the file, test name, lane,
 arm, platform, failing job, failure signature, first red run, owner and an
 expiry date 14 days out. The stress gate can exempt only a failure whose file,
 exact test name and failure signature match an unexpired record in an open
-issue. The watcher writes those as `<!-- gbrain-stress-exemption -->` JSON
+issue. The watcher writes those as `<!-- devmodel-stress-exemption -->` JSON
 records (file, exact test name, backend `unit` or `e2e`, the gate's failure
 signature, owner `agent on release duty`, expiry) in `master-red`, `flake` and
 `nightly-red` bodies, one per failing test identity from the manifest. A
@@ -86,7 +86,7 @@ secret problem, ask the repository owner for that fix instead of a code PR.
 
 The `executed-receipts` job of `test.yml` runs `scripts/ci-manifest.ts` and
 uploads the `ci-manifest` artifact: a versioned JSON file
-(`gbrain-ci-manifest/v1`) bound to the workflow, event, SHA, run id and run
+(`devmodel-ci-manifest/v1`) bound to the workflow, event, SHA, run id and run
 attempt. It lists every failing test identity (lane, file, test, arm) and, per
 file, how many tests executed, failed and were skipped. It is `complete` only
 when every lane's receipts are valid (no killed shard, truncated report, older

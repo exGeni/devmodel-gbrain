@@ -21,7 +21,7 @@ describe.skipIf(process.platform === 'win32')('scripts/ci-bun-install.ts', () =>
 
   /** `plan` is one word per attempt: stall, fail or ok. */
   async function run(plan: string[], flags = ['--frozen-lockfile', '--ignore-scripts']) {
-    const dir = mkdtempSync(join(tmpdir(), 'gbrain-ci-bun-install-'));
+    const dir = mkdtempSync(join(tmpdir(), 'devmodel-ci-bun-install-'));
     dirs.push(dir);
     const stub = join(dir, 'bun');
     writeFileSync(stub, `#!/bin/sh
@@ -37,7 +37,7 @@ esac
     writeFileSync(join(dir, 'plan'), `${plan.join('\n')}\n`);
     const started = Date.now();
     const proc = Bun.spawn([process.execPath, SCRIPT, ...flags], { stdout: 'pipe', stderr: 'pipe', env: {
-      ...process.env, GBRAIN_CI_INSTALL_BUN: stub, GBRAIN_CI_INSTALL_ATTEMPT_S: '1', GBRAIN_CI_INSTALL_RETRY_SLEEP_S: '0',
+      ...process.env, DEVMODEL_CI_INSTALL_BUN: stub, DEVMODEL_CI_INSTALL_ATTEMPT_S: '1', DEVMODEL_CI_INSTALL_RETRY_SLEEP_S: '0',
     } });
     const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
     const annotations = stderr.split('\n').filter(line => line.startsWith('::warning::') || line.startsWith('::error::'));

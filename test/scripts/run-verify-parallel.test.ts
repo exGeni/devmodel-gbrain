@@ -270,7 +270,7 @@ if [ -n "\${STUB_SLOW_CHECK:-}" ] && [ "$name" = "\${STUB_SLOW_CHECK}" ]; then s
 [ -n "\${STUB_LOG:-}" ] && echo "end $name" >> "$STUB_LOG"
 echo "stub check OK: $name"
 if [ -n "\${STUB_SKIP_CHECK:-}" ] && [ "$name" = "\${STUB_SKIP_CHECK}" ]; then
-  echo "GBRAIN_CHECK_SKIPPED: subject absent in this checkout"
+  echo "DEVMODEL_CHECK_SKIPPED: subject absent in this checkout"
 fi
 if [ -n "\${STUB_FAIL_CHECK:-}" ] && [ "$name" = "\${STUB_FAIL_CHECK}" ]; then
   echo "stub check failing: $name" >&2
@@ -287,8 +287,8 @@ exit 0
         PATH: bin,
         HOME: process.env.HOME ?? root,
         TMPDIR: process.env.TMPDIR ?? "/tmp",
-        GBRAIN_VERIFY_TIMEOUT: timeoutSecs,
-        GBRAIN_VERIFY_LOG_DIR: join(root, "logs"),
+        DEVMODEL_VERIFY_TIMEOUT: timeoutSecs,
+        DEVMODEL_VERIFY_LOG_DIR: join(root, "logs"),
       },
     };
   }
@@ -315,7 +315,7 @@ exit 0
       const receipts = join(root, "receipts");
       const r = spawnSync("bash", [join(root, "scripts", "run-verify-parallel.sh")], {
         encoding: "utf8",
-        env: { ...env, STUB_SKIP_CHECK: "check:module-size", STUB_FAIL_CHECK: "check:function-size", GBRAIN_TEST_RECEIPT_DIR: receipts },
+        env: { ...env, STUB_SKIP_CHECK: "check:module-size", STUB_FAIL_CHECK: "check:function-size", DEVMODEL_TEST_RECEIPT_DIR: receipts },
       });
       expect(r.status).toBe(1);
       expect(r.stderr).toMatch(/fail=1 skip=1\b/);
@@ -335,7 +335,7 @@ exit 0
 
   it("keeps its default temp log directory when a check fails and names it", () => {
     const { root, env } = makeFallbackHarness();
-    const { GBRAIN_VERIFY_LOG_DIR: _unused, ...defaults } = env;
+    const { DEVMODEL_VERIFY_LOG_DIR: _unused, ...defaults } = env;
     try {
       const r = spawnSync("bash", [join(root, "scripts", "run-verify-parallel.sh")], {
         encoding: "utf8",
@@ -360,7 +360,7 @@ exit 0
       expect(dry.filter((c) => c === "check:guard-self-test")).toHaveLength(1);
       const r = spawnSync("bash", [join(root, "scripts", "run-verify-parallel.sh")], {
         encoding: "utf8",
-        env: { ...env, STUB_LOG: log, STUB_SLOW_CHECK: "typecheck", GBRAIN_VERIFY_MAX_PARALLEL: "4" },
+        env: { ...env, STUB_LOG: log, STUB_SLOW_CHECK: "typecheck", DEVMODEL_VERIFY_MAX_PARALLEL: "4" },
       });
       expect(r.status, r.stderr).toBe(0);
       expect(r.stderr).toMatch(/running \d+ checks: \d+ in the pool, then 1 solo/);
@@ -387,10 +387,10 @@ exit 0
   it("typecheck runs on every platform: no workflow raises the per-check cap, every runner keeps 120 s (#6056)", () => {
     const workflows = readdirSync(".github/workflows").filter((f) => /\.ya?ml$/.test(f));
     const read = (f: string) => readFileSync(join(".github/workflows", f), "utf8");
-    expect(workflows.filter((f) => read(f).includes("GBRAIN_VERIFY_TIMEOUT"))).toEqual([]);
+    expect(workflows.filter((f) => read(f).includes("DEVMODEL_VERIFY_TIMEOUT"))).toEqual([]);
     for (const f of workflows) expect(read(f)).not.toContain("TYPECHECK_COVERED_BY");
     expect(readFileSync(SCRIPT, "utf8")).not.toContain("TYPECHECK_COVERED_BY");
-    expect(readFileSync(SCRIPT, "utf8")).toContain('TIMEOUT="${GBRAIN_VERIFY_TIMEOUT:-120}"');
+    expect(readFileSync(SCRIPT, "utf8")).toContain('TIMEOUT="${DEVMODEL_VERIFY_TIMEOUT:-120}"');
     const testYml = read("test.yml");
     const verifyStart = testYml.indexOf("\n  verify:\n");
     const verifyJob = testYml.slice(verifyStart, testYml.indexOf("\n  serial-tests:\n", verifyStart));
@@ -398,7 +398,7 @@ exit 0
     const dry = spawnSync("bash", [SCRIPT, "--dry-list"], { encoding: "utf8" }).stdout.split("\n");
     expect(dry).toContain("typecheck");
     const pkgScripts = (JSON.parse(readFileSync("package.json", "utf8")) as { scripts: Record<string, string> }).scripts;
-    for (const [name, cmd] of Object.entries(pkgScripts)) expect(`${name}: ${cmd}`).not.toContain("GBRAIN_VERIFY_TIMEOUT");
+    for (const [name, cmd] of Object.entries(pkgScripts)) expect(`${name}: ${cmd}`).not.toContain("DEVMODEL_VERIFY_TIMEOUT");
   });
 
   it("one check failing → exit 1, sentinel records the check's own rc (7), not 143", () => {

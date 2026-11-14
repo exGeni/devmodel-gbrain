@@ -22,8 +22,8 @@ function fingerprint(path: string): string {
   }
 }
 
-if (process.env.GBRAIN_TEST_ALLOW_REAL_HOME_WRITES === '1') {
-  console.error('[real-home-guard-preload] DISARMED by GBRAIN_TEST_ALLOW_REAL_HOME_WRITES=1. Use only for a deliberate one-shot install test.');
+if (process.env.DEVMODEL_TEST_ALLOW_REAL_HOME_WRITES === '1') {
+  console.error('[real-home-guard-preload] DISARMED by DEVMODEL_TEST_ALLOW_REAL_HOME_WRITES=1. Use only for a deliberate one-shot install test.');
 } else {
   const baseline = new Map(paths.map(({ path }) => [path, fingerprint(path)]));
   const check = (when: string): void => {

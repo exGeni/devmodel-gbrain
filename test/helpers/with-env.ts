@@ -96,5 +96,5 @@ export async function withEnv<T>(
  * leaked (test process is short-lived); the OS reaps tmp.
  */
 export function emptyHome(): string {
-  return mkdtempSync(join(tmpdir(), 'gbrain-nokey-home-'));
+  return mkdtempSync(join(tmpdir(), 'devmodel-nokey-home-'));
 }

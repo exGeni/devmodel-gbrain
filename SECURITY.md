@@ -36,27 +36,27 @@ Every `bun test` run in this repository loads the preloads listed in `bunfig.tom
 this order. They keep a developer's shell from changing a test's result and keep a test
 from reaching anything outside the run. Each preload removes only ambient shell state,
 once, before any test file loads; a variable a test sets itself is never touched.
-`GBRAIN_DEBUG_PRELOAD=1` makes the preloads log the names they remove, never the values.
+`DEVMODEL_DEBUG_PRELOAD=1` makes the preloads log the names they remove, never the values.
 More detail: [test preloads](docs/TESTING.md#test-preloads).
 
 | Preload | What it does to the environment | Opt-out |
 |---|---|---|
-| `test/helpers/database-url-guard-preload.ts` | Refuses to start (exit 1) while `DATABASE_URL` or `GBRAIN_DATABASE_URL` is set and non-empty. It does not unset them: a silent unset would turn tests that need a database into green skips. | `GBRAIN_TEST_ALLOW_DATABASE_URL=1`, one-shot. The runners unset both variables at their boundary; do not export the opt-in from a shell profile |
-| `test/helpers/operator-env-preload.ts` | Deletes `CONDUCTOR_*`, `MCP_*` and `OPENCLAW_*` variables, and every `GBRAIN_*` variable except the keep-list below. It stops the run with exit 2 when a test opt-in is set under its old name (`GBRAIN_BASH32_REQUIRE` is now `GBRAIN_TEST_BASH32_REQUIRE`). | `GBRAIN_TEST_KEEP_AMBIENT_ENV=1` |
-| `test/helpers/provider-keys-preload.ts` | Deletes every variable in `PROVIDER_ENV_KEYS` (`test/helpers/provider-env.ts`): the API keys, base URLs and related settings of the model providers, such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL` and `OLLAMA_BASE_URL`. It also sets `GBRAIN_MODEL_DISCOVERY=off` unless it is already set, so no test makes a discovery call. | `GBRAIN_TEST_KEEP_PROVIDER_KEYS=1` |
-| `test/helpers/real-home-guard-preload.ts` | Changes no variable. It records the size, modification time, inode and mode of the install files under the real home directory, and fails the check that sees one of them change: before a test, after a test or after the last test. | `GBRAIN_TEST_ALLOW_REAL_HOME_WRITES=1` disarms it with a warning |
+| `test/helpers/database-url-guard-preload.ts` | Refuses to start (exit 1) while `DATABASE_URL` or `GBRAIN_DATABASE_URL` is set and non-empty. It does not unset them: a silent unset would turn tests that need a database into green skips. | `DEVMODEL_TEST_ALLOW_DATABASE_URL=1`, one-shot. The runners unset both variables at their boundary; do not export the opt-in from a shell profile |
+| `test/helpers/operator-env-preload.ts` | Deletes `CONDUCTOR_*`, `MCP_*` and `OPENCLAW_*` variables, and every `DEVMODEL_*` and `GBRAIN_*` variable except the keep-list below. It stops the run with exit 2 when a test opt-in is set under an old name (`GBRAIN_TEST_<X>` is now `DEVMODEL_TEST_<X>`). | `DEVMODEL_TEST_KEEP_AMBIENT_ENV=1` |
+| `test/helpers/provider-keys-preload.ts` | Deletes every variable in `PROVIDER_ENV_KEYS` (`test/helpers/provider-env.ts`): the API keys, base URLs and related settings of the model providers, such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL` and `OLLAMA_BASE_URL`. It also sets `GBRAIN_MODEL_DISCOVERY=off` unless it is already set, so no test makes a discovery call. | `DEVMODEL_TEST_KEEP_PROVIDER_KEYS=1` |
+| `test/helpers/real-home-guard-preload.ts` | Changes no variable. It records the size, modification time, inode and mode of the install files under the real home directory, and fails the check that sees one of them change: before a test, after a test or after the last test. | `DEVMODEL_TEST_ALLOW_REAL_HOME_WRITES=1` disarms it with a warning |
 | `test/helpers/gbrain-home-preload.ts` | Sets `GBRAIN_HOME` to a fresh temporary directory unless it is already set, so tests never read or write the operator's real configuration. | An exported `GBRAIN_HOME` is kept by a direct `bun test`; the unit and slow runners unset it first, and `scripts/run-e2e.sh` sets its own |
 | `test/helpers/git-hermetic-preload.ts` | Deletes the git variables that locate or reconfigure one repository (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_CONFIG*`, the pathspec switches and the rest of `git rev-parse --local-env-vars`), so a run started from a git hook never writes into the caller's repository. It keeps the operator's `safe.directory` entries and the transport and credential variables, then injects `commit.gpgsign=false` and `tag.gpgsign=false` through `GIT_CONFIG_COUNT`, and makes `Bun.spawn` and `Bun.spawnSync` default their `env` to `process.env`. | None for the variable drop. It leaves signing alone when `GIT_CONFIG_KEY_<n>` already sets `commit.gpgsign` or `tag.gpgsign` |
 
 The `operator-env-preload.ts` keep-list, from `test/helpers/operator-env-policy.ts`:
 
 - exact names: `GBRAIN_HOME`, `GBRAIN_DATABASE_URL`, `GBRAIN_MODEL_DISCOVERY` and
-  `GBRAIN_DEBUG_PRELOAD`;
-- the prefixes `GBRAIN_TEST_` (test opt-ins and runner knobs), `GBRAIN_CI_` (the local CI
-  gate) and `GBRAIN_E2E_` (the E2E runner and its database floor).
+  `DEVMODEL_DEBUG_PRELOAD`;
+- the prefixes `DEVMODEL_TEST_` (test opt-ins and runner knobs), `DEVMODEL_CI_` (the local CI
+  gate) and `DEVMODEL_E2E_` (the E2E runner's knobs).
 
 A test opt-in under any other name is deleted before the test reads it, so name new ones
-`GBRAIN_TEST_<AREA>_<WHAT>` ([Opt-in naming rule](docs/TESTING.md#opt-in-naming-rule)).
+`DEVMODEL_TEST_<AREA>_<WHAT>` ([Opt-in naming rule](docs/TESTING.md#opt-in-naming-rule)).
 `bun run check:test-env-opt-ins` fails on a test that gates its execution on a name the
 preload deletes.
 
@@ -64,8 +64,8 @@ The runners add their own boundary. `scripts/run-unit-parallel.sh`,
 `scripts/run-unit-shard.sh`, `scripts/run-slow-tests.sh`, `scripts/run-serial-tests.sh`
 and `scripts/run-e2e.sh` unset `DATABASE_URL` and `GBRAIN_DATABASE_URL`; the unit and slow
 runners also unset `GBRAIN_HOME`. `scripts/run-e2e.sh` gives each test file its own `HOME`
-and `GBRAIN_HOME`, sets `GBRAIN_TEST_KEEP_PROVIDER_KEYS=1`, removes `CONDUCTOR_*`,
-`MCP_*`, `OPENCLAW_*`, `HERMES_*`, `GROK_*`, `OPENCODE_*` and `GBRAIN_*` variables outside a
+and `GBRAIN_HOME`, sets `DEVMODEL_TEST_KEEP_PROVIDER_KEYS=1`, removes `CONDUCTOR_*`,
+`MCP_*`, `OPENCLAW_*`, `HERMES_*`, `GROK_*`, `OPENCODE_*`, `GBRAIN_*` and `DEVMODEL_*` variables outside a
 short keep-list before Bun starts, and checks that the real user configuration did not
 change. `scripts/regen-all.ts` runs its generators with provider keys (`*_API_KEY`,
 `*_API_TOKEN`) and both database URLs removed.

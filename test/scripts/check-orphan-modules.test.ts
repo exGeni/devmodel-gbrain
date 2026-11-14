@@ -2,7 +2,7 @@
  * Failing-side proof for every check-orphan-modules.mjs rule. The
  * guard-self-test fixtures cover the hard-orphan rule (bad) and the pass path
  * with a permitted test-only and a script-reachable module (good); these tests
- * drive the named permitted-set rules through GBRAIN_GUARD_ROOT temp trees and
+ * drive the named permitted-set rules through DEVMODEL_GUARD_ROOT temp trees and
  * pin the diagnostic contract (rule, module, importers, reason, remedy, rerun
  * command, docs anchor), so a delete-one-add-one swap or a stale entry cannot
  * pass silently.
@@ -24,7 +24,7 @@ afterEach(() => {
 type Permitted = Array<{ path?: string; reason?: string }>;
 
 function makeTree(files: Record<string, string>, permitted?: Permitted): string {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-orphan-modules-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-orphan-modules-'));
   tempDirs.push(root);
   const all: Record<string, string> = {
     'src/entry.ts': "import { used } from './used.ts';\nconsole.log(used);\n",
@@ -41,7 +41,7 @@ function makeTree(files: Record<string, string>, permitted?: Permitted): string 
 }
 
 function runGuard(root: string) {
-  const r = spawnSync('node', [GUARD], { env: { ...process.env, GBRAIN_GUARD_ROOT: root }, encoding: 'utf8' });
+  const r = spawnSync('node', [GUARD], { env: { ...process.env, DEVMODEL_GUARD_ROOT: root }, encoding: 'utf8' });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
@@ -129,31 +129,31 @@ describe('check-orphan-modules permitted test-only set', () => {
 
 describe('check-orphan-modules skip while src/ is empty', () => {
   function makeEmptyTree(permitted?: Permitted, withSrcDir = true): string {
-    const root = mkdtempSync(join(tmpdir(), 'gbrain-orphan-modules-'));
+    const root = mkdtempSync(join(tmpdir(), 'devmodel-orphan-modules-'));
     tempDirs.push(root);
     if (withSrcDir) mkdirSync(join(root, 'src'));
     if (permitted) writeFileSync(join(root, 'permitted-test-only.json'), JSON.stringify(permitted));
     return root;
   }
 
-  test('an empty src/ with no permitted entries prints GBRAIN_CHECK_SKIPPED and exits 0', () => {
+  test('an empty src/ with no permitted entries prints DEVMODEL_CHECK_SKIPPED and exits 0', () => {
     const r = runGuard(makeEmptyTree());
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED:');
+    expect(r.stdout).toContain('DEVMODEL_CHECK_SKIPPED:');
     expect(r.stdout).not.toContain('check-orphan-modules: OK');
   });
 
   test('a missing src/ is the same skip, not an infrastructure error', () => {
     const r = runGuard(makeEmptyTree(undefined, false));
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED:');
+    expect(r.stdout).toContain('DEVMODEL_CHECK_SKIPPED:');
   });
 
   test('an empty src/ does not hide a stale permitted entry', () => {
     const r = runGuard(makeEmptyTree([{ path: 'src/removed.ts', reason: 'fixture helper' }]));
     expect(r.status).toBe(1);
     expectDiagnostic(r.stderr, 'stale-permitted-entry', 'src/removed.ts');
-    expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(r.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 
   test('a source file turns the skip off: without an entrypoint it is still an infra error', () => {

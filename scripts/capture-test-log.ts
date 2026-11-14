@@ -258,7 +258,7 @@ export async function captureTestLog(job: string, out: string, command: string[]
     throw error;
   });
   try {
-    await record('##[gbrain-capture-start]');
+    await record('##[devmodel-capture-start]');
     const streams = await Promise.allSettled([
       guardedConsume(child.stdout!, process.stdout), guardedConsume(child.stderr!, process.stderr),
     ]);
@@ -283,7 +283,7 @@ export async function captureTestLog(job: string, out: string, command: string[]
         catch (error) { console.error(`capture-test-log: could not write the step summary: ${(error as Error).message}`); }
       }
     }
-    await record(`##[gbrain-capture-complete] exit=${code}`);
+    await record(`##[devmodel-capture-complete] exit=${code}`);
     await new Promise<void>((resolve, reject) => {
       log.once('error', reject);
       log.end(resolve);

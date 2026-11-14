@@ -36,15 +36,15 @@
  * keeping lines and justification. Anything that is not a verified identical
  * move is left for review.
  *
- * Seams: GBRAIN_GUARD_ROOT (fixture root; baseline read from
+ * Seams: DEVMODEL_GUARD_ROOT (fixture root; baseline read from
  * <root>/scripts/function-size-baseline.tsv, base baseline from
  * <root>/scripts/function-size-baseline.base.tsv if present),
- * GBRAIN_FUNCTION_SIZE_LIMIT, GBRAIN_FUNCTION_SIZE_SLACK,
- * GBRAIN_FUNCTION_SIZE_BASE_REF (git ref whose merge-base supplies the base
+ * DEVMODEL_FUNCTION_SIZE_LIMIT, DEVMODEL_FUNCTION_SIZE_SLACK,
+ * DEVMODEL_FUNCTION_SIZE_BASE_REF (git ref whose merge-base supplies the base
  * baseline; default origin/main).
  *
  * While src/ holds no source file and the baseline has no row there is nothing
- * to measure: the guard prints `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0,
+ * to measure: the guard prints `DEVMODEL_CHECK_SKIPPED: <reason>` and exits 0,
  * which the verify runner counts as a skip. A stale row still fails.
  */
 import { spawnSync } from 'node:child_process';
@@ -52,12 +52,12 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from '
 import { dirname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
 
-const FIXTURE_ROOT = process.env.GBRAIN_GUARD_ROOT;
+const FIXTURE_ROOT = process.env.DEVMODEL_GUARD_ROOT;
 const ROOT = FIXTURE_ROOT ?? gitOut(['rev-parse', '--show-toplevel'], process.cwd())?.trim() ?? process.cwd();
 const BASELINE_REL = 'scripts/function-size-baseline.tsv';
 const BASELINE = join(ROOT, BASELINE_REL);
-const LIMIT = positiveInt(process.env.GBRAIN_FUNCTION_SIZE_LIMIT, 300);
-const SLACK = positiveInt(process.env.GBRAIN_FUNCTION_SIZE_SLACK, 50);
+const LIMIT = positiveInt(process.env.DEVMODEL_FUNCTION_SIZE_LIMIT, 300);
+const SLACK = positiveInt(process.env.DEVMODEL_FUNCTION_SIZE_SLACK, 50);
 const ANCHOR = 'docs/TESTING.md#function-size-ratchet';
 const ISSUE_ID = /(#\d+|TODOS\.md:\d+|\bTODO[-:]\s*\S+|\b[A-Z][A-Z0-9]+-\d+\b)/;
 const HEADER = 'path\tname\tlines\tjustification';
@@ -248,7 +248,7 @@ function baseBaselineText(): { text: string | null; source: string } {
     const p = join(ROOT, 'scripts/function-size-baseline.base.tsv');
     return existsSync(p) ? { text: readFileSync(p, 'utf8'), source: 'fixture base' } : { text: null, source: 'none' };
   }
-  const ref = process.env.GBRAIN_FUNCTION_SIZE_BASE_REF ?? 'origin/main';
+  const ref = process.env.DEVMODEL_FUNCTION_SIZE_BASE_REF ?? 'origin/main';
   const mergeBase = gitOut(['merge-base', 'HEAD', ref], ROOT)?.trim();
   const at = mergeBase ?? (gitOut(['rev-parse', '--verify', 'HEAD'], ROOT) ? 'HEAD' : null);
   if (!at) return { text: null, source: 'none (no git history)' };
@@ -336,7 +336,7 @@ function main(): number {
   }
 
   if (files.length === 0 && rows.length === 0 && problems.length === 0) {
-    console.log(`GBRAIN_CHECK_SKIPPED: no source files under src/ and no rows in ${BASELINE_REL}`);
+    console.log(`DEVMODEL_CHECK_SKIPPED: no source files under src/ and no rows in ${BASELINE_REL}`);
     return 0;
   }
 

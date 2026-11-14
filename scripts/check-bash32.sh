@@ -10,38 +10,41 @@
 # job running `bun run verify` under /bin/bash.
 #
 # Parser, first available:
-#   GBRAIN_BASH32=<path>  a bash 3.x binary
+#   DEVMODEL_BASH32=<path>  a bash 3.x binary
 #   /bin/bash             when it is bash 3.x (stock macOS)
 #   Docker image bash:3.2 (GNU bash 3.2.57, digest-pinned)
-# GBRAIN_BASH32=docker forces the image. Without a parser the guard prints
-# one skip line and exits 0, unless GBRAIN_TEST_BASH32_REQUIRE=1 (CI), which
+# DEVMODEL_BASH32=docker forces the image. Without a parser the guard prints
+# one skip line and exits 0, unless DEVMODEL_TEST_BASH32_REQUIRE=1 (CI), which
 # turns that into exit 2.
 #
 # Run: bun run check:bash32
-# Wired into CI by test.yml (verify job) and macos-validation.yml; not in
-# `bun run verify`, which must not need Docker.
-# Seams: GBRAIN_GUARD_ROOT scans a fixture tree with find instead of
-# git ls-files; GBRAIN_BASH32_DOCKER names the docker CLI.
+# Wired into CI by test.yml (verify job); not in `bun run verify`, which must
+# not need Docker.
+# Seams: DEVMODEL_GUARD_ROOT scans a fixture tree with find instead of
+# git ls-files; DEVMODEL_BASH32_DOCKER names the docker CLI.
 
 set -uo pipefail
 
-ROOT="${GBRAIN_GUARD_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+ROOT="${DEVMODEL_GUARD_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 cd "$ROOT" || exit 2
 ROOT="$(pwd -P)"
 
 IMAGE='bash:3.2@sha256:0fd7cb8499c63a3c9345e7088a9cd83bb69f6e895e83833859aff838a0312091'
-DOCKER="${GBRAIN_BASH32_DOCKER:-docker}"
-if [ -n "${GBRAIN_BASH32_REQUIRE:-}" ]; then
-  echo "✗ bash 3.2 parse: GBRAIN_BASH32_REQUIRE was renamed to GBRAIN_TEST_BASH32_REQUIRE." >&2
-  echo "Why: test opt-ins live under GBRAIN_TEST_ so the test preload's operator-env scrub keeps them; the old name is no longer read." >&2
-  echo "Fix: unset GBRAIN_BASH32_REQUIRE && export GBRAIN_TEST_BASH32_REQUIRE=${GBRAIN_BASH32_REQUIRE}" >&2
+DOCKER="${DEVMODEL_BASH32_DOCKER:-docker}"
+# Old names of the opt-in (test/helpers/operator-env-policy.ts, RENAMED).
+for old in GBRAIN_BASH32_REQUIRE GBRAIN_TEST_BASH32_REQUIRE; do
+  value="${!old:-}"
+  [ -n "$value" ] || continue
+  echo "✗ bash 3.2 parse: $old was renamed to DEVMODEL_TEST_BASH32_REQUIRE." >&2
+  echo "Why: test opt-ins live under DEVMODEL_TEST_ so the test preload's operator-env scrub keeps them; the old name is no longer read." >&2
+  echo "Fix: unset $old && export DEVMODEL_TEST_BASH32_REQUIRE=$value" >&2
   echo "Docs: docs/TESTING.md#test-isolation-lint-and-helpers" >&2
   exit 2
-fi
-REQUIRE="${GBRAIN_TEST_BASH32_REQUIRE:-0}"
+done
+REQUIRE="${DEVMODEL_TEST_BASH32_REQUIRE:-0}"
 
 FILES=()
-if [ -n "${GBRAIN_GUARD_ROOT:-}" ]; then
+if [ -n "${DEVMODEL_GUARD_ROOT:-}" ]; then
   while IFS= read -r -d '' f; do FILES+=("${f#./}"); done < <(find . -type f -name '*.sh' -print0)
 else
   while IFS= read -r -d '' f; do FILES+=("$f"); done < <(git ls-files -z '*.sh')
@@ -62,18 +65,18 @@ is_bash3() {
 
 unavailable() {
   if [ "$REQUIRE" = "1" ]; then
-    echo "✗ bash 3.2 parse: $1, and GBRAIN_TEST_BASH32_REQUIRE=1 forbids skipping" >&2
+    echo "✗ bash 3.2 parse: $1, and DEVMODEL_TEST_BASH32_REQUIRE=1 forbids skipping" >&2
     exit 2
   fi
-  echo "- bash 3.2 parse: skipped ($1; install Docker or set GBRAIN_BASH32 to a bash 3.2 binary)"
+  echo "- bash 3.2 parse: skipped ($1; install Docker or set DEVMODEL_BASH32 to a bash 3.2 binary)"
   exit 0
 }
 
-PARSER="${GBRAIN_BASH32:-}"
+PARSER="${DEVMODEL_BASH32:-}"
 if [ -z "$PARSER" ] && is_bash3 /bin/bash; then PARSER=/bin/bash; fi
 if [ -n "$PARSER" ] && [ "$PARSER" != "docker" ]; then
   if ! is_bash3 "$PARSER"; then
-    echo "✗ bash 3.2 parse: GBRAIN_BASH32=$PARSER is not an executable bash 3.x" >&2
+    echo "✗ bash 3.2 parse: DEVMODEL_BASH32=$PARSER is not an executable bash 3.x" >&2
     exit 2
   fi
   label="$PARSER ($("$PARSER" -c 'echo "$BASH_VERSION"'))"

@@ -1,5 +1,5 @@
 {
- "schema": "gbrain-ci-manifest/v1",
+ "schema": "devmodel-ci-manifest/v1",
  "workflow": "",
  "event": "",
  "sha": "17c5765ba425a724ba92c6563c3b81562c83025e",

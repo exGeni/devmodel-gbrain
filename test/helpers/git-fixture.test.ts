@@ -8,7 +8,7 @@ import { makeGitFixture, type GitFixture } from './git-fixture.ts';
 const dirs: string[] = [];
 
 async function makeFixture(): Promise<GitFixture> {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-git-fixture-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-git-fixture-'));
   dirs.push(dir);
   return makeGitFixture(dir);
 }

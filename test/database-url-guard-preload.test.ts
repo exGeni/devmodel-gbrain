@@ -1,7 +1,7 @@
 /**
  * #3485 invocation-level guard: a bare `bun test` must refuse to start while
  * DATABASE_URL or GBRAIN_DATABASE_URL is ambient, unless the invoker opted in
- * with GBRAIN_TEST_ALLOW_DATABASE_URL=1 (the e2e wrappers do, at their own
+ * with DEVMODEL_TEST_ALLOW_DATABASE_URL=1 (the e2e wrappers do, at their own
  * subprocess boundary).
  *
  * Each case spawns a real `bun test` child on a trivial probe fixture with a
@@ -21,7 +21,7 @@ function baseEnv(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (v === undefined) continue;
-    if (k === 'DATABASE_URL' || k === 'GBRAIN_DATABASE_URL' || k === 'GBRAIN_TEST_ALLOW_DATABASE_URL') continue;
+    if (k === 'DATABASE_URL' || k === 'GBRAIN_DATABASE_URL' || k === 'DEVMODEL_TEST_ALLOW_DATABASE_URL') continue;
     env[k] = v;
   }
   return env;
@@ -66,10 +66,10 @@ describe('database-url-guard-preload (#3485)', () => {
     expect(r.stderr).toContain('DATABASE_URL and GBRAIN_DATABASE_URL are set');
   }, 30_000);
 
-  test('allows with GBRAIN_TEST_ALLOW_DATABASE_URL=1', () => {
+  test('allows with DEVMODEL_TEST_ALLOW_DATABASE_URL=1', () => {
     const r = runProbe({
       DATABASE_URL: 'postgresql://localhost:5434/gbrain',
-      GBRAIN_TEST_ALLOW_DATABASE_URL: '1',
+      DEVMODEL_TEST_ALLOW_DATABASE_URL: '1',
     });
     expect(r.stderr).not.toContain(GUARD_MARKER);
     expect(r.exitCode).toBe(0);
@@ -86,7 +86,7 @@ describe('database-url-guard-preload (#3485)', () => {
     // only the exact string '1' opts in.
     const r = runProbe({
       DATABASE_URL: 'postgresql://localhost:5434/gbrain',
-      GBRAIN_TEST_ALLOW_DATABASE_URL: 'true',
+      DEVMODEL_TEST_ALLOW_DATABASE_URL: 'true',
     });
     expect(r.exitCode).not.toBe(0);
     expect(r.stderr).toContain(GUARD_MARKER);

@@ -19,22 +19,22 @@
 #   4. unlisted src file > NEWFILE_CAP -> FAIL (split it, or add a TSV row
 #                                         consciously)
 #
-# Self-test seams: GBRAIN_GUARD_ROOT (fixture tree root; TSV read from
-# <root>/scripts/module-size-limits.tsv), GBRAIN_MODULE_SIZE_SLACK,
-# GBRAIN_MODULE_SIZE_NEWFILE_CAP.
+# Self-test seams: DEVMODEL_GUARD_ROOT (fixture tree root; TSV read from
+# <root>/scripts/module-size-limits.tsv), DEVMODEL_MODULE_SIZE_SLACK,
+# DEVMODEL_MODULE_SIZE_NEWFILE_CAP.
 #
 # While src/ holds no source file and the TSV has no row, there is nothing to
-# measure: the guard prints `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0, which
+# measure: the guard prints `DEVMODEL_CHECK_SKIPPED: <reason>` and exits 0, which
 # the verify runner counts as a skip.
 
 set -uo pipefail
 
-ROOT="${GBRAIN_GUARD_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+ROOT="${DEVMODEL_GUARD_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 cd "$ROOT" || exit 1
 
 TSV="scripts/module-size-limits.tsv"
-SLACK="${GBRAIN_MODULE_SIZE_SLACK:-50}"
-NEWFILE_CAP="${GBRAIN_MODULE_SIZE_NEWFILE_CAP:-1500}"
+SLACK="${DEVMODEL_MODULE_SIZE_SLACK:-50}"
+NEWFILE_CAP="${DEVMODEL_MODULE_SIZE_NEWFILE_CAP:-1500}"
 
 if [ ! -f "$TSV" ]; then
   echo "FAIL: $TSV not found under $ROOT" >&2
@@ -100,7 +100,7 @@ fi
 # Nothing to measure: no src/ source file and no TSV row (a stale row already
 # failed above). The runner counts this marker as a skip, not a pass.
 if [ "$src_files" -eq 0 ] && [ -z "$listed_paths" ]; then
-  echo "GBRAIN_CHECK_SKIPPED: no source files under src/ and no rows in $TSV"
+  echo "DEVMODEL_CHECK_SKIPPED: no source files under src/ and no rows in $TSV"
   exit 0
 fi
 

@@ -28,11 +28,11 @@
  *     release aggregate (full-suite, test-status, executed-receipts,
  *     reused-full-suite, cheap-tier) is gated.
  *
- * With no workflow file it prints `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0,
+ * With no workflow file it prints `DEVMODEL_CHECK_SKIPPED: <reason>` and exits 0,
  * which `bun run verify` records as a skip, not a pass.
  *
  * Fix: copy the form of an existing gated job in .github/workflows/test.yml.
- * Seam: GBRAIN_GUARD_ROOT (fixture tree root).
+ * Seam: DEVMODEL_GUARD_ROOT (fixture tree root).
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -42,7 +42,7 @@ type Step = { id?: string; uses?: string; with?: Record<string, unknown>; 'conti
 type Job = { 'timeout-minutes'?: unknown; if?: unknown; needs?: string | string[]; outputs?: Record<string, unknown>; steps?: Step[] };
 type Workflow = { on?: unknown; jobs?: Record<string, Job> };
 
-const ROOT = process.env.GBRAIN_GUARD_ROOT ?? join(import.meta.dir, '..');
+const ROOT = process.env.DEVMODEL_GUARD_ROOT ?? join(import.meta.dir, '..');
 const ACTION = 'trunk-io/dynamic-ci@';
 const NEVER_GATED = new Set(['full-suite', 'test-status', 'executed-receipts', 'reused-full-suite', 'cheap-tier']);
 
@@ -128,7 +128,7 @@ if (import.meta.main) {
   const problems = files.flatMap(f => checkWorkflow(f, load(readFileSync(join(dir, f), 'utf8')) as Workflow));
   if (files.length === 0) {
     // Nothing to check: the runner counts the marker as a skip, not a pass.
-    console.log('GBRAIN_CHECK_SKIPPED: no workflow files under .github/workflows');
+    console.log('DEVMODEL_CHECK_SKIPPED: no workflow files under .github/workflows');
     process.exit(0);
   }
   if (problems.length) {

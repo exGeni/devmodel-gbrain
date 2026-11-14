@@ -102,9 +102,9 @@ fi
 # #4479: per-shard timeout multiplier. 4-way shard contention in the sharded
 # lane makes subprocess tests ~6x slower per file than a quiet run,
 # producing timeout-class failures that pass natively. The 60s per-test
-# ceiling scales by GBRAIN_TEST_TIMEOUT_MULTIPLIER (integer, default 1;
+# ceiling scales by DEVMODEL_TEST_TIMEOUT_MULTIPLIER (integer, default 1;
 # ci-local's sharded lane sets it). Non-integer values fall back to 1.
-MULT="${GBRAIN_TEST_TIMEOUT_MULTIPLIER:-1}"
+MULT="${DEVMODEL_TEST_TIMEOUT_MULTIPLIER:-1}"
 if ! printf '%s' "$MULT" | grep -qE '^[0-9]+$' || [ "$MULT" -lt 1 ]; then
   MULT=1
 fi
@@ -115,7 +115,7 @@ echo "[unit-shard ${RUNNER_SHARD:-(unsharded)}] running ${#files[@]} files (time
 # worker count and attempt every selected file after ordinary failures.
 GROUP_SIZE=1
 GROUPS_TOTAL=$(( (${#files[@]} + GROUP_SIZE - 1) / GROUP_SIZE ))
-GROUP_LOG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/gbrain-unit-groups.XXXXXX")
+GROUP_LOG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/devmodel-unit-groups.XXXXXX")
 trap 'rm -rf "$GROUP_LOG_DIR"' EXIT
 TEST_ARGS=(test)
 [ -z "$MAX_CONC" ] || TEST_ARGS+=("--max-concurrency=$MAX_CONC")
@@ -130,7 +130,7 @@ for ((offset=0, group=1; offset<${#files[@]}; offset+=GROUP_SIZE, group++)); do
   group_files=("${files[@]:offset:GROUP_SIZE}")
   log="$GROUP_LOG_DIR/$group.log"
   printf '%s\n' "${group_files[@]}" > "$GROUP_LOG_DIR/$group.assigned"
-  echo "__gbrain_unit_group_start__ group=$group/$GROUPS_TOTAL files=${#group_files[@]}"
+  echo "__devmodel_unit_group_start__ group=$group/$GROUPS_TOTAL files=${#group_files[@]}"
   receipt_begin primary "$RECEIPT_TAG-g$group" "$RECEIPT_SHARD" "$RECEIPT_OF" "" "${group_files[@]}"
   set +e
   bun "${TEST_ARGS[@]}" ${RECEIPT_ARGS[@]+"${RECEIPT_ARGS[@]}"} "${group_files[@]}" 2>&1 | tee "$log"
@@ -175,8 +175,8 @@ for ((offset=0, group=1; offset<${#files[@]}; offset+=GROUP_SIZE, group++)); do
   else
     echo "[unit-shard] group $group/$GROUPS_TOTAL incomplete: missing or mismatched Bun summary/file census; missing_headers=$missing_count" >&2
   fi
-  echo "__gbrain_unit_group__ group=$group/$GROUPS_TOTAL files=${#group_files[@]} bun_rc=$bun_rc tee_rc=$tee_rc complete=$summary_ok pass=$pass_count fail=$fail_count skip=$skip_count rc=$group_rc"
+  echo "__devmodel_unit_group__ group=$group/$GROUPS_TOTAL files=${#group_files[@]} bun_rc=$bun_rc tee_rc=$tee_rc complete=$summary_ok pass=$pass_count fail=$fail_count skip=$skip_count rc=$group_rc"
 done
 # Distinct from native Bun summary syntax: consumers must not count these twice.
-echo "__gbrain_unit_shard__ groups=$GROUPS_TOTAL complete_groups=$COMPLETE_GROUPS files=${#files[@]} pass=$TOTAL_PASS fail=$TOTAL_FAIL skip=$TOTAL_SKIP rc=$TOTAL_RC"
+echo "__devmodel_unit_shard__ groups=$GROUPS_TOTAL complete_groups=$COMPLETE_GROUPS files=${#files[@]} pass=$TOTAL_PASS fail=$TOTAL_FAIL skip=$TOTAL_SKIP rc=$TOTAL_RC"
 exit "$TOTAL_RC"

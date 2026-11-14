@@ -7,7 +7,7 @@
  * are one `gbrain init`-shaped test away from the same class. run-e2e.sh
  * already scrubs these for the E2E lane; test/helpers/operator-env-preload.ts
  * is the unit-lane equivalent, and the repo's own test machinery (the
- * GBRAIN_TEST_ / GBRAIN_CI_ / GBRAIN_E2E_ prefixes + the exact keeps) must
+ * DEVMODEL_TEST_ / DEVMODEL_CI_ / DEVMODEL_E2E_ prefixes + the exact keeps) must
  * survive it.
  *
  * Each case spawns a real `bun test` child on a probe fixture with a
@@ -34,9 +34,9 @@ function baseEnv(probed: string[]): Record<string, string> {
     ...probed,
     'DATABASE_URL',
     'GBRAIN_DATABASE_URL',
-    'GBRAIN_TEST_ALLOW_DATABASE_URL',
-    'GBRAIN_TEST_KEEP_AMBIENT_ENV',
-    'GBRAIN_DEBUG_PRELOAD',
+    'DEVMODEL_TEST_ALLOW_DATABASE_URL',
+    'DEVMODEL_TEST_KEEP_AMBIENT_ENV',
+    'DEVMODEL_DEBUG_PRELOAD',
   ]);
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
@@ -58,8 +58,8 @@ function runProbe(
       env: {
         ...baseEnv(probed),
         ...ambient,
-        GBRAIN_TEST_OPERATOR_ENV_PROBE_OUT: out,
-        GBRAIN_TEST_OPERATOR_ENV_PROBE_NAMES: probed.join(','),
+        DEVMODEL_TEST_OPERATOR_ENV_PROBE_OUT: out,
+        DEVMODEL_TEST_OPERATOR_ENV_PROBE_NAMES: probed.join(','),
       },
       stdout: 'pipe',
       stderr: 'pipe',
@@ -108,17 +108,17 @@ describe('operator-env-preload (#4023)', () => {
   test('keeps the test machinery the runners and CI workflows export', () => {
     const probed = [
       'GBRAIN_MODEL_DISCOVERY',
-      'GBRAIN_TEST_SENTINEL',
-      'GBRAIN_CI_EXAMPLE_PORT',
-      'GBRAIN_E2E_ALLOW_DB',
+      'DEVMODEL_TEST_SENTINEL',
+      'DEVMODEL_CI_EXAMPLE_PORT',
+      'DEVMODEL_E2E_ALLOW_DB',
     ];
     const ambient: Record<string, string> = {
       // '1' (not 'off') so a strip is distinguishable from provider-keys-
       // preload's own default of 'off' when the var is absent.
       GBRAIN_MODEL_DISCOVERY: '1',
-      GBRAIN_TEST_SENTINEL: 'kept',
-      GBRAIN_CI_EXAMPLE_PORT: '5434',
-      GBRAIN_E2E_ALLOW_DB: 'gbrain_probe_db',
+      DEVMODEL_TEST_SENTINEL: 'kept',
+      DEVMODEL_CI_EXAMPLE_PORT: '5434',
+      DEVMODEL_E2E_ALLOW_DB: 'gbrain_probe_db',
     };
     const r = runProbe(ambient, probed);
     expect(r.exitCode).toBe(0);
@@ -126,21 +126,20 @@ describe('operator-env-preload (#4023)', () => {
   }, 30_000);
 
   test('keeps GBRAIN_DATABASE_URL in the opted-in e2e lane', () => {
-    // The e2e wrappers export GBRAIN_DATABASE_URL as the lane's target; a
-    // blanket GBRAIN_* delete here would sever it AFTER the guard preload
-    // approved the run.
+    // GBRAIN_DATABASE_URL is on the keep-list: the database-url guard
+    // preload, registered first, has already approved the run.
     const url = 'postgresql://localhost:5434/gbrain_probe';
     const r = runProbe(
-      { GBRAIN_DATABASE_URL: url, GBRAIN_TEST_ALLOW_DATABASE_URL: '1' },
+      { GBRAIN_DATABASE_URL: url, DEVMODEL_TEST_ALLOW_DATABASE_URL: '1' },
       ['GBRAIN_DATABASE_URL'],
     );
     expect(r.exitCode).toBe(0);
     expect(r.report.GBRAIN_DATABASE_URL).toBe(url);
   }, 30_000);
 
-  test('GBRAIN_TEST_KEEP_AMBIENT_ENV=1 disables the scrub', () => {
+  test('DEVMODEL_TEST_KEEP_AMBIENT_ENV=1 disables the scrub', () => {
     const r = runProbe(
-      { GBRAIN_SOURCE: 'default', GBRAIN_TEST_KEEP_AMBIENT_ENV: '1' },
+      { GBRAIN_SOURCE: 'default', DEVMODEL_TEST_KEEP_AMBIENT_ENV: '1' },
       ['GBRAIN_SOURCE'],
     );
     expect(r.exitCode).toBe(0);
@@ -151,10 +150,12 @@ describe('operator-env-preload (#4023)', () => {
     // Under the old names the scrub deleted these before any test read them,
     // so the gated tests skipped silently (D7). The preload now exits first.
     for (const [old, next] of [
-      ['GBRAIN_BASH32_REQUIRE', 'GBRAIN_TEST_BASH32_REQUIRE'],
+      ['GBRAIN_BASH32_REQUIRE', 'DEVMODEL_TEST_BASH32_REQUIRE'],
+      ['GBRAIN_TEST_KEEP_PROVIDER_KEYS', 'DEVMODEL_TEST_KEEP_PROVIDER_KEYS'],
+      ['GBRAIN_E2E_FILE_TIMEOUT', 'DEVMODEL_E2E_FILE_TIMEOUT'],
     ]) {
       // Also with the scrub disabled: the old-name check runs before it.
-      const r = runProbe({ [old]: '1', GBRAIN_TEST_KEEP_AMBIENT_ENV: '1' }, [old]);
+      const r = runProbe({ [old]: '1', DEVMODEL_TEST_KEEP_AMBIENT_ENV: '1' }, [old]);
       expect(r.exitCode).toBe(2);
       expect(r.stderr).toContain(`${old} was renamed to ${next}.`);
       expect(r.stderr).toContain(`Fix: unset ${old} && export ${next}=1`);
@@ -164,16 +165,16 @@ describe('operator-env-preload (#4023)', () => {
   }, 60_000);
 
   test('the new opt-in names survive the scrub', () => {
-    const probed = ['GBRAIN_TEST_EXAMPLE_FLAG', 'GBRAIN_TEST_BASH32_REQUIRE', 'GBRAIN_TEST_EXAMPLE_MULTIPLIER'];
-    const ambient = { GBRAIN_TEST_EXAMPLE_FLAG: '1', GBRAIN_TEST_BASH32_REQUIRE: '1', GBRAIN_TEST_EXAMPLE_MULTIPLIER: '3' };
+    const probed = ['DEVMODEL_TEST_EXAMPLE_FLAG', 'DEVMODEL_TEST_BASH32_REQUIRE', 'DEVMODEL_TEST_EXAMPLE_MULTIPLIER'];
+    const ambient = { DEVMODEL_TEST_EXAMPLE_FLAG: '1', DEVMODEL_TEST_BASH32_REQUIRE: '1', DEVMODEL_TEST_EXAMPLE_MULTIPLIER: '3' };
     const r = runProbe(ambient, probed);
     expect(r.exitCode).toBe(0);
     expect(r.report).toEqual(ambient);
   }, 30_000);
 
-  test('GBRAIN_DEBUG_PRELOAD=1 logs removed names, never values', () => {
+  test('DEVMODEL_DEBUG_PRELOAD=1 logs removed names, never values', () => {
     const r = runProbe(
-      { GBRAIN_SOURCE: 'hunter2-not-for-logs', GBRAIN_DEBUG_PRELOAD: '1' },
+      { GBRAIN_SOURCE: 'hunter2-not-for-logs', DEVMODEL_DEBUG_PRELOAD: '1' },
       ['GBRAIN_SOURCE'],
     );
     expect(r.exitCode).toBe(0);

@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const SCRIPT = join(import.meta.dir, '..', '..', 'scripts', 'ci-typecheck.sh');
-const BUILDINFO = 'node_modules/.cache/gbrain-typecheck.tsbuildinfo';
+const BUILDINFO = 'node_modules/.cache/devmodel-typecheck.tsbuildinfo';
 const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -23,7 +23,7 @@ afterEach(() => {
 // signal name (the process kills itself with it), or "hang".
 const FAKE_TSC = String.raw`#!/usr/bin/env bash
 n=$(( $(wc -l < "$FIXTURE_LOG") + 1 ))
-if [ -f node_modules/.cache/gbrain-typecheck.tsbuildinfo ]; then echo warm >> "$FIXTURE_LOG"; else echo cold >> "$FIXTURE_LOG"; fi
+if [ -f node_modules/.cache/devmodel-typecheck.tsbuildinfo ]; then echo warm >> "$FIXTURE_LOG"; else echo cold >> "$FIXTURE_LOG"; fi
 step=$(sed -n "$n"p "$FIXTURE_PLAN")
 case "$step" in
   ABRT|KILL) kill -s "$step" $$ ;;
@@ -33,7 +33,7 @@ esac
 `;
 
 function run(plan: string[], seconds = '20') {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-ci-typecheck-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-ci-typecheck-'));
   roots.push(root);
   mkdirSync(join(root, 'node_modules/.cache'), { recursive: true });
   writeFileSync(join(root, BUILDINFO), 'restored from another head');
@@ -49,7 +49,7 @@ function run(plan: string[], seconds = '20') {
       FIXTURE_PLAN: join(root, 'plan'),
       FIXTURE_LOG: join(root, 'log'),
       GITHUB_OUTPUT: join(root, 'output'),
-      GBRAIN_TYPECHECK_ATTEMPT_SECONDS: seconds,
+      DEVMODEL_TYPECHECK_ATTEMPT_SECONDS: seconds,
     },
   });
   return {

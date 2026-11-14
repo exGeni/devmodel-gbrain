@@ -8,7 +8,7 @@ import { buildSide, loadReceiptDir } from '../../scripts/ci-executed-counts.ts';
 const REPO = join(import.meta.dir, '../..');
 
 function sandbox() {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-with-receipt-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-with-receipt-'));
   mkdirSync(join(root, 'scripts/lib'), { recursive: true });
   mkdirSync(join(root, 'test'));
   copyFileSync(join(REPO, 'scripts/run-with-receipt.sh'), join(root, 'scripts/run-with-receipt.sh'));
@@ -17,8 +17,8 @@ function sandbox() {
   writeFileSync(join(root, 'test/a.test.ts'), `import { describe, test, expect } from 'bun:test';
 describe('wrapped', () => {
   test('hides receipt routing', () => {
-    expect(process.env.GBRAIN_TEST_RECEIPT_DIR).toBeUndefined();
-    expect(process.env.GBRAIN_TEST_RECEIPT_LANE).toBeUndefined();
+    expect(process.env.DEVMODEL_TEST_RECEIPT_DIR).toBeUndefined();
+    expect(process.env.DEVMODEL_TEST_RECEIPT_LANE).toBeUndefined();
   });
   test.skip('optional', () => {});
 });`);
@@ -32,7 +32,7 @@ describe('run-with-receipt.sh', () => {
     const root = sandbox();
     try {
       const receipts = join(root, 'receipts');
-      const r = run(root, ['slow', 'perf-a', '--', 'bun', 'test', 'test/a.test.ts', '--timeout=60000'], { GBRAIN_TEST_RECEIPT_DIR: receipts });
+      const r = run(root, ['slow', 'perf-a', '--', 'bun', 'test', 'test/a.test.ts', '--timeout=60000'], { DEVMODEL_TEST_RECEIPT_DIR: receipts });
       expect(r.status, r.stdout + r.stderr).toBe(0);
       expect(readdirSync(receipts).sort()).toEqual(['slow--perf-a--primary.files', 'slow--perf-a--primary.junit.xml', 'slow--perf-a--primary.receipt']);
       const meta = readFileSync(join(receipts, 'slow--perf-a--primary.receipt'), 'utf8');
@@ -60,7 +60,7 @@ describe('run-with-receipt.sh', () => {
     const root = sandbox();
     try {
       const receipts = join(root, 'receipts');
-      const r = run(root, ['reconciliation', 'pglite', '--', 'bun', '--no-env-file', 'test', '--timeout=60000', 'test/a.test.ts'], { GBRAIN_TEST_RECEIPT_DIR: receipts });
+      const r = run(root, ['reconciliation', 'pglite', '--', 'bun', '--no-env-file', 'test', '--timeout=60000', 'test/a.test.ts'], { DEVMODEL_TEST_RECEIPT_DIR: receipts });
       expect(r.status, r.stdout + r.stderr).toBe(0);
       const side = buildSide('local', loadReceiptDir(receipts));
       expect(side.issues).toEqual([]);

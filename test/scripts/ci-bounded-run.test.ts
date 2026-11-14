@@ -30,7 +30,7 @@ const alive = (pid: number) => {
 describe.skipIf(process.platform === 'win32')('scripts/ci-bounded-run.ts', () => {
   const dirs: string[] = [];
   afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
-  const scratch = () => { const dir = mkdtempSync(join(tmpdir(), 'gbrain-ci-bounded-')); dirs.push(dir); return dir; };
+  const scratch = () => { const dir = mkdtempSync(join(tmpdir(), 'devmodel-ci-bounded-')); dirs.push(dir); return dir; };
 
   /** A command whose attempts follow `plan` (stall, fail or ok), leaving a backgrounded grandchild on a stall. Only shell
    * builtins run before the step, so a healthy attempt is one short-lived process that forks nothing on its way to exit. */

@@ -29,9 +29,9 @@ import {
   notStressedReason, parseFileList, profileFor, redact, reproduceLine, validRef, type HelperExpansion, type Profile,
 } from './plan.ts';
 
-/** GBRAIN_STRESS_ROOT is a test seam: a fixture tree whose test files the runner executes. */
-const ROOT = process.env.GBRAIN_STRESS_ROOT ? resolve(process.env.GBRAIN_STRESS_ROOT) : resolve(import.meta.dir, '..', '..');
-const ITERATION_CAP_MS = Number(process.env.GBRAIN_STRESS_ITERATION_TIMEOUT_MS ?? 15 * 60_000);
+/** DEVMODEL_STRESS_ROOT is a test seam: a fixture tree whose test files the runner executes. */
+const ROOT = process.env.DEVMODEL_STRESS_ROOT ? resolve(process.env.DEVMODEL_STRESS_ROOT) : resolve(import.meta.dir, '..', '..');
+const ITERATION_CAP_MS = Number(process.env.DEVMODEL_STRESS_ITERATION_TIMEOUT_MS ?? 15 * 60_000);
 
 export interface Args {
   files: string[]; iterations: number; firstIteration: number; base: string; head?: string;
@@ -113,8 +113,8 @@ interface RunContext { args: Args; sha: string; bun: string; out: string; child?
 function childEnv(profile: Profile, seed: number): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v;
-  for (const k of ['DATABASE_URL', 'GBRAIN_DATABASE_URL', 'GBRAIN_TEST_RECEIPT_DIR', 'GBRAIN_TEST_RECEIPT_LANE', 'GBRAIN_STRESS_ROOT']) delete env[k];
-  env.GBRAIN_TEST_SEED = String(seed);
+  for (const k of ['DATABASE_URL', 'GBRAIN_DATABASE_URL', 'DEVMODEL_TEST_RECEIPT_DIR', 'DEVMODEL_TEST_RECEIPT_LANE', 'DEVMODEL_STRESS_ROOT']) delete env[k];
+  env.DEVMODEL_TEST_SEED = String(seed);
   return { ...env, ...profile.vars };
 }
 
@@ -126,8 +126,8 @@ async function runIteration(ctx: RunContext, file: string, profile: Profile, ind
   const junit = join(dir, 'stress.junit.xml');
   let cmd: string[];
   if (profile.name === 'e2e') {
-    env.GBRAIN_TEST_RECEIPT_DIR = dir;
-    env.GBRAIN_TEST_RECEIPT_LANE = 'stress-e2e';
+    env.DEVMODEL_TEST_RECEIPT_DIR = dir;
+    env.DEVMODEL_TEST_RECEIPT_LANE = 'stress-e2e';
     cmd = ['bash', 'scripts/run-e2e.sh', file];
   } else {
     cmd = ['bun', 'test', `--timeout=${profile.timeoutMs}`,
@@ -329,7 +329,7 @@ async function main(argv: string[]): Promise<number> {
 
 function artifactUrl(): string {
   const { GITHUB_SERVER_URL: server, GITHUB_REPOSITORY: repo, GITHUB_RUN_ID: run } = process.env;
-  return process.env.GBRAIN_STRESS_ARTIFACT_URL || (server && repo && run ? `${server}/${repo}/actions/runs/${run}` : '');
+  return process.env.DEVMODEL_STRESS_ARTIFACT_URL || (server && repo && run ? `${server}/${repo}/actions/runs/${run}` : '');
 }
 
 /** The context line printed under every reproduce command. */
@@ -345,7 +345,7 @@ function writeManifest(ctx: RunContext, results: FileResult[], selection: Select
     context: contextLine(ctx, r, it, artifact),
   }))));
   const manifest = {
-    version: 1, kind: 'gbrain-stress-manifest', sha: ctx.sha, bun: ctx.bun, randomize: ctx.args.randomize,
+    version: 1, kind: 'devmodel-stress-manifest', sha: ctx.sha, bun: ctx.bun, randomize: ctx.args.randomize,
     run_id: process.env.GITHUB_RUN_ID ?? '', run_attempt: process.env.GITHUB_RUN_ATTEMPT ?? '', artifact,
     setup_ms: setupMs, run_ms: runMs, helpers: selection.helpers,
     files: results.map(r => ({ ...r, iterations: r.iterations.map(({ receipt, ...it }) => ({ ...it, receipt })) })),

@@ -15,7 +15,7 @@ test('the local gate avoids GNU-only xargs flags', () => {
 });
 
 function runPhases(noShard: boolean, diff: boolean, failStage = '') {
-  const home = mkdtempSync(join(tmpdir(), 'gbrain-ci-phases-'));
+  const home = mkdtempSync(join(tmpdir(), 'devmodel-ci-phases-'));
   try {
     const bin = join(home, 'bin');
     mkdirSync(bin);
@@ -114,7 +114,7 @@ describe('ci-local execution coverage', () => {
 
   for (const gitleaks of ['missing', 'success', 'failure']) {
     test(`doc-only diff requires a successful gitleaks scan (${gitleaks})`, () => {
-      const home = mkdtempSync(join(tmpdir(), 'gbrain-ci-docs-'));
+      const home = mkdtempSync(join(tmpdir(), 'devmodel-ci-docs-'));
       try {
         const bin = join(home, 'bin');
         mkdirSync(bin);
@@ -142,7 +142,7 @@ describe('ci-local execution coverage', () => {
   }
 
   function diffPreflight(classification: string, docChecks = 'exit 0') {
-    const home = mkdtempSync(join(tmpdir(), 'gbrain-ci-diff-'));
+    const home = mkdtempSync(join(tmpdir(), 'devmodel-ci-diff-'));
     try {
       const bin = join(home, 'bin');
       mkdirSync(bin);
@@ -180,7 +180,7 @@ describe('ci-local execution coverage', () => {
 describe('local test configuration through run-e2e', () => {
   for (const disabled of ['1', '0', undefined]) {
     test(`preserves configuration isolation flag ${disabled ?? '(absent)'} through the actual Bun child`, () => {
-      const fixture = mkdtempSync(join(tmpdir(), 'gbrain-e2e-env-file-'));
+      const fixture = mkdtempSync(join(tmpdir(), 'devmodel-e2e-env-file-'));
       const repo = resolve(import.meta.dir, '../..');
       try {
         mkdirSync(join(fixture, 'scripts/lib'), { recursive: true });
@@ -195,7 +195,7 @@ describe('local test configuration through run-e2e', () => {
 import { expect, test } from 'bun:test';
 test('configuration file respects the parent isolation policy', () => {
   expect({
-    disabled: process.env.GBRAIN_CI_DISABLE_TEST_ENV_FILE ?? null,
+    disabled: process.env.DEVMODEL_CI_DISABLE_TEST_ENV_FILE ?? null,
     operatorOverride: process.env.GBRAIN_SOURCE ?? null,
   }).toEqual(${JSON.stringify(expected)});
 });
@@ -204,7 +204,7 @@ test('configuration file respects the parent isolation policy', () => {
           ...process.env, HOME: fixture, PATH: `${dirname(process.execPath)}:${process.env.PATH}`,
           SHARD: '', COVERAGE_DIR: '', DATABASE_URL: '', GBRAIN_DATABASE_URL: '',
           GBRAIN_SOURCE: 'ambient-must-be-removed',
-          GBRAIN_CI_DISABLE_TEST_ENV_FILE: disabled,
+          DEVMODEL_CI_DISABLE_TEST_ENV_FILE: disabled,
         };
         const result = spawnSync('bash', [join(fixture, 'scripts/run-e2e.sh'), 'test/e2e/config-file-probe.test.ts'], {
           cwd: fixture, encoding: 'utf8', timeout: 20_000, env,

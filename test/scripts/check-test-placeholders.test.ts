@@ -41,7 +41,7 @@ describe('check-test-placeholders fixtures', () => {
     const { status, out } = run(join(FIXTURES, 'good'));
     expect(status).toBe(0);
     expect(out).toContain('check-test-placeholders: OK (1 test files, 0 allowlisted placeholder site(s))');
-    expect(out).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(out).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 
   test('a test/ with no scannable test file reports a skip, not a pass', () => {
@@ -54,8 +54,8 @@ describe('check-test-placeholders fixtures', () => {
       try {
         const { status, out } = run(dir);
         expect(status).toBe(0);
-        expect(out).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
-        expect(out).toContain('GBRAIN_CHECK_SKIPPED: no *.test.ts files under test/ to scan');
+        expect(out).toMatch(/^DEVMODEL_CHECK_SKIPPED: \S/m);
+        expect(out).toContain('DEVMODEL_CHECK_SKIPPED: no *.test.ts files under test/ to scan');
         expect(out).not.toContain('check-test-placeholders: OK');
       } finally {
         rmSync(dir, { recursive: true, force: true });
@@ -68,7 +68,7 @@ describe('check-test-placeholders fixtures', () => {
     try {
       const { status, out } = run(dir);
       expect(status).toBe(2);
-      expect(out).not.toContain('GBRAIN_CHECK_SKIPPED');
+      expect(out).not.toContain('DEVMODEL_CHECK_SKIPPED');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

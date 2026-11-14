@@ -36,7 +36,7 @@ describe('gbrain-home-preload contract', () => {
     const out = runBunEval(script, { GBRAIN_HOME: undefined });
     const parsed = JSON.parse(out.split('\n').pop()!) as { home: string | null };
     expect(parsed.home).not.toBeNull();
-    expect(parsed.home!).toContain('gbrain-test-home-');
+    expect(parsed.home!).toContain('devmodel-test-home-');
   });
 
   test('respects a pre-set GBRAIN_HOME (the e2e wrapper sets its own)', () => {
@@ -44,8 +44,8 @@ describe('gbrain-home-preload contract', () => {
       `await import(${JSON.stringify(PRELOAD)});`,
       `console.log(JSON.stringify({ home: process.env.GBRAIN_HOME ?? null }));`,
     ].join('\n');
-    const out = runBunEval(script, { GBRAIN_HOME: '/tmp/gbrain-preload-preset-pin' });
+    const out = runBunEval(script, { GBRAIN_HOME: '/tmp/devmodel-preload-preset-pin' });
     const parsed = JSON.parse(out.split('\n').pop()!) as { home: string | null };
-    expect(parsed.home).toBe('/tmp/gbrain-preload-preset-pin');
+    expect(parsed.home).toBe('/tmp/devmodel-preload-preset-pin');
   });
 });

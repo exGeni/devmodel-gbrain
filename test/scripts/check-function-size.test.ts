@@ -1,6 +1,6 @@
 /**
  * Failing-side proof for every scripts/check-function-size.ts rule (W5), driven
- * through GBRAIN_GUARD_ROOT temp trees with a small limit so each rule is
+ * through DEVMODEL_GUARD_ROOT temp trees with a small limit so each rule is
  * exercised without 300-line fixtures. The guard-self-test fixtures prove the
  * default 300-line limit end to end.
  */
@@ -25,7 +25,7 @@ afterEach(() => {
 const body = (n: number, indent = '    ') => Array.from({ length: n }, (_, i) => `${indent}total += ${i};`).join('\n');
 
 function makeTree(files: Record<string, string>, rows: string[] = [], base?: string[]): string {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-function-size-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-function-size-'));
   tempDirs.push(root);
   mkdirSync(join(root, 'scripts'), { recursive: true });
   writeFileSync(join(root, 'scripts', 'function-size-baseline.tsv'), [HEADER, ...rows].join('\n') + '\n');
@@ -40,7 +40,7 @@ function makeTree(files: Record<string, string>, rows: string[] = [], base?: str
 function runGuard(root: string, args: string[] = [], env: Record<string, string> = {}) {
   const res = spawnSync('bun', [GUARD, ...args], {
     encoding: 'utf8',
-    env: { ...process.env, GBRAIN_GUARD_ROOT: root, GBRAIN_FUNCTION_SIZE_LIMIT: String(LIMIT), GBRAIN_FUNCTION_SIZE_SLACK: '5', ...env },
+    env: { ...process.env, DEVMODEL_GUARD_ROOT: root, DEVMODEL_FUNCTION_SIZE_LIMIT: String(LIMIT), DEVMODEL_FUNCTION_SIZE_SLACK: '5', ...env },
     timeout: 30_000,
   });
   return { code: res.status ?? -1, out: `${res.stdout}\n${res.stderr}`, stderr: res.stderr };
@@ -189,13 +189,13 @@ describe('check-function-size.ts rules', () => {
       }),
     );
     expect(r.code).toBe(0);
-    expect(r.out).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(r.out).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 
-  test('skip: an empty src/ with no baseline rows prints GBRAIN_CHECK_SKIPPED and exits 0', () => {
+  test('skip: an empty src/ with no baseline rows prints DEVMODEL_CHECK_SKIPPED and exits 0', () => {
     const r = runGuard(makeTree({ 'src/t.generated.ts': long(40), 'test/long.test.ts': long(40) }));
     expect(r.code).toBe(0);
-    expect(r.out).toContain('GBRAIN_CHECK_SKIPPED:');
+    expect(r.out).toContain('DEVMODEL_CHECK_SKIPPED:');
     expect(r.out).not.toContain('OK: function sizes');
   });
 
@@ -203,7 +203,7 @@ describe('check-function-size.ts rules', () => {
     const r = runGuard(makeTree({}, ['src/a.ts\tbig\t14\tseed']));
     expect(r.code).toBe(1);
     expect(r.out).toContain('src/a.ts big no longer exists');
-    expect(r.out).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(r.out).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 
   test('--transfer moves a row to the identical function at its new path, and leaves edited functions alone', () => {

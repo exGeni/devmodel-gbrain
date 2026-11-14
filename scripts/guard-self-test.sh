@@ -10,7 +10,7 @@
 # every guard marked `selftest yes` in scripts/guards-manifest.tsv is run
 # against test/fixtures/guards/<guard>/bad and every bad-<variant> sibling
 # (EACH must exit non-zero on its own) and .../good (MUST exit 0), via the
-# GBRAIN_GUARD_ROOT override each guard
+# DEVMODEL_GUARD_ROOT override each guard
 # honors. Adding a self-test to a `todo` scanner = flip the manifest flag +
 # drop two fixture files.
 #
@@ -41,9 +41,9 @@ fi
 run_guard() {
   local guard="$1" fixture_root="$2"
   case "$guard" in
-    *.mjs) GBRAIN_GUARD_ROOT="$fixture_root" node "scripts/$guard" "$fixture_root" >/dev/null 2>&1 ;;
-    *.ts)  GBRAIN_GUARD_ROOT="$fixture_root" bun "scripts/$guard" >/dev/null 2>&1 ;;
-    *)     GBRAIN_GUARD_ROOT="$fixture_root" bash "scripts/$guard" >/dev/null 2>&1 ;;
+    *.mjs) DEVMODEL_GUARD_ROOT="$fixture_root" node "scripts/$guard" "$fixture_root" >/dev/null 2>&1 ;;
+    *.ts)  DEVMODEL_GUARD_ROOT="$fixture_root" bun "scripts/$guard" >/dev/null 2>&1 ;;
+    *)     DEVMODEL_GUARD_ROOT="$fixture_root" bash "scripts/$guard" >/dev/null 2>&1 ;;
   esac
 }
 

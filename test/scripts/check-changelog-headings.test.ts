@@ -16,7 +16,7 @@ const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd,
 const changelog = (...versions: string[]) => '# Changelog\n\n' + versions.map((v) => '## [' + v + '] - 2026-10-20\n\nEntry ' + v + '.\n').join('\n');
 
 function repo(): string {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-changelog-headings-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-changelog-headings-'));
   roots.push(root);
   git(root, 'init', '-q', '-b', 'main');
   git(root, 'config', 'user.email', 't@t.co');
@@ -40,7 +40,7 @@ describe('check:changelog-headings', () => {
     writeFileSync(join(root, 'CHANGELOG.md'), changelog('0.60.323.0', '0.60.322.0', '0.60.321.0', '0.60.46.0'));
     const r = run(root);
     expect(r.code).toBe(0);
-    expect(r.out).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(r.out).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 
   test('a base changelog with no release heading reports a skip, not a pass', () => {
@@ -50,7 +50,7 @@ describe('check:changelog-headings', () => {
     git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
     const r = run(root);
     expect(r.code).toBe(0);
-    expect(r.out).toContain('GBRAIN_CHECK_SKIPPED: origin/main:CHANGELOG.md has no release headings');
+    expect(r.out).toContain('DEVMODEL_CHECK_SKIPPED: origin/main:CHANGELOG.md has no release headings');
     expect(r.out).not.toContain('check-changelog-headings: ok');
   });
 
@@ -87,6 +87,6 @@ describe('check:changelog-headings', () => {
     const root = repo();
     git(root, 'update-ref', '-d', 'refs/remotes/origin/main');
     expect(run(root, { CI: 'true' }).code).toBe(1);
-    expect(run(root).out).toContain('GBRAIN_CHECK_SKIPPED');
+    expect(run(root).out).toContain('DEVMODEL_CHECK_SKIPPED');
   });
 });

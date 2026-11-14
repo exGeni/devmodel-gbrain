@@ -10,7 +10,7 @@
  * Fails when: a retired phrase in a scanned location stops failing, an exempt
  * location starts failing, or the failure loses its FAIL / Why / Fix / See
  * lines or the file:line, or the script stops parsing under macOS /bin/bash 3.2.
- * Seam: GBRAIN_GUARD_ROOT pointed at temp trees.
+ * Seam: DEVMODEL_GUARD_ROOT pointed at temp trees.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { spawnSync } from 'node:child_process';
@@ -35,7 +35,7 @@ function write(rel: string, content: string): void {
 }
 
 function run() {
-  return spawnSync('bash', [SCRIPT], { encoding: 'utf8', env: { ...process.env, GBRAIN_GUARD_ROOT: root } });
+  return spawnSync('bash', [SCRIPT], { encoding: 'utf8', env: { ...process.env, DEVMODEL_GUARD_ROOT: root } });
 }
 
 const RETIRED: Array<[string, string]> = [
@@ -56,7 +56,7 @@ describe('check-retired-phrases.sh', () => {
     const r = run();
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('✓ retired phrases');
-    expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(r.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
   });
 
   it('reports a skip, not a pass, when none of the scanned paths exists', () => {
@@ -64,8 +64,8 @@ describe('check-retired-phrases.sh', () => {
     const r = run();
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('✓ retired phrases: nothing to scan');
-    expect(r.stdout).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
-    expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: none of the scanned docs, scripts or package.json exist');
+    expect(r.stdout).toMatch(/^DEVMODEL_CHECK_SKIPPED: \S/m);
+    expect(r.stdout).toContain('DEVMODEL_CHECK_SKIPPED: none of the scanned docs, scripts or package.json exist');
   });
 
   for (const [sentence, match] of RETIRED) {
@@ -116,7 +116,7 @@ describe('check-retired-phrases.sh under /bin/bash (3.2 on macOS)', () => {
 
   it('still flags a retired phrase', () => {
     write('docs/guides/x.md', '# Guide\n\nSee the MIGRATIONS array.\n');
-    const r = spawnSync('/bin/bash', [SCRIPT], { encoding: 'utf8', env: { ...process.env, GBRAIN_GUARD_ROOT: root } });
+    const r = spawnSync('/bin/bash', [SCRIPT], { encoding: 'utf8', env: { ...process.env, DEVMODEL_GUARD_ROOT: root } });
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('FAIL: docs/guides/x.md:3 retired phrase "MIGRATIONS array"');
   });

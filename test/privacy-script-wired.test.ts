@@ -47,11 +47,11 @@ describe('check-privacy.sh', () => {
       writeFileSync(join(root, 'untracked.md'), 'safe\n');
       const working = runPrivacy(root);
       expect(working.status).toBe(0);
-      expect(working.stdout).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
-      expect(working.stdout).toContain('GBRAIN_CHECK_SKIPPED: git lists no tracked files to scan');
+      expect(working.stdout).toMatch(/^DEVMODEL_CHECK_SKIPPED: \S/m);
+      expect(working.stdout).toContain('DEVMODEL_CHECK_SKIPPED: git lists no tracked files to scan');
       const staged = runPrivacy(root, ['--staged']);
       expect(staged.status).toBe(0);
-      expect(staged.stdout).toContain('GBRAIN_CHECK_SKIPPED: no staged files to scan');
+      expect(staged.stdout).toContain('DEVMODEL_CHECK_SKIPPED: no staged files to scan');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -64,10 +64,10 @@ describe('check-privacy.sh', () => {
       for (const args of [[], ['--staged']]) {
         const ok = runPrivacy(clean, args);
         expect(ok.status).toBe(0);
-        expect(ok.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+        expect(ok.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
         const bad = runPrivacy(dirty, args);
         expect(bad.status).toBe(1);
-        expect(bad.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+        expect(bad.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
       }
     } finally {
       rmSync(clean, { recursive: true, force: true });

@@ -65,15 +65,15 @@ describe('check-test-isolation.sh', () => {
       ]);
       expect(r.status).toBe(0);
       expect(r.stdout).toContain('check-test-isolation: OK');
-      expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+      expect(r.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
     });
 
     it('reports a skip, not a pass, when no non-serial unit test file exists', () => {
       for (const files of [[], [{ path: 'only.serial.test.ts', contents: `process.env.OOPS = 'ok here';\n` }]]) {
         const r = runLintIn(files);
         expect(r.status).toBe(0);
-        expect(r.stdout).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
-        expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: no non-serial unit test files under test');
+        expect(r.stdout).toMatch(/^DEVMODEL_CHECK_SKIPPED: \S/m);
+        expect(r.stdout).toContain('DEVMODEL_CHECK_SKIPPED: no non-serial unit test files under test');
         expect(r.stdout).not.toContain('check-test-isolation: OK');
       }
     });

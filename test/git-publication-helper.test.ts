@@ -9,7 +9,7 @@ import { withEnv } from './helpers/with-env.ts';
 // gave up under oven-sh/bun#34069 looks the same to the caller) must fail the
 // test that called it, not return '' as if it had succeeded.
 async function withSignalledGit<T>(run: () => Promise<T>): Promise<T> {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-fake-git-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-fake-git-'));
   try {
     const fake = join(dir, 'git');
     writeFileSync(fake, '#!/bin/sh\nkill -KILL $$\n');
@@ -26,7 +26,7 @@ test.skipIf(process.platform === 'win32')('a git call that ends without an exit 
 });
 
 test('a non-zero exit carries the command, the status and git\'s stderr', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-not-a-repo-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-not-a-repo-'));
   try {
     expect(() => git(dir, 'rev-parse', 'HEAD')).toThrow(/git rev-parse HEAD in .*: exit 128\n.*not a git repository/i);
     await expect(gitAsync(dir, 'rev-parse', 'HEAD')).rejects.toThrow(/exit 128\n.*not a git repository/i);

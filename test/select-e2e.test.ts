@@ -50,7 +50,7 @@ describe("selectTests", () => {
 describe("selector CLI", () => {
   /** A repository whose base commit tracks the two E2E files; `files` are then written on top of it, uncommitted. */
   function run(args: string[], files: Record<string, string> = {}) {
-    const dir = mkdtempSync(join(tmpdir(), "gbrain-select-e2e-"));
+    const dir = mkdtempSync(join(tmpdir(), "devmodel-select-e2e-"));
     try {
       const git = (...a: string[]) => expect(spawnSync("git", a, { cwd: dir, encoding: "utf8" }).status).toBe(0);
       git("init", "-q");

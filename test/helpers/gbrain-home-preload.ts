@@ -33,9 +33,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 if (!process.env.GBRAIN_HOME) {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-test-home-'));
+  const dir = mkdtempSync(join(tmpdir(), 'devmodel-test-home-'));
   process.env.GBRAIN_HOME = dir;
-  if (process.env.GBRAIN_DEBUG_PRELOAD === '1') {
+  if (process.env.DEVMODEL_DEBUG_PRELOAD === '1') {
     console.error(`[gbrain-home-preload] GBRAIN_HOME=${dir}`);
   }
 }

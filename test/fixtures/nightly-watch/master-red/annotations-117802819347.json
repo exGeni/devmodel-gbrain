@@ -13,7 +13,7 @@
   },
   {
     "annotation_level": "failure",
-    "message": "PostgreSQL arm failed. Reproduce: DATABASE_URL=<pgvector test database> GBRAIN_TEST_ALLOW_DATABASE_URL=1 bun test --timeout=120000 test/large-pages/segmented-prior-view.test.ts",
+    "message": "PostgreSQL arm failed. Reproduce: DATABASE_URL=<pgvector test database> DEVMODEL_TEST_ALLOW_DATABASE_URL=1 bun test --timeout=120000 test/large-pages/segmented-prior-view.test.ts",
     "path": "test/large-pages/segmented-prior-view.test.ts",
     "title": ""
   },

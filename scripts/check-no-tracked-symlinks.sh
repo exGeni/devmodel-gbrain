@@ -22,7 +22,7 @@
 #
 # Usage: scripts/check-no-tracked-symlinks.sh
 # Exit:  0 when clean (or when git lists no tracked file: it then prints
-#        `GBRAIN_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a
+#        `DEVMODEL_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a
 #        skip, not a pass), 1 when a tracked symlink is found.
 
 set -euo pipefail
@@ -39,7 +39,7 @@ ALLOWLIST=()
 index="$(git ls-files -s || true)"
 # Nothing to check: the runner counts the marker as a skip, not a pass.
 if [ -z "$index" ]; then
-  echo "GBRAIN_CHECK_SKIPPED: git lists no tracked files"
+  echo "DEVMODEL_CHECK_SKIPPED: git lists no tracked files"
   exit 0
 fi
 found="$(printf '%s\n' "$index" | awk '$1 == "120000"' | cut -f2- || true)"

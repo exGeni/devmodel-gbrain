@@ -87,7 +87,7 @@ export function verdictOf(conclusion: string | null): RunEvidence['verdict'] {
   return RED_CONCLUSIONS.has(conclusion ?? '') ? 'red' : 'ignored';
 }
 
-export const EXEMPTION_MARKER = 'gbrain-stress-exemption';
+export const EXEMPTION_MARKER = 'devmodel-stress-exemption';
 export const EXEMPTION_OWNER = 'agent on release duty';
 export const EXEMPTION_DAYS = 14;
 export interface ExemptionRow { file: string; test: string; backend: string; signature: string; owner: string; expires: string }

@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 const REPO = resolve(import.meta.dir, '..', '..');
 
 function fixtureTree(scripts: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-run-heavy-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-run-heavy-'));
   mkdirSync(join(root, 'scripts'));
   mkdirSync(join(root, 'tests', 'heavy'), { recursive: true });
   copyFileSync(join(REPO, 'scripts', 'run-heavy.sh'), join(root, 'scripts', 'run-heavy.sh'));

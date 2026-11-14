@@ -14,17 +14,17 @@
  *     on the scheduled run (GITHUB_EVENT_NAME=schedule), where nightly-watch
  *     turns it into an issue. Both print the lane's miner command.
  *
- * With no test file in any lane it prints `GBRAIN_CHECK_SKIPPED: <reason>` and
+ * With no test file in any lane it prints `DEVMODEL_CHECK_SKIPPED: <reason>` and
  * exits 0, which `bun run verify` records as a skip, not a pass.
  *
- * Seam: GBRAIN_GUARD_ROOT (fixture tree root); there `*.test.fixture.ts` files
+ * Seam: DEVMODEL_GUARD_ROOT (fixture tree root); there `*.test.fixture.ts` files
  * count as their `*.test.ts` names so fixtures stay out of bun's discovery.
  */
 import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-const ROOT = process.env.GBRAIN_GUARD_ROOT ?? join(import.meta.dir, '..');
-const TEST_FILE = process.env.GBRAIN_GUARD_ROOT ? /\.test(\.fixture)?\.ts$/ : /\.test\.ts$/;
+const ROOT = process.env.DEVMODEL_GUARD_ROOT ?? join(import.meta.dir, '..');
+const TEST_FILE = process.env.DEVMODEL_GUARD_ROOT ? /\.test(\.fixture)?\.ts$/ : /\.test\.ts$/;
 const DOCS = 'docs/TESTING.md#keeping-ci-partitions-balanced';
 const SCHEDULED = process.env.GITHUB_EVENT_NAME === 'schedule';
 const latestRun = (workflow: string, event: string) =>
@@ -92,7 +92,7 @@ if (failures.length) {
 }
 if (LANES.every(l => l.files.length === 0)) {
   // Nothing to weigh: the runner counts the marker as a skip, not a pass.
-  console.log('GBRAIN_CHECK_SKIPPED: no test files under test/ to weigh');
+  console.log('DEVMODEL_CHECK_SKIPPED: no test files under test/ to weigh');
   process.exit(0);
 }
 console.log(`check-weight-coverage: OK (${LANES.map(l => `${l.lane} ${l.files.length} files`).join(', ')}; no dead entries)`);

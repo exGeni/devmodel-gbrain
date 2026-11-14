@@ -17,18 +17,18 @@
 #   bash scripts/run-verify-parallel.sh --dry-list   # print check list, exit
 #
 # Env overrides:
-#   GBRAIN_VERIFY_TIMEOUT       per-check wallclock cap, seconds (default 120)
-#   GBRAIN_VERIFY_SKIP_TYPECHECK=1  leave typecheck out: test.yml's typecheck job
+#   DEVMODEL_VERIFY_TIMEOUT       per-check wallclock cap, seconds (default 120)
+#   DEVMODEL_VERIFY_SKIP_TYPECHECK=1  leave typecheck out: test.yml's typecheck job
 #                               runs tsc in parallel under its own measured timeout
-#   GBRAIN_VERIFY_LOG_DIR       where to write per-check logs (default tempdir,
+#   DEVMODEL_VERIFY_LOG_DIR       where to write per-check logs (default tempdir,
 #                               removed on success and kept on failure)
-#   GBRAIN_TEST_RECEIPT_DIR     also write the verify receipt (X2): one JUnit
+#   DEVMODEL_TEST_RECEIPT_DIR     also write the verify receipt (X2): one JUnit
 #                               testcase per check with its real outcome
 #
 # Outcomes: every check is recorded as pass, fail, timeout or skip in
 # <log dir>/outcomes.tsv and in the receipt. A check that exits 0 without
 # checking anything (its subject is absent) must print a line starting with
-# `GBRAIN_CHECK_SKIPPED: <reason>`; the recorder reads that marker, so a
+# `DEVMODEL_CHECK_SKIPPED: <reason>`; the recorder reads that marker, so a
 # self-skip is never counted as a pass.
 #
 # Exit codes:
@@ -49,7 +49,7 @@ receipts_init verify || exit 2
 # "scripts" key), invoked as `bun run <name>`.
 #
 # ORDER MATTERS for wallclock: the spawn loop below is capped at
-# GBRAIN_VERIFY_MAX_PARALLEL workers, so the heaviest checks go FIRST
+# DEVMODEL_VERIFY_MAX_PARALLEL workers, so the heaviest checks go FIRST
 # (LPT-style — makespan ≈ max(longest check, total/POOL)). The heavy block:
 # typecheck (tsc) and the whole-tree scans. Everything after is sub-second;
 # that tail keeps its historical order for grep-ability. The guard self-test
@@ -72,7 +72,7 @@ CHECKS=(
   "check:privacy"
   "check:test-names"
   "check:test-isolation"
-  # D7: a test that gates execution on a GBRAIN_* opt-in the operator-env
+  # D7: a test that gates execution on a DEVMODEL_* or GBRAIN_* opt-in the operator-env
   # preload strips is a silent skip; TS AST scan, ~2s.
   "check:test-env-opt-ins"
   # C2: weight maps name only existing files; the unweighted share per lane
@@ -124,7 +124,7 @@ SOLO_CHECKS=(
   # Budget: 30 s wall clock (scripts/guard-self-test.sh BUDGET_SECONDS).
   "check:guard-self-test"
 )
-if [ "${GBRAIN_VERIFY_SKIP_TYPECHECK:-}" = "1" ]; then
+if [ "${DEVMODEL_VERIFY_SKIP_TYPECHECK:-}" = "1" ]; then
   KEPT=()
   for c in "${CHECKS[@]}"; do [ "$c" = "typecheck" ] || KEPT+=("$c"); done
   CHECKS=("${KEPT[@]}")
@@ -148,16 +148,16 @@ if [ "$#" -gt 0 ] && [ "${1:-}" != "" ]; then
   exit 2
 fi
 
-TIMEOUT="${GBRAIN_VERIFY_TIMEOUT:-120}"
+TIMEOUT="${DEVMODEL_VERIFY_TIMEOUT:-120}"
 
 # Per-check temp dir. Each check gets its own subdir so writes can't race
 # on shared scratch state (the checks themselves are read-only — they grep
 # the working tree — but defense-in-depth.)
-if [ -n "${GBRAIN_VERIFY_LOG_DIR:-}" ]; then
-  LOG_DIR="$GBRAIN_VERIFY_LOG_DIR"
+if [ -n "${DEVMODEL_VERIFY_LOG_DIR:-}" ]; then
+  LOG_DIR="$DEVMODEL_VERIFY_LOG_DIR"
   mkdir -p "$LOG_DIR" || { echo "ERROR: cannot create $LOG_DIR" >&2; exit 2; }
 else
-  LOG_DIR="$(mktemp -d /tmp/gbrain-verify-XXXXXX)"
+  LOG_DIR="$(mktemp -d /tmp/devmodel-verify-XXXXXX)"
   KEEP_LOGS=0
   trap '[ "$KEEP_LOGS" = "1" ] || rm -rf "$LOG_DIR"' EXIT
 fi
@@ -174,10 +174,10 @@ fi
 # simultaneously on a 4-vCPU CI runner — pushing slow checks into the
 # 120s per-check timeout (the documented flake class on slower hosts).
 # Default = detect_cpus so a many-core dev machine keeps its wide fan-out;
-# escape hatch: GBRAIN_VERIFY_MAX_PARALLEL=999.
-MAX_PAR="${GBRAIN_VERIFY_MAX_PARALLEL:-$(detect_cpus)}"
+# escape hatch: DEVMODEL_VERIFY_MAX_PARALLEL=999.
+MAX_PAR="${DEVMODEL_VERIFY_MAX_PARALLEL:-$(detect_cpus)}"
 if ! printf '%s' "$MAX_PAR" | grep -qE '^[0-9]+$' || [ "$MAX_PAR" -lt 1 ]; then
-  echo "ERROR: invalid GBRAIN_VERIFY_MAX_PARALLEL: $MAX_PAR" >&2
+  echo "ERROR: invalid DEVMODEL_VERIFY_MAX_PARALLEL: $MAX_PAR" >&2
   exit 2
 fi
 
@@ -297,8 +297,8 @@ for i in "${!ALL_CHECKS[@]}"; do
   [ -f "$LOG_DIR/$safe.seconds" ] && secs=$(cat "$LOG_DIR/$safe.seconds" 2>/dev/null)
   skip_reason=""
   if [ "$rc" = "0" ] && [ -f "$LOG_FILE" ]; then
-    skip_reason=$(sed -n 's/^GBRAIN_CHECK_SKIPPED:[[:space:]]*//p' "$LOG_FILE" | head -1 | tr '\t' ' ')
-    [ -n "$skip_reason" ] || ! grep -q '^GBRAIN_CHECK_SKIPPED:' "$LOG_FILE" || skip_reason="(no reason given)"
+    skip_reason=$(sed -n 's/^DEVMODEL_CHECK_SKIPPED:[[:space:]]*//p' "$LOG_FILE" | head -1 | tr '\t' ' ')
+    [ -n "$skip_reason" ] || ! grep -q '^DEVMODEL_CHECK_SKIPPED:' "$LOG_FILE" || skip_reason="(no reason given)"
   fi
 
   if [ "$rc" = "0" ] && [ -n "$skip_reason" ]; then

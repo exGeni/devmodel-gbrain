@@ -7,12 +7,12 @@
  * Fails when: the real 3.2 parser stops flagging the #5810 shape, a guard
  * fixture leaks into the scan, a failure loses its FAIL file:line / Why / Fix
  * / See lines, or a missing parser stops being a one-line skip (exit 2 under
- * GBRAIN_TEST_BASH32_REQUIRE=1).
- * Seams: GBRAIN_GUARD_ROOT (fixture tree), GBRAIN_BASH32 (parser binary; a
- * shim here), GBRAIN_BASH32_DOCKER (docker CLI). The real-parser cases run
+ * DEVMODEL_TEST_BASH32_REQUIRE=1).
+ * Seams: DEVMODEL_GUARD_ROOT (fixture tree), DEVMODEL_BASH32 (parser binary; a
+ * shim here), DEVMODEL_BASH32_DOCKER (docker CLI). The real-parser cases run
  * when bash 3.2 is reachable without a network pull (stock /bin/bash, or the
  * pinned image already present) and are mandatory under
- * GBRAIN_TEST_BASH32_REQUIRE=1, which the CI step sets.
+ * DEVMODEL_TEST_BASH32_REQUIRE=1, which the CI step sets.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { spawnSync } from 'node:child_process';
@@ -55,7 +55,7 @@ exit 0
 function run(guardRoot: string, env: Record<string, string> = {}) {
   return spawnSync('bash', [SCRIPT], {
     encoding: 'utf8',
-    env: { ...process.env, GBRAIN_BASH32: '', GBRAIN_BASH32_REQUIRE: '', GBRAIN_TEST_BASH32_REQUIRE: '', GBRAIN_GUARD_ROOT: guardRoot, ...env },
+    env: { ...process.env, DEVMODEL_BASH32: '', GBRAIN_BASH32_REQUIRE: '', GBRAIN_TEST_BASH32_REQUIRE: '', DEVMODEL_TEST_BASH32_REQUIRE: '', DEVMODEL_GUARD_ROOT: guardRoot, ...env },
   });
 }
 
@@ -64,7 +64,7 @@ describe('check-bash32.sh reporting (parser shim)', () => {
     write('tree/scripts/a.sh', 'echo a\n');
     write('tree/b.sh', 'echo b\n');
     write('tree/test/fixtures/guards/g/bad/x-bad.sh', 'echo fixture\n');
-    const r = run(join(root, 'tree'), { GBRAIN_BASH32: shim() });
+    const r = run(join(root, 'tree'), { DEVMODEL_BASH32: shim() });
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('✓ bash 3.2 parse: 2 script(s) parse under');
   });
@@ -73,7 +73,7 @@ describe('check-bash32.sh reporting (parser shim)', () => {
     write('tree/scripts/ok.sh', 'echo ok\n');
     write('tree/scripts/bad-table.sh', 'echo bad\n');
     write('tree/test/fixtures/guards/g/bad/also-bad.sh', 'echo fixture\n');
-    const r = run(join(root, 'tree'), { GBRAIN_BASH32: shim() });
+    const r = run(join(root, 'tree'), { DEVMODEL_BASH32: shim() });
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('FAIL: scripts/bad-table.sh:4 does not parse under bash 3.2: unexpected EOF');
     expect(r.stderr).not.toContain('also-bad.sh');
@@ -82,37 +82,39 @@ describe('check-bash32.sh reporting (parser shim)', () => {
     expect(r.stderr).toContain('See:  docs/TESTING.md#bash-32-parse-guard');
   });
 
-  it('refuses an explicit GBRAIN_BASH32 that is not bash 3.x', () => {
+  it('refuses an explicit DEVMODEL_BASH32 that is not bash 3.x', () => {
     write('tree/a.sh', 'echo a\n');
-    const r = run(join(root, 'tree'), { GBRAIN_BASH32: shim(5) });
+    const r = run(join(root, 'tree'), { DEVMODEL_BASH32: shim(5) });
     expect(r.status).toBe(2);
     expect(r.stderr).toContain('is not an executable bash 3.x');
   });
 
   it('prints one skip line without a parser, and exits 2 when the parser is required', () => {
     write('tree/a.sh', 'echo a\n');
-    const noDocker = { GBRAIN_BASH32: 'docker', GBRAIN_BASH32_DOCKER: join(root, 'missing-docker') };
+    const noDocker = { DEVMODEL_BASH32: 'docker', DEVMODEL_BASH32_DOCKER: join(root, 'missing-docker') };
     const skipped = run(join(root, 'tree'), noDocker);
     expect(skipped.status).toBe(0);
     expect(skipped.stdout.trim().split('\n')).toEqual([
-      '- bash 3.2 parse: skipped (no bash 3.x at /bin/bash and no docker CLI; install Docker or set GBRAIN_BASH32 to a bash 3.2 binary)',
+      '- bash 3.2 parse: skipped (no bash 3.x at /bin/bash and no docker CLI; install Docker or set DEVMODEL_BASH32 to a bash 3.2 binary)',
     ]);
-    const required = run(join(root, 'tree'), { ...noDocker, GBRAIN_TEST_BASH32_REQUIRE: '1' });
+    const required = run(join(root, 'tree'), { ...noDocker, DEVMODEL_TEST_BASH32_REQUIRE: '1' });
     expect(required.status).toBe(2);
-    expect(required.stderr).toContain('GBRAIN_TEST_BASH32_REQUIRE=1 forbids skipping');
+    expect(required.stderr).toContain('DEVMODEL_TEST_BASH32_REQUIRE=1 forbids skipping');
   });
 
-  it('refuses the pre-rename GBRAIN_BASH32_REQUIRE with the rename line instead of ignoring it', () => {
+  it('refuses an old name of the opt-in with the rename line instead of ignoring it', () => {
     write('tree/a.sh', 'echo a\n');
-    const r = run(join(root, 'tree'), { GBRAIN_BASH32: shim(), GBRAIN_BASH32_REQUIRE: '1' });
-    expect(r.status).toBe(2);
-    expect(r.stderr).toContain('GBRAIN_BASH32_REQUIRE was renamed to GBRAIN_TEST_BASH32_REQUIRE');
-    expect(r.stderr).toContain('Fix: unset GBRAIN_BASH32_REQUIRE && export GBRAIN_TEST_BASH32_REQUIRE=1');
+    for (const old of ['GBRAIN_BASH32_REQUIRE', 'GBRAIN_TEST_BASH32_REQUIRE']) {
+      const r = run(join(root, 'tree'), { DEVMODEL_BASH32: shim(), [old]: '1' });
+      expect(r.status, old).toBe(2);
+      expect(r.stderr).toContain(`${old} was renamed to DEVMODEL_TEST_BASH32_REQUIRE`);
+      expect(r.stderr).toContain(`Fix: unset ${old} && export DEVMODEL_TEST_BASH32_REQUIRE=1`);
+    }
   });
 });
 
 function realParserReachable(): boolean {
-  if (process.env.GBRAIN_TEST_BASH32_REQUIRE === '1') return true;
+  if (process.env.DEVMODEL_TEST_BASH32_REQUIRE === '1') return true;
   const native = spawnSync('/bin/bash', ['-c', 'echo "${BASH_VERSINFO[0]}"'], { encoding: 'utf8' });
   if (native.stdout?.trim() === '3') return true;
   return spawnSync('docker', ['image', 'inspect', IMAGE], { stdio: 'ignore' }).status === 0;
@@ -132,7 +134,7 @@ describe.skipIf(!realParserReachable())('check-bash32.sh under the real bash 3.2
   }, 60_000);
 
   it('passes every tracked script in this repository', () => {
-    const r = spawnSync('bash', [SCRIPT], { encoding: 'utf8', cwd: REPO, env: { ...process.env, GBRAIN_GUARD_ROOT: '' } });
+    const r = spawnSync('bash', [SCRIPT], { encoding: 'utf8', cwd: REPO, env: { ...process.env, DEVMODEL_GUARD_ROOT: '' } });
     expect(r.stderr).toBe('');
     expect(r.status).toBe(0);
   }, 60_000);

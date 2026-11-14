@@ -554,7 +554,7 @@ export async function main(argv: string[]): Promise<number> {
   } catch (e) { return refuse(e, json); }
 
   const statePath = join(pre.runDir, 'state.json');
-  const scratch = mkdtempSync(join(tmpdir(), 'gbrain-contributor-audit-'));
+  const scratch = mkdtempSync(join(tmpdir(), 'devmodel-contributor-audit-'));
   const ctx: Ctx = { o, repo, runDir: pre.runDir, scratch, cacheDir: join(pre.runDir, 'bun-cache'), head: pre.head, timeoutMs: o.stepTimeoutSec * 1000 };
   const onSigint = () => { interrupted = true; if (activeChild) { try { process.kill(-activeChild, 'SIGKILL'); } catch { /* gone */ } } };
   process.on('SIGINT', onSigint);

@@ -9,7 +9,7 @@ const GUARD = join(repo, 'scripts/check-weight-coverage.ts');
 
 /** A guard root with `files` (paths named as `*.test.ts`, written as fixtures) and the three weight maps. */
 function run(files: string[], maps: Record<string, Record<string, number>>, event?: string) {
-  const root = mkdtempSync(join(tmpdir(), 'gbrain-weight-coverage-'));
+  const root = mkdtempSync(join(tmpdir(), 'devmodel-weight-coverage-'));
   try {
     const put = (path: string, body: string) => {
       mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -20,7 +20,7 @@ function run(files: string[], maps: Record<string, Record<string, number>>, even
       put(map, JSON.stringify(maps[map] ?? {}));
     }
     const summary = join(root, 'summary.md');
-    const env: Record<string, string> = { ...process.env as Record<string, string>, GBRAIN_GUARD_ROOT: root, GITHUB_STEP_SUMMARY: summary };
+    const env: Record<string, string> = { ...process.env as Record<string, string>, DEVMODEL_GUARD_ROOT: root, GITHUB_STEP_SUMMARY: summary };
     delete env.GITHUB_EVENT_NAME;
     if (event) env.GITHUB_EVENT_NAME = event;
     const result = spawnSync(process.execPath, ['--no-env-file', GUARD], { encoding: 'utf8', env });
@@ -41,22 +41,22 @@ describe('check-weight-coverage', () => {
       const r = run(unit, { 'scripts/test-weights.json': weighted }, event);
       expect(r.status, r.stderr).toBe(0);
       expect(r.stdout).toContain('check-weight-coverage: OK');
-      expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+      expect(r.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
     }
   });
 
   test('a tree with no test file in any lane reports a skip, not a pass', () => {
     const r = run([], {});
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
-    expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: no test files under test/ to weigh');
+    expect(r.stdout).toMatch(/^DEVMODEL_CHECK_SKIPPED: \S/m);
+    expect(r.stdout).toContain('DEVMODEL_CHECK_SKIPPED: no test files under test/ to weigh');
     expect(r.stdout).not.toContain('check-weight-coverage: OK');
   });
 
   test('an empty tree does not hide a dead weight entry', () => {
     const r = run([], { 'scripts/test-weights.json': { 'test/deleted.test.ts': 5 } });
     expect(r.status).toBe(1);
-    expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(r.stdout).not.toContain('DEVMODEL_CHECK_SKIPPED');
     expect(r.stderr).toContain('test/deleted.test.ts');
   });
 
@@ -104,7 +104,7 @@ describe('check-weight-coverage', () => {
   test('the committed weight maps name only existing files', () => {
     const env: Record<string, string> = { ...process.env as Record<string, string> };
     delete env.GITHUB_EVENT_NAME;
-    delete env.GBRAIN_GUARD_ROOT;
+    delete env.DEVMODEL_GUARD_ROOT;
     delete env.GITHUB_STEP_SUMMARY;
     const r = spawnSync(process.execPath, ['--no-env-file', GUARD], { encoding: 'utf8', env, cwd: repo });
     expect(r.status, r.stderr).toBe(0);
