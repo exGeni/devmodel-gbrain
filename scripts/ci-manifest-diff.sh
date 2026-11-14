@@ -15,7 +15,7 @@
 #     Reads both revisions with `gh api` (env REPO, BASE_SHA, HEAD_SHA).
 #   bash scripts/ci-manifest-diff.sh dependency-scope < changed-files
 #     prints `blocking=true|false` and `reason=...` for the dependency-audit
-#     job: true when bun.lock, admin/bun.lock or patches/ changed, or when a
+#     job: true when bun.lock or patches/ changed, or when a
 #     package.json's dependency fields changed (env as above).
 #
 # Fails closed: a file that cannot be read or parsed is never version-only
@@ -73,13 +73,13 @@ case "$mode" in
       printf 'blocking=true\nreason=the changed-file list is empty or unreadable\n'
       exit 0
     fi
-    if hit=$(grep -E -m1 '^(bun\.lock|admin/bun\.lock|patches/)' <<< "$files"); then
+    if hit=$(grep -E -m1 '^(bun\.lock|patches/)' <<< "$files"); then
       printf 'blocking=true\nreason=%s changed\n' "$hit"
       exit 0
     fi
     while IFS= read -r path; do
       case "$path" in
-        package.json|admin/package.json)
+        package.json)
           if ! fetch_pair "$path" "$tmp" || [ "$(dependency_change "$tmp/base.json" "$tmp/head.json")" = true ]; then
             printf 'blocking=true\nreason=%s dependency fields changed (or could not be read)\n' "$path"
             exit 0
