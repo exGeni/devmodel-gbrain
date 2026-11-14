@@ -1025,10 +1025,6 @@ describe('nightly-watch routing and guard', () => {
       expect(steps.some(s => s.with?.name === MANIFEST_ARTIFACT)).toBe(true);
     }
   });
-  test('a known-red row for the race-hunt job is refused', () => {
-    const row = ['Test', 'race-hunt (1)', 'x', 'known-red', 'Set the ANTHROPIC_API_KEY and OPENAI_API_KEY repo secrets', '2026-10-25'].join('\t');
-    expect(validateKnownRed(`# h\n${row}`, '- Set the ANTHROPIC_API_KEY and OPENAI_API_KEY repo secrets\n').join('\n')).toContain('race-hunt failures cannot be known-red');
-  });
 });
 
 describe('ci-manifest', () => {

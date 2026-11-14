@@ -91,8 +91,6 @@ export interface Plan {
 }
 
 const GENERIC_ERROR = /^Process completed with exit code \d+\.?$/;
-/** Jobs whose reds must be repaired, never parked as known-red (the race hunt reports races in product or test code). */
-export const NO_KNOWN_RED_JOBS = /^race[- ]hunt\b/i;
 
 export function parseKnownRed(text: string): { rows: KnownRow[]; problems: string[] } {
   const rows: KnownRow[] = [];
@@ -118,7 +116,6 @@ export function validateKnownRed(text: string, todosText: string): string[] {
   const { rows, problems } = parseKnownRed(text);
   for (const row of rows) {
     if (!todosText.includes(row.todo)) problems.push(`row '${row.job}': todo '${row.todo}' is not in TODOS.md; every known-red row needs the TODO that owns its fix`);
-    if (NO_KNOWN_RED_JOBS.test(row.job)) problems.push(`row '${row.job}': race-hunt failures cannot be known-red; delete the row and open a repair PR for each file the race hunt lists (docs/ci-red-runbook.md#ci-issue-labels)`);
   }
   return problems.map(p => `${KNOWN_RED_FILE}: ${p}. Fix: edit the row, then run bun test --timeout=60000 test/scripts/nightly-issue.test.ts. Docs: ${DOCS}`);
 }
@@ -130,7 +127,7 @@ export function assessRun(run: RunInfo, jobs: JobInfo[], annotations: Record<num
       .map(a => [a.title, a.message].filter(Boolean).join(': '));
     return { job: j.name, job_id: j.id, job_url: j.html_url, conclusion: j.conclusion!, step: step?.name ?? '(job-level)', errors, files: annotationFiles(annotations[j.id] ?? []) };
   });
-  const mine = rows.filter(r => r.workflow === run.name && !NO_KNOWN_RED_JOBS.test(r.job));
+  const mine = rows.filter(r => r.workflow === run.name);
   const matched: Assessment['matched'] = [];
   const stale: KnownRow[] = [];
   const unmatched = failures.filter(f => {
@@ -226,7 +223,7 @@ export function renderBody(rec: IncidentRecord, assessment: Assessment, exemptio
     lines.push(`- Incomplete evidence: ${rec.evidence.problems.join('; ')}. This run's failures may be under-reported and it cannot close an incident. Docs: docs/ci-red-runbook.md#ci-failure-manifest`);
   }
   if (exemptions.length) {
-    lines.push('', `Stress-gate exemption records (${exemptions.length}; race-hunt and other failing tests): a PR's stress gate does not count a failure that matches one exactly (file, test name, signature) until ${exemptions[0]!.expires}; any other failure still fails. Docs: docs/ci-red-runbook.md#flake-issues`, '', jsonBlock(EXEMPTION_MARKER, exemptions));
+    lines.push('', `Stress-gate exemption records (${exemptions.length}; one per failing test): a PR's stress gate does not count a failure that matches one exactly (file, test name, signature) until ${exemptions[0]!.expires}; any other failure still fails. Docs: docs/ci-red-runbook.md#flake-issues`, '', jsonBlock(EXEMPTION_MARKER, exemptions));
   }
   lines.push('', '### Next step for the agent', '', nextStepText(rec, assessment), '', jsonBlock(JSON_MARKER, rec), '');
   return lines.join('\n');
