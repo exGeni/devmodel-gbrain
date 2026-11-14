@@ -226,7 +226,7 @@ export function renderBody(rec: IncidentRecord, assessment: Assessment, exemptio
     lines.push(`- Incomplete evidence: ${rec.evidence.problems.join('; ')}. This run's failures may be under-reported and it cannot close an incident. Docs: docs/ci-red-runbook.md#ci-failure-manifest`);
   }
   if (exemptions.length) {
-    lines.push('', `Stress-gate exemption records (${exemptions.length}; race-hunt and other failing tests): a PR's stress gate does not count a failure that matches one exactly (file, test name, backend, signature) until ${exemptions[0]!.expires}; any other failure still fails. Docs: docs/ci-red-runbook.md#flake-issues`, '', jsonBlock(EXEMPTION_MARKER, exemptions));
+    lines.push('', `Stress-gate exemption records (${exemptions.length}; race-hunt and other failing tests): a PR's stress gate does not count a failure that matches one exactly (file, test name, signature) until ${exemptions[0]!.expires}; any other failure still fails. Docs: docs/ci-red-runbook.md#flake-issues`, '', jsonBlock(EXEMPTION_MARKER, exemptions));
   }
   lines.push('', '### Next step for the agent', '', nextStepText(rec, assessment), '', jsonBlock(JSON_MARKER, rec), '');
   return lines.join('\n');

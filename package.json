@@ -7,7 +7,7 @@
     "audit:contributors": "bun scripts/contributor-audit.ts",
     "weights:mine": "bun run scripts/mine-shard-weights.ts",
     "test": "bash scripts/run-unit-parallel.sh",
-    "test:full": "bun run verify && bash scripts/run-unit-parallel.sh && bun run test:slow && (if [ -n \"$DATABASE_URL\" ]; then bash scripts/run-e2e.sh; else echo '[test:full] skipped E2E (no DATABASE_URL); set it and run bun run test:e2e to include' 1>&2; fi)",
+    "test:full": "bun run verify && bash scripts/run-unit-parallel.sh && bun run test:slow && bash scripts/run-e2e.sh",
     "verify": "bash scripts/run-verify-parallel.sh",
     "check:file-url-pathname": "bash scripts/check-file-url-pathname.sh",
     "check:doc-history": "bash scripts/check-key-files-current-state.sh",
