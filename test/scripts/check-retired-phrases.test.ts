@@ -51,8 +51,8 @@ const RETIRED: Array<[string, string]> = [
 
 describe('check-retired-phrases.sh', () => {
   it('passes a tree that uses the current instructions', () => {
-    write('CLAUDE.md', '- One file per migration in `src/core/schema-migrations/` (`bun run new:migration <name>`).\n');
-    write('docs/guides/x.md', 'A CLI-only command is a record in `src/cli/command-table.ts`.\n');
+    write('CLAUDE.md', '- Run `bun run verify` before every push.\n');
+    write('docs/guides/x.md', 'A guard is a row in `scripts/guards-manifest.tsv`.\n');
     const r = run();
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('✓ retired phrases');

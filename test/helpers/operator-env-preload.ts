@@ -27,7 +27,7 @@
  * test machinery exported into `bun test` processes by the runners and CI
  * workflows (must survive), so it is stripped through the keep-lists below.
  * A blanket GBRAIN_* delete would break that machinery — e.g. the e2e lane's
- * GBRAIN_DATABASE_URL target or the snapshot fast path.
+ * GBRAIN_DATABASE_URL target.
  *
  * The keep-lists, the renamed-opt-in map and the naming rule for test opt-ins
  * live in ./operator-env-policy.ts, shared with
@@ -64,9 +64,4 @@ if (process.env.GBRAIN_TEST_KEEP_AMBIENT_ENV !== '1') {
       `[operator-env-preload] cleared ${removed.length}: ${removed.sort().join(', ')}`,
     );
   }
-}
-
-if (process.env.GBRAIN_NO_SNAPSHOT === '1') {
-  delete process.env.GBRAIN_PGLITE_SNAPSHOT;
-  delete process.env.GBRAIN_TEST_DEFAULT_SNAPSHOT;
 }

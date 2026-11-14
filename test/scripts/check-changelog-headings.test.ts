@@ -1,6 +1,6 @@
 /**
  * check:changelog-headings (scripts/check-changelog-headings.ts): a CHANGELOG.md
- * that drops any release heading origin/master has is refused; one that only adds
+ * that drops any release heading origin/main has is refused; one that only adds
  * an entry on top passes. Fixtures are throwaway git repos.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
@@ -9,7 +9,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { main } from '../../scripts/check-changelog-headings.ts';
-import { DEFAULT_CHECKS } from '../../scripts/release-restamp.ts';
 
 const roots: string[] = [];
 afterAll(() => { for (const root of roots) rmSync(root, { recursive: true, force: true }); });
@@ -19,13 +18,13 @@ const changelog = (...versions: string[]) => '# Changelog\n\n' + versions.map((v
 function repo(): string {
   const root = mkdtempSync(join(tmpdir(), 'gbrain-changelog-headings-'));
   roots.push(root);
-  git(root, 'init', '-q', '-b', 'master');
+  git(root, 'init', '-q', '-b', 'main');
   git(root, 'config', 'user.email', 't@t.co');
   git(root, 'config', 'user.name', 't');
   writeFileSync(join(root, 'CHANGELOG.md'), changelog('0.60.322.0', '0.60.321.0', '0.60.46.0'));
   git(root, 'add', '-A');
-  git(root, 'commit', '-q', '-m', 'master');
-  git(root, 'update-ref', 'refs/remotes/origin/master', 'HEAD');
+  git(root, 'commit', '-q', '-m', 'main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
   return root;
 }
 
@@ -58,7 +57,7 @@ describe('check:changelog-headings', () => {
     writeFileSync(join(root, 'CHANGELOG.md'), changelog('0.60.321.0', '0.60.46.0'));
     const r = run(root);
     expect(r.code).toBe(0);
-    expect(r.out).toContain('1 newer release heading(s) on origin/master are not on this branch yet');
+    expect(r.out).toContain('1 newer release heading(s) on origin/main are not on this branch yet');
   });
 
   test('a branch behind master that cut an older release heading is still refused', () => {
@@ -73,12 +72,8 @@ describe('check:changelog-headings', () => {
 
   test('without the base ref: refused under CI, skipped locally', () => {
     const root = repo();
-    git(root, 'update-ref', '-d', 'refs/remotes/origin/master');
+    git(root, 'update-ref', '-d', 'refs/remotes/origin/main');
     expect(run(root, { CI: 'true' }).code).toBe(1);
     expect(run(root).out).toContain('GBRAIN_CHECK_SKIPPED');
-  });
-
-  test("release:restamp's drift checks run it", () => {
-    expect(DEFAULT_CHECKS.map((c) => c.argv.join(' '))).toContain('bun scripts/check-changelog-headings.ts');
   });
 });

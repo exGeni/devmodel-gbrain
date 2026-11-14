@@ -17,7 +17,7 @@
  *   #107 fix score     product fix, no test change            → not_audited (no_tests)
  *   PR #105            rewrites the clamp line #101 fixed     → conflict
  *
- * No package.json, so nothing installs and nothing touches the network.
+ * The sample repository keeps its code under lib/. No package.json, so nothing installs and nothing touches the network.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -47,36 +47,36 @@ export function buildFixture(dir: string): Fixture {
   git('config', 'commit.gpgsign', 'false');
   as('maintainer-example');
   write('README.md', '# audit fixture\n');
-  write('src/clamp.ts', 'export function clamp(x: number, lo: number, hi: number): number {\n  return x;\n}\n');
-  write('src/greet.ts', 'export function greet(name: string): string {\n  return `hello ${name}`;\n}\n');
-  write('src/parse.ts', 'export function parseInts(s: string): number[] {\n  return [];\n}\n');
-  write('src/score.ts', SCORE.replace('// score helpers\n', ''));
+  write('lib/clamp.ts', 'export function clamp(x: number, lo: number, hi: number): number {\n  return x;\n}\n');
+  write('lib/greet.ts', 'export function greet(name: string): string {\n  return `hello ${name}`;\n}\n');
+  write('lib/parse.ts', 'export function parseInts(s: string): number[] {\n  return [];\n}\n');
+  write('lib/score.ts', SCORE.replace('// score helpers\n', ''));
   commit('base');
   const base = git('rev-parse', 'HEAD');
 
   mergePr(101, 'fix-clamp', 'alice-example', () => {
-    write('src/clamp.ts', 'export function clamp(x: number, lo: number, hi: number): number {\n  return Math.min(hi, Math.max(lo, x));\n}\n');
-    write('test/clamp.test.ts', "import { expect, test } from 'bun:test';\nimport { clamp } from '../src/clamp';\n\ntest('clamps into range', () => {\n  expect(clamp(15, 0, 10)).toBe(10);\n  expect(clamp(-3, 0, 10)).toBe(0);\n});\n");
+    write('lib/clamp.ts', 'export function clamp(x: number, lo: number, hi: number): number {\n  return Math.min(hi, Math.max(lo, x));\n}\n');
+    write('test/clamp.test.ts', "import { expect, test } from 'bun:test';\nimport { clamp } from '../lib/clamp';\n\ntest('clamps into range', () => {\n  expect(clamp(15, 0, 10)).toBe(10);\n  expect(clamp(-3, 0, 10)).toBe(0);\n});\n");
   });
   mergePr(102, 'greet-suffix', 'charlie-example', () => {
-    write('src/greet.ts', 'export function greet(name: string): string {\n  return `hello ${name}!`;\n}\n');
-    write('test/greet.test.ts', "import { expect, test } from 'bun:test';\nimport { greet } from '../src/greet';\n\ntest('greet exists', () => {\n  expect(typeof greet).toBe('function');\n});\n");
+    write('lib/greet.ts', 'export function greet(name: string): string {\n  return `hello ${name}!`;\n}\n');
+    write('test/greet.test.ts', "import { expect, test } from 'bun:test';\nimport { greet } from '../lib/greet';\n\ntest('greet exists', () => {\n  expect(typeof greet).toBe('function');\n});\n");
   });
   mergePr(103, 'parse-ints', 'dana-example', () => {
-    write('src/parse.ts', "export function parseInts(s: string): number[] {\n  return s.split(',').map(Number);\n}\n");
-    write('test/parse.test.ts', "import { expect, test } from 'bun:test';\nimport { parseInts } from '../src/parse';\n\ntest('parses a list', () => {\n  expect(parseInts('1,2')).toEqual([1, 2, 3]);\n});\n");
+    write('lib/parse.ts', "export function parseInts(s: string): number[] {\n  return s.split(',').map(Number);\n}\n");
+    write('test/parse.test.ts', "import { expect, test } from 'bun:test';\nimport { parseInts } from '../lib/parse';\n\ntest('parses a list', () => {\n  expect(parseInts('1,2')).toEqual([1, 2, 3]);\n});\n");
   });
   mergePr(104, 'docs', 'erin-example', () => write('README.md', '# audit fixture\n\nA tiny repository for the contributor audit.\n'));
   mergePr(106, 'score-note', 'gina-example', () => {
-    write('src/score.ts', SCORE);
-    write('test/score.test.ts', "import { expect, test } from 'bun:test';\nimport { score } from '../src/score';\n\ntest('scores two', () => {\n  expect(score()).toBe(2);\n});\n");
+    write('lib/score.ts', SCORE);
+    write('test/score.test.ts', "import { expect, test } from 'bun:test';\nimport { score } from '../lib/score';\n\ntest('scores two', () => {\n  expect(score()).toBe(2);\n});\n");
   });
-  mergePr(107, 'fix-score', 'hana-example', () => write('src/score.ts', SCORE.replace('return 0;', 'return a + b;')));
+  mergePr(107, 'fix-score', 'hana-example', () => write('lib/score.ts', SCORE.replace('return 0;', 'return a + b;')));
   const head = git('rev-parse', 'HEAD');
 
   git('checkout', '-qb', 'pr-105', base);
   as('frank-example');
-  write('src/clamp.ts', 'export function clamp(x: number, lo: number, hi: number): number {\n  return x < lo ? lo : x > hi ? hi : x;\n}\n');
+  write('lib/clamp.ts', 'export function clamp(x: number, lo: number, hi: number): number {\n  return x < lo ? lo : x > hi ? hi : x;\n}\n');
   commit('pr-105: alternative clamp');
   git('checkout', '-q', 'master');
 
@@ -93,5 +93,5 @@ if (import.meta.main) {
   }
   const f = buildFixture(resolve(target));
   const tool = join(import.meta.dir, 'contributor-audit.ts');
-  process.stdout.write(`Built ${f.dir}. Audit it with:\n\n  cd ${f.dir} && bun ${tool} ${f.base.slice(0, 9)}..${f.head.slice(0, 9)} --prs prs.json --skip-security --skip-lanes\n`);
+  process.stdout.write(`Built ${f.dir}. Audit it with:\n\n  cd ${f.dir} && bun ${tool} ${f.base.slice(0, 9)}..${f.head.slice(0, 9)} --prs prs.json --skip-security\n`);
 }

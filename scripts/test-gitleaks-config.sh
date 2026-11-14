@@ -4,11 +4,11 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 fixture_root=$(mktemp -d)
 trap 'rm -rf "$fixture_root"' EXIT
-mkdir -p "$fixture_root/test"
+mkdir -p "$fixture_root/.claude/skills/gstack/browse/test"
 cd "$fixture_root"
-printf "const clientSecret = '%s%s';\n" 'gbrain_cs_' 'secret456' > "$fixture_root/test/auth-register-client-output-pin.test.ts"
+printf "const clientSecret = '%s%s';\n" 'gbrain_cs_' 'secret456' > "$fixture_root/.claude/skills/gstack/browse/test/commands.test.ts"
 gitleaks dir . --config "$repo_root/.gitleaks.toml" --redact --no-banner --log-level error
-python3 - "$fixture_root/test/auth-register-client-output-pin.test.ts" <<'PY'
+python3 - "$fixture_root/.claude/skills/gstack/browse/test/commands.test.ts" <<'PY'
 import hashlib, sys
 with open(sys.argv[1], 'a') as fixture:
     fixture.write('const api_key = "' + hashlib.sha256(b'synthetic-gitleaks-canary').hexdigest() + '";\n')

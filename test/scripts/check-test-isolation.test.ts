@@ -3,7 +3,7 @@
  *
  * Spawns the script in a tmpdir with hand-crafted fake test files and
  * asserts the lint's exit code + violation messages match expectations.
- * No env mutation, no mock.module, no PGLite — this test file is itself
+ * No env mutation, no mock.module — this test file is itself
  * subject to the lint (it ships outside *.serial.test.ts and outside
  * test/e2e/).
  */
@@ -97,23 +97,21 @@ describe('check-test-isolation.sh', () => {
         writeFileSync(join(bin, tool), '#!/usr/bin/env bash\nprintf "' + tool + '\\n" >> "$CALL_LOG"\nexec "' + Bun.which(tool)! + '" "$@"\n', { mode: 0o755 });
       }
       try {
-        const candidate = [
-          "import { beforeAll, afterAll } from 'bun:test';",
-          'let engine;',
-          'beforeAll(async () => { engine = new PGLiteEngine(); });',
-          'afterAll(async () => { await engine.disconnect(); });',
-          '',
-        ].join('\n');
+        // Every file matches a rule pattern (so it is a grep candidate) and is
+        // allow-listed (so the one awk pass skips it): 200 candidates, one pass.
+        const candidate = "process.env.EXAMPLE_FLAG = '1';\n";
         const files = Array.from({ length: 200 }, (_, i) => ({ path: 'candidate ' + i + '.test.ts', contents: candidate }));
+        const allowlist = files.map((f) => 'test/' + f.path);
         const env = { PATH: bin + ':' + process.env.PATH, CALL_LOG: log };
-        const r = runLintIn(files, [], env);
+        const r = runLintIn(files, allowlist, env);
         expect(r.status).toBe(0);
         expect(r.stdout).toContain('200 non-serial unit files scanned');
         expect(readFileSync(log, 'utf8').trim().split('\n').length).toBeLessThan(12);
-        const bad = runLintIn([...files, { path: 'z bad.test.ts', contents: 'const engine = new PGLiteEngine();\n' }], [], env);
+        const badContents = "process.env.EXAMPLE_FLAG = '1';\nmock.module('x', () => ({}));\n";
+        const bad = runLintIn([...files, { path: 'z bad.test.ts', contents: badContents }], allowlist, env);
         expect(bad.status).toBe(1);
-        expect(bad.stdout).toContain('ERROR: test/z bad.test.ts\n       rule R3:');
-        expect(bad.stdout).toContain('         1:const engine = new PGLiteEngine();\nERROR: test/z bad.test.ts\n       rule R4:');
+        expect(bad.stdout).toContain('ERROR: test/z bad.test.ts\n       rule R1:');
+        expect(bad.stdout).toContain("         1:process.env.EXAMPLE_FLAG = '1';\nERROR: test/z bad.test.ts\n       rule R2:");
         expect(bad.stdout).toContain('check-test-isolation: FAIL (2 violation(s))');
       } finally {
         rmSync(bin, { recursive: true, force: true });
@@ -199,144 +197,6 @@ describe('check-test-isolation.sh', () => {
       ]);
       expect(r.status).toBe(1);
       expect(r.stdout).toContain('R2');
-    });
-  });
-
-  describe('R3 — new PGLiteEngine() outside beforeAll context', () => {
-    it('flags engine created at module top-level', () => {
-      const r = runLintIn([
-        {
-          path: 'pglite-toplevel.test.ts',
-          contents: `import { PGLiteEngine } from '../src/core/pglite-engine.ts';\nconst engine = new PGLiteEngine();\n`,
-        },
-      ]);
-      expect(r.status).toBe(1);
-      expect(r.stdout).toContain('R3');
-    });
-
-    it('does NOT flag engine created within ~50 lines of a beforeAll', () => {
-      const r = runLintIn([
-        {
-          path: 'pglite-ok.test.ts',
-          contents:
-            `import { beforeAll, afterAll, test, expect } from 'bun:test';\n` +
-            `import { PGLiteEngine } from '../src/core/pglite-engine.ts';\n` +
-            `let engine: PGLiteEngine;\n` +
-            `beforeAll(async () => {\n` +
-            `  engine = new PGLiteEngine();\n` +
-            `  await engine.connect({});\n` +
-            `});\n` +
-            `afterAll(async () => { await engine.disconnect(); });\n` +
-            `test('x', () => expect(1).toBe(1));\n`,
-        },
-      ]);
-      expect(r.status).toBe(0);
-    });
-
-    it('keeps the exact 50-line boundary and reports violations in later candidate files', () => {
-      const r = runLintIn([
-        { path: 'a clean.test.ts', contents: 'export {};\n' },
-        { path: 'b boundary.test.ts', contents: `beforeAll(() => {});\n${'\n'.repeat(49)}new PGLiteEngine();\nafterAll(() => engine.disconnect());\n` },
-        { path: 'c outside.test.ts', contents: `beforeAll(() => {});\n${'\n'.repeat(50)}new PGLiteEngine();\nafterAll(() => engine.disconnect());\n` },
-      ]);
-      expect(r.status).toBe(1);
-      expect(r.stdout).toContain('rule R3');
-      expect(r.stdout).toContain('c outside.test.ts');
-      expect(r.stdout).not.toContain('b boundary.test.ts');
-      expect(r.stdout).toContain('52:new PGLiteEngine();');
-    });
-  });
-
-  describe('R4 — afterAll/disconnect pairing', () => {
-    it('flags engine creation without afterAll{disconnect}', () => {
-      const r = runLintIn([
-        {
-          path: 'pglite-no-disconnect.test.ts',
-          contents:
-            `import { beforeAll, test, expect } from 'bun:test';\n` +
-            `import { PGLiteEngine } from '../src/core/pglite-engine.ts';\n` +
-            `let engine: PGLiteEngine;\n` +
-            `beforeAll(async () => { engine = new PGLiteEngine(); await engine.connect({}); });\n` +
-            `test('x', () => expect(1).toBe(1));\n`,
-        },
-      ]);
-      expect(r.status).toBe(1);
-      expect(r.stdout).toContain('R4');
-    });
-  });
-
-  describe('R5: a configured gateway must be reset', () => {
-    const IMPORTS = `import { afterAll, afterEach, beforeAll, test } from 'bun:test';\n` +
-      `import { configureGateway, resetGateway } from '../src/core/ai/gateway.ts';\n`;
-    const CONFIGURE = `beforeAll(() => configureGateway({ embedding_model: 'litellm:example-embed', env: {} }));\n`;
-    const lintOne = (contents: string, path = 'gateway-user.test.ts') => runLintIn([{ path, contents }]);
-
-    it('flags a file that configures the gateway and never resets it, naming the call line', () => {
-      const r = lintOne(IMPORTS + CONFIGURE + `test('t', () => {});\n`);
-      expect(r.status).toBe(1);
-      expect(r.stdout).toContain('test/gateway-user.test.ts');
-      expect(r.stdout).toContain('rule R5');
-      expect(r.stdout).toContain('3:beforeAll(() => configureGateway(');
-    });
-
-    it('control: the same file with an afterEach reset passes', () => {
-      const r = lintOne(IMPORTS + CONFIGURE + `afterEach(() => resetGateway());\n`);
-      expect(r.status).toBe(0);
-      expect(r.stdout).toContain('check-test-isolation: OK');
-    });
-
-    it('flags a call through a dynamic import and a call with a space before the paren', () => {
-      for (const call of [
-        `test('t', async () => { (await import('../src/core/ai/gateway.ts')).configureGateway({ env: {} }); });\n`,
-        `beforeAll(() => configureGateway ({ env: {} }));\n`,
-      ]) {
-        const r = lintOne(call);
-        expect(r.status).toBe(1);
-        expect(r.stdout).toContain('rule R5');
-      }
-    });
-
-    it('a reset that only appears in a comment does not count', () => {
-      for (const reset of [
-        `// afterAll(() => resetGateway()) is handled by a sibling file\n`,
-        `/**\n * The suite would call resetGateway() here.\n */\n`,
-        `test('t', () => {}); // TODO resetGateway()\n`,
-      ]) {
-        const r = lintOne(IMPORTS + CONFIGURE + reset);
-        expect(r.status).toBe(1);
-        expect(r.stdout).toContain('rule R5');
-      }
-    });
-
-    it('a configureGateway mention that only appears in a comment is not a call', () => {
-      for (const mention of [
-        `// configureGateway() is set up by the preload\n`,
-        `/*\n  configureGateway({ env: {} });\n*/\n`,
-        `test('t', () => {}); // unlike configureGateway(), this needs no reset\n`,
-      ]) {
-        expect(lintOne(mention + `test('u', () => {});\n`).status).toBe(0);
-      }
-    });
-
-    it('a URL or a glob on a code line does not hide the reset', () => {
-      const r = lintOne(
-        IMPORTS + CONFIGURE +
-        `const fixtures = 'test/*.json';\n` +
-        `afterAll(() => { const u = 'http://localhost:4000'; void u; resetGateway(); });\n`,
-      );
-      expect(r.status).toBe(0);
-    });
-
-    it('the subprocess opt-out exempts a file whose call runs in a child script', () => {
-      const body = 'const child = `\n  configureGateway({ env: {} });\n`;\nvoid child;\n';
-      expect(lintOne(`// isolation-lint: R5-subprocess-only (runs in the spawned child)\n` + body).status).toBe(0);
-      const control = lintOne(body);
-      expect(control.status).toBe(1);
-      expect(control.stdout).toContain('rule R5');
-    });
-
-    it('serial files are out of scope for R5', () => {
-      expect(lintOne(IMPORTS + CONFIGURE, 'gateway-user.serial.test.ts').status).toBe(0);
     });
   });
 

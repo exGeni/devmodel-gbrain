@@ -179,8 +179,31 @@ describe('check-function-size.ts rules', () => {
   });
 
   test('scope (EO15): *.generated.ts, .d.ts and files outside src/ are ignored', () => {
-    const r = runGuard(makeTree({ 'src/t.generated.ts': long(40), 'src/t.d.ts': 'export declare const x: number;\n', 'test/long.test.ts': long(40) }));
+    // src/ok.ts keeps the tree from being empty, so the run measures instead of skipping.
+    const r = runGuard(
+      makeTree({
+        'src/ok.ts': 'export const x = 1;\n',
+        'src/t.generated.ts': long(40),
+        'src/t.d.ts': 'export declare const x: number;\n',
+        'test/long.test.ts': long(40),
+      }),
+    );
     expect(r.code).toBe(0);
+    expect(r.out).not.toContain('GBRAIN_CHECK_SKIPPED');
+  });
+
+  test('skip: an empty src/ with no baseline rows prints GBRAIN_CHECK_SKIPPED and exits 0', () => {
+    const r = runGuard(makeTree({ 'src/t.generated.ts': long(40), 'test/long.test.ts': long(40) }));
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('GBRAIN_CHECK_SKIPPED:');
+    expect(r.out).not.toContain('OK: function sizes');
+  });
+
+  test('skip does not hide a stale row: an empty src/ with a baseline row still fails rule 5', () => {
+    const r = runGuard(makeTree({}, ['src/a.ts\tbig\t14\tseed']));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('src/a.ts big no longer exists');
+    expect(r.out).not.toContain('GBRAIN_CHECK_SKIPPED');
   });
 
   test('--transfer moves a row to the identical function at its new path, and leaves edited functions alone', () => {

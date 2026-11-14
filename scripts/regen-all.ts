@@ -10,9 +10,8 @@
  *
  * Offline and keyless: generators run with provider keys and database URLs
  * removed from the environment. Idempotent: a second run changes nothing.
- * Goldens that need Postgres are never regenerated here; they are named with
- * their own command. Order matters: llms.txt inlines docs other generators
- * write, so it runs last.
+ * Goldens that need a database are never regenerated here; they are named with
+ * their own command.
  *
  * Exit: 0 fresh (or regenerated), 1 --check found stale artifacts or a
  * generator failed, 2 usage error.
@@ -22,17 +21,10 @@ import { join, resolve } from 'node:path';
 
 export interface Artifact { name: string; regen: string[]; check: string[] }
 
-const HARNESS_DOCS_CHECK = `import { readFileSync } from 'node:fs';
-import { renderHarnessReference } from './src/core/harness/registry.ts';
-if (readFileSync('docs/guides/harness-adapters.md', 'utf8') !== renderHarnessReference()) {
-  console.error('docs/guides/harness-adapters.md is stale');
-  process.exit(1);
-}`;
-
 /**
  * Every `bun test` this script spawns. Bun does not apply bunfig.toml's
- * `[test] timeout`, so without the flag a cold PGLite init or a JIT-less
- * runner hits the 5 s default (#6187).
+ * `[test] timeout`, so without the flag a slow runner hits the 5 s default
+ * (#6187).
  */
 const BUN_TEST = ['bun', 'test', '--timeout=60000'];
 
@@ -40,19 +32,11 @@ export const ARTIFACTS: Artifact[] = [
   { name: 'structural suites manifest', regen: ['bun', 'scripts/classify-tests.ts'], check: ['bun', 'scripts/classify-tests.ts', '--check'] },
 ];
 
-/** Offline contract goldens: regenerated only with --goldens, each a reviewer-visible change to justify. */
-export const CONTRACT_GOLDENS = [
-  'test/export-surface-golden.test.ts',
-  'test/cli-goldens.test.ts',
-  'test/cli-dispatch-phase.test.ts',
-  'test/engine-sql-sql-text.test.ts',
-];
+/** Offline contract goldens: regenerated only with --goldens, each a reviewer-visible change to justify. Empty: no golden test is left. */
+export const CONTRACT_GOLDENS: string[] = [];
 
-/** Goldens that need a Postgres database; never run here. */
-export const POSTGRES_GOLDENS = [
-  'GBRAIN_TEST_UPDATE_GOLDENS=1 DATABASE_URL=<test db> bun test --timeout=60000 test/e2e/schema-catalog-golden.test.ts',
-  'GBRAIN_TEST_UPDATE_GOLDENS=1 DATABASE_URL=<test db> bun test --timeout=60000 test/e2e/doctor-json-golden.test.ts',
-];
+/** Goldens that need Postgres; never run here, named with their own command. Empty: none is left. */
+export const POSTGRES_GOLDENS: string[] = [];
 
 export const goldenArgv = (file: string): string[] => [...BUN_TEST, file];
 
@@ -128,8 +112,6 @@ if (import.meta.main) {
   const before = dirtyState();
   const steps = [...ARTIFACTS.map(a => ({ name: a.name, argv: a.regen, env })),
     ...(args.includes('--goldens') ? CONTRACT_GOLDENS.map(f => ({ name: `golden ${f}`, argv: goldenArgv(f), env: { ...env, GBRAIN_TEST_UPDATE_GOLDENS: '1' } })) : [])];
-  const llms = steps.findIndex(s => s.name.startsWith('llms'));
-  steps.push(...steps.splice(llms, 1));
   for (const step of steps) {
     const r = await run(step.argv, step.env);
     if (r.code !== 0) {
@@ -147,6 +129,6 @@ if (import.meta.main) {
   if (args.includes('--goldens') && changed.some(p => p.includes('test/fixtures/goldens/'))) {
     console.log('Changed contract goldens are reviewer-visible behavior changes: justify each in the PR body.');
   }
-  console.log(`Not regenerated here (need Postgres):\n${POSTGRES_GOLDENS.map(c => `  ${c}`).join('\n')}`);
-  if (!args.includes('--goldens')) console.log(`Contract goldens (deliberate): bun run regen:all --goldens regenerates ${CONTRACT_GOLDENS.join(', ')}.`);
+  if (POSTGRES_GOLDENS.length) console.log(`Not regenerated here (need Postgres):\n${POSTGRES_GOLDENS.map(c => `  ${c}`).join('\n')}`);
+  if (CONTRACT_GOLDENS.length && !args.includes('--goldens')) console.log(`Contract goldens (deliberate): bun run regen:all --goldens regenerates ${CONTRACT_GOLDENS.join(', ')}.`);
 }

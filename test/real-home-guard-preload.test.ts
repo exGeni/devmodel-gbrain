@@ -66,16 +66,6 @@ ${body}
 }
 
 describe('real-home guard', () => {
-  test('the complete autopilot install suite leaves fake-live sentinels untouched', () => {
-    fixture((home, env) => {
-      const child = Bun.spawnSync([process.execPath, 'test', './test/autopilot-install.test.ts'], {
-        cwd: root, env, stdout: 'pipe', stderr: 'pipe', timeout: 45_000,
-      });
-      for (const path of artifacts) expect(readFileSync(join(home, path), 'utf8')).toBe('fake-live-sentinel\n');
-      expect(child.exitCode).toBe(0);
-    });
-  });
-
   for (const path of artifacts) {
     test(`detects writes to ${path} without blaming subsequent tests`, () => {
       const result = probe(`

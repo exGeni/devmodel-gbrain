@@ -6,7 +6,7 @@
 # `bun test` gets the 5000ms default for BOTH tests and beforeAll/beforeEach/
 # afterAll/afterEach hooks. Hooks do NOT inherit a test's third-arg timeout —
 # a file whose tests all declare `}, 30_000)` still has a 5s hook budget, and
-# slow setup (Postgres connect + migrations, PGLite cold start) flakes on
+# slow setup (database connect + migrations, cold starts) flakes on
 # loaded CI runners with the signature `(unnamed) [5001ms] ... hook timed out`
 # (the #3545 jsonb-parity failure). The CLI --timeout flag is the one measured
 # mechanism that raises the hook budget uniformly; per-hook second-arg

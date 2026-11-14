@@ -23,8 +23,8 @@
  * Rows are keyed by `path<TAB>name-path`, never line numbers, so unrelated
  * edits above a function do not churn the baseline. The name path is built
  * from enclosing declarations, property names and call context, e.g.
- * `PGLiteEngine.initSchema`, `runServeHttp>app.post('/mcp')`,
- * `MIGRATIONS[v131].handler`, `add>result=this.engine.transaction(#0)`
+ * `Store.initSchema`, `runServer>app.post('/rpc')`,
+ * `TABLE[v131].handler`, `add>result=this.store.transaction(#0)`
  * (`>` enters a function, `.` a member, `=` a call whose result is bound); a repeated key gets a `#2`, `#3` ordinal in
  * source order. Every failure prints the computed key so it can be copied.
  *
@@ -41,7 +41,11 @@
  * <root>/scripts/function-size-baseline.base.tsv if present),
  * GBRAIN_FUNCTION_SIZE_LIMIT, GBRAIN_FUNCTION_SIZE_SLACK,
  * GBRAIN_FUNCTION_SIZE_BASE_REF (git ref whose merge-base supplies the base
- * baseline; default origin/master).
+ * baseline; default origin/main).
+ *
+ * While src/ holds no source file and the baseline has no row there is nothing
+ * to measure: the guard prints `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0,
+ * which the verify runner counts as a skip. A stale row still fails.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -244,7 +248,7 @@ function baseBaselineText(): { text: string | null; source: string } {
     const p = join(ROOT, 'scripts/function-size-baseline.base.tsv');
     return existsSync(p) ? { text: readFileSync(p, 'utf8'), source: 'fixture base' } : { text: null, source: 'none' };
   }
-  const ref = process.env.GBRAIN_FUNCTION_SIZE_BASE_REF ?? 'origin/master';
+  const ref = process.env.GBRAIN_FUNCTION_SIZE_BASE_REF ?? 'origin/main';
   const mergeBase = gitOut(['merge-base', 'HEAD', ref], ROOT)?.trim();
   const at = mergeBase ?? (gitOut(['rev-parse', '--verify', 'HEAD'], ROOT) ? 'HEAD' : null);
   if (!at) return { text: null, source: 'none (no git history)' };
@@ -287,7 +291,8 @@ function preambleOf(text: string): string {
 function main(): number {
   const t0 = performance.now();
   const args = process.argv.slice(2);
-  const measured = srcFiles(ROOT).flatMap((f) => measureSource(repoRelative(f), readFileSync(f, 'utf8')));
+  const files = srcFiles(ROOT);
+  const measured = files.flatMap((f) => measureSource(repoRelative(f), readFileSync(f, 'utf8')));
   const byKey = new Map(measured.map((m) => [keyOf(m.path, m.name), m]));
   const problems: string[] = [];
   if (!existsSync(BASELINE)) {
@@ -327,6 +332,11 @@ function main(): number {
     });
     writeFileSync(BASELINE, formatBaseline(next, preambleOf(baselineText)));
     console.log(`transferred ${moved} row(s); review the ${BASELINE_REL} diff`);
+    return 0;
+  }
+
+  if (files.length === 0 && rows.length === 0 && problems.length === 0) {
+    console.log(`GBRAIN_CHECK_SKIPPED: no source files under src/ and no rows in ${BASELINE_REL}`);
     return 0;
   }
 

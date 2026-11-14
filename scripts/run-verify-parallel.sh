@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # scripts/run-verify-parallel.sh — parallel verify dispatcher.
 #
-# Runs the verify checks (privacy, jsonb, source-id, … + typecheck +
-# admin-build) as background jobs through a bounded pool, then the
+# Runs the verify checks (privacy, test hygiene, docs, size ratchets, … +
+# typecheck) as background jobs through a bounded pool, then the
 # self-timed SOLO_CHECKS one at a time, waits for all, aggregates exit codes,
 # surfaces failed-check name + tail of its log to stderr. The CHECKS array
-# plus SOLO_CHECKS below are the single source of truth for what runs (50+
-# checks; count them, don't trust prose).
+# plus SOLO_CHECKS below are the single source of truth for what runs (count
+# them, don't trust prose).
 #
 # Replaces the sequential `&&`-chain in package.json's `verify` script.
 # Wallclock: the pool makespan (the longest check, typecheck, dominates) plus
@@ -40,8 +40,7 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
-# detect_cpus + ensure_pglite_snapshot (the PGLite-booting eval checks use
-# the snapshot fast-path when the shape matches).
+# detect_cpus and the receipt helpers.
 . scripts/lib/test-env.sh
 receipts_init verify || exit 2
 
@@ -52,11 +51,9 @@ receipts_init verify || exit 2
 # ORDER MATTERS for wallclock: the spawn loop below is capped at
 # GBRAIN_VERIFY_MAX_PARALLEL workers, so the heaviest checks go FIRST
 # (LPT-style — makespan ≈ max(longest check, total/POOL)). The heavy block:
-# typecheck (tsc), two `cp -R src` + `bun build --compile` binary builds,
-# the admin vite+tsc build, the fuzz bundles, the PGLite-booting eval
-# checks, and the whole-tree greps. Everything after is sub-second; that tail
-# keeps its historical order for grep-ability. The guard self-test is not
-# here: it times itself, so it runs in SOLO_CHECKS below.
+# typecheck (tsc) and the whole-tree scans. Everything after is sub-second;
+# that tail keeps its historical order for grep-ability. The guard self-test
+# is not here: it times itself, so it runs in SOLO_CHECKS below.
 #
 # To add a check: add one line to the right block of CHECKS (a plain list).
 # To skip in CI temporarily, comment the line — the runner doesn't care
@@ -101,20 +98,19 @@ CHECKS=(
   # keeps the fail-open !cancelled() && != 'false' form.
   "check:dynamic-ci"
   # W7 (refactor wave 1): workflow phrases the wave retired stay out of the
-  # docs agents follow (CLAUDE.md, AGENTS.md, CONTRIBUTING.md, docs/, skills/).
+  # docs agents follow (CLAUDE.md, AGENTS.md, CONTRIBUTING.md, docs/, skills/),
+  # and so does the vocabulary of the product code that was cut.
   "check:retired-phrases"
   # #6530: skills, recipes, templates, docs, plugin trees and agent docs never
   # teach git pull --rebase, stash, autostash, repo-wide add/commit, reset
   # --hard or a bare/force push for a shared brain checkout (~0.5s).
   "check:shared-tree-git"
-  # CHANGELOG.md keeps every release heading origin/master has (a cut file is refused).
+  # CHANGELOG.md keeps every release heading origin/main has (a cut file is refused).
   "check:changelog-headings"
   "check:structural-manifest"
   # Every generated artifact's freshness in one place (GBRA-47 B8); its Fix
   # line is `bun run regen:all`, the same code path that regenerates them.
   "check:regen-all"
-  # v0.50.5.0 security wave: compiled binaries must not autoload a cwd bunfig.toml.
-  "check:compile-autoload"
 )
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -178,8 +174,7 @@ if command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN="gtimeout"
 elif command -v timeout >/dev/null 2>&1; then TIMEOUT_BIN="timeout"
 fi
 
-# Bounded worker pool. Unbounded fan-out ran two `cp -R src` +
-# `bun build --compile` builds, the admin vite build, tsc, and ~40 greps
+# Bounded worker pool. Unbounded fan-out ran tsc and ~40 greps
 # simultaneously on a 4-vCPU CI runner — pushing slow checks into the
 # 120s per-check timeout (the documented flake class on slower hosts).
 # Default = detect_cpus so a many-core dev machine keeps its wide fan-out;
@@ -189,8 +184,6 @@ if ! printf '%s' "$MAX_PAR" | grep -qE '^[0-9]+$' || [ "$MAX_PAR" -lt 1 ]; then
   echo "ERROR: invalid GBRAIN_VERIFY_MAX_PARALLEL: $MAX_PAR" >&2
   exit 2
 fi
-
-ensure_pglite_snapshot "verify-parallel"
 
 START_TS=$(date +%s)
 echo "[verify-parallel] running ${#ALL_CHECKS[@]} checks: ${#CHECKS[@]} in the pool, then ${#SOLO_CHECKS[@]} solo (pool=$MAX_PAR, timeout=${TIMEOUT}s, logs=$LOG_DIR)" >&2

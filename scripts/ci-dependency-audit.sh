@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# scripts/ci-dependency-audit.sh — run `bun audit` for the root and admin/
-# lockfiles; fail only when the run is blocking (test.yml dependency-audit
+# scripts/ci-dependency-audit.sh — run `bun audit` for the root lockfile;
+# fail only when the run is blocking (test.yml dependency-audit
 # scope step; env BLOCKING=true|false, REASON). Otherwise a found advisory is
 # a ::warning:: naming why this run does not block (GBRA-47 B11).
 #
@@ -41,7 +41,6 @@ audit() {
 }
 
 audit .
-audit admin
 
 blocking=true; [ "${BLOCKING:-true}" = false ] && blocking=false
 problems=0

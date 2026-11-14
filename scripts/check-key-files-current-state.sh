@@ -18,9 +18,9 @@
 #      shrinks, never raise it; detail moves next to its code instead. A subsystem
 #      page at its cap continues on a new page linked from its last line, not
 #      on an unrelated page.
-#   3. One reference bullet per src file across the index and subsystems — a cherry-pick that keeps both sides
-#      of a hunk leaves two "- `src/x.ts`" bullets describing two different
-#      "current states" for one file. Merge into the survivor, never append a twin.
+#   3. One reference bullet per source file across the index and subsystems — a cherry-pick that keeps both
+#      sides of a hunk leaves two bullets for one file describing two different
+#      "current states". Merge into the survivor, never append a twin.
 #
 # SOFT WARNS (stderr, non-fatal): prose history markers that suggest narration
 # creeping back ("pre-fix", ", then v0.", "superseded by") in the reference docs.
@@ -119,9 +119,9 @@ for doc in "$ROOT"/docs/architecture/key-files/*.md; do
 done
 
 # ── Gate 3: one KEY_FILES.md bullet per src file ───────────────────────────
-# ponytail: KNOWN_DUP_PATHS seeds the pairs that pre-date the gate so it lands
-# green; merge a pair and delete its entry here — never add to this list.
-KNOWN_DUP_PATHS='src/cli.ts|src/commands/dream.ts|src/core/context/resolve-ipc.ts|src/core/context/turn-context.ts|src/core/cycle/transcript-discovery.ts'
+# KNOWN_DUP_PATHS seeds duplicate bullets that pre-date the gate (`|`-separated
+# paths); merge a pair and delete its entry here — never add to this list.
+KNOWN_DUP_PATHS=''
 if [ "${#KEY_FILE_DOCS[@]}" -gt 0 ]; then
   dups=$(grep -h -oE '^- `src/[^`]+`' "${KEY_FILE_DOCS[@]}" | sort | uniq -d | grep -vE "^- \`($KNOWN_DUP_PATHS)\`$" || true)
   if [ -n "$dups" ]; then

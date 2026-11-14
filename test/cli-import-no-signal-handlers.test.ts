@@ -1,22 +1,12 @@
 /**
- * Regression pins for the local-lane green wave's two harness contracts.
+ * Regression pin for the local-lane green wave's harness contract.
  *
- * 1. Importing src/cli.ts as a MODULE must not install process-cleanup's
- *    SIGTERM/SIGHUP→exit handlers. The install lives inside the
- *    `import.meta.main` seam; at module load it leaked a process-wide
- *    SIGTERM→exit(143) handler into any importer — in a bun test runner,
- *    one test's synthetic `process.emit('SIGTERM')` then killed the whole
- *    shard, which the parallel runner misread as an external kill. The
- *    one test that used to die on this (run-child-entry) now shields
- *    itself by stripping foreign listeners, so THIS pin is the only
- *    thing that fails if the install moves back to module scope.
+ * test/helpers/gbrain-home-preload.ts sets GBRAIN_HOME to per-run scratch when
+ * unset and respects a pre-set value. Every unit test's isolation from the
+ * operator's real ~/.gbrain depends on it.
  *
- * 2. test/helpers/gbrain-home-preload.ts sets GBRAIN_HOME to per-run
- *    scratch when unset and respects a pre-set value. Every unit test's
- *    isolation from the operator's real ~/.gbrain depends on it.
- *
- * Both pins spawn a fresh bun process: the contracts are about
- * process-start module-load behavior, which can't be observed in-process.
+ * The pins spawn a fresh bun process: the contract is about process-start
+ * module-load behavior, which can't be observed in-process.
  */
 
 import { describe, test, expect } from 'bun:test';
@@ -34,24 +24,6 @@ function runBunEval(script: string, env: Record<string, string | undefined>): st
   });
   return (res.stdout ?? '').trim();
 }
-
-describe('cli.ts module-import signal-handler contract', () => {
-  test('importing cli.ts does NOT install SIGTERM/SIGHUP handlers (import.meta.main seam)', () => {
-    const script = [
-      `await import(${JSON.stringify(join(REPO, 'src', 'cli.ts'))});`,
-      // Give any microtask-deferred module init a tick before counting.
-      `await new Promise((r) => setTimeout(r, 50));`,
-      `console.log(JSON.stringify({ sigterm: process.listenerCount('SIGTERM'), sighup: process.listenerCount('SIGHUP') }));`,
-    ].join('\n');
-    const out = runBunEval(script, {});
-    const lines = out.split('\n').filter((l) => l.trim().startsWith('{'));
-    const counts = JSON.parse(lines[lines.length - 1]) as { sigterm: number; sighup: number };
-    // zombie-reap's SIGCHLD handler is expected at module scope (tracked as a
-    // TODOS follow-up); SIGTERM/SIGHUP from process-cleanup must NOT be.
-    expect(counts.sigterm).toBe(0);
-    expect(counts.sighup).toBe(0);
-  });
-});
 
 describe('gbrain-home-preload contract', () => {
   const PRELOAD = join(REPO, 'test', 'helpers', 'gbrain-home-preload.ts');

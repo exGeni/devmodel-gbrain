@@ -1,8 +1,8 @@
 /**
  * scripts/regen-all.ts (GBRA-47 B8, DX-14): one table drives both the
  * regeneration and the read-only check verify runs; a stale artifact is named
- * with the fix; generators run offline and keyless; Postgres goldens are
- * excluded and named.
+ * with the fix; generators run offline and keyless; goldens that need Postgres
+ * are excluded and named.
  */
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
@@ -27,14 +27,13 @@ describe('regen:all', () => {
     expect(readFileSync(join(ROOT, 'docs/RELEASING.md'), 'utf8')).toContain('## Generated artifacts');
   });
 
-  test('every generator and check names a script or test that exists, and llms is regenerated last', () => {
+  test('every generator and check names a script or test that exists', () => {
     for (const a of ARTIFACTS) {
       for (const argv of [a.regen, a.check]) {
         const path = argv.find(x => /^(scripts|test)\//.test(x));
         if (path) expect(existsSync(join(ROOT, path)), `${a.name}: ${path}`).toBe(true);
       }
     }
-    expect(ARTIFACTS.at(-1)!.name).toContain('llms');
     for (const f of CONTRACT_GOLDENS) expect(existsSync(join(ROOT, f)), f).toBe(true);
     for (const c of POSTGRES_GOLDENS) expect(existsSync(join(ROOT, /bun test (?:--timeout=\d+ )?(\S+)/.exec(c)![1]!)), c).toBe(true);
   });
@@ -42,7 +41,6 @@ describe('regen:all', () => {
   test('every bun test it spawns passes an explicit --timeout (bunfig\'s [test] timeout is not applied, #6187)', () => {
     const argvs = [...ARTIFACTS.flatMap(a => [a.regen, a.check]), ...CONTRACT_GOLDENS.map(goldenArgv)];
     const bunTests = argvs.filter(argv => argv[0] === 'bun' && argv[1] === 'test');
-    expect(bunTests.length).toBeGreaterThanOrEqual(2 + CONTRACT_GOLDENS.length);
     for (const argv of bunTests) expect(argv.some(x => /^--timeout=\d+$/.test(x)), argv.join(' ')).toBe(true);
   });
 

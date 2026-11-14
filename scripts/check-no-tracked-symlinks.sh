@@ -6,9 +6,9 @@
 # link, and anything that opens it fails. That is not hypothetical: commit
 # faf5cdba landed `node_modules -> /tmp/fleet/repo/node_modules`, which made
 # `bun install` abort with `ENOENT: could not open the "node_modules"
-# directory` on every fresh clone, and took `gbrain upgrade`'s bun-link path
-# down with it (the auto-upgrade runs `bun install`, so the printed manual
-# fallback failed the same way).
+# directory` on every fresh clone, and took the upgrade path down with it
+# (the auto-upgrade runs `bun install`, so the printed manual fallback failed
+# the same way).
 #
 # .gitignore alone does not prevent this. A `node_modules/` pattern with a
 # trailing slash matches directories ONLY, so a symlink of the same name is

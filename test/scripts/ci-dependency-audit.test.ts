@@ -50,8 +50,8 @@ test('a registry that keeps answering 503 is audit_registry_unavailable after bo
   expect(run.out).toContain('::error::audit_registry_unavailable');
   expect(run.out).toContain('- 503 (attempt 3)');
   expect(run.out).not.toContain('found advisories');
-  // Root and admin/, three attempts each.
-  expect(run.calls).toBe(2 * 3 * perAudit);
+  // Three attempts on the root lockfile.
+  expect(run.calls).toBe(3 * perAudit);
 }, 60_000);
 
 test('a 503 that recovers on retry is a clean audit', async () => {

@@ -15,7 +15,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildFixture } from '../../scripts/contributor-audit-fixture.ts';
-import { classifyPath, classifyReversed, parseArgs, sandboxEnv } from '../../scripts/contributor-audit.ts';
+import { classifyPath, classifyReversed, sandboxEnv } from '../../scripts/contributor-audit.ts';
 
 const SCRIPT = join(import.meta.dir, '..', '..', 'scripts', 'contributor-audit.ts');
 
@@ -32,7 +32,7 @@ function withFixture(fn: (f: ReturnType<typeof buildFixture>) => void) {
 describe('contributor audit on the fixture range', () => {
   test('classifies discriminating, non-discriminating, setup-failure, docs-only and conflicting changes, keeping later fixes in place', () => {
     withFixture(f => {
-      const r = audit(f.dir, [`${f.base}..${f.head}`, '--prs', f.prsManifest, '--json', '--skip-security', '--skip-lanes']);
+      const r = audit(f.dir, [`${f.base}..${f.head}`, '--prs', f.prsManifest, '--json', '--skip-security']);
       expect(r.code, r.stderr).toBe(1);
       const report = JSON.parse(r.stdout);
       const byPr = Object.fromEntries(Object.values(report.cases as Record<string, any>).map(c => [c.pr, c]));
@@ -47,14 +47,14 @@ describe('contributor audit on the fixture range', () => {
       expect(byPr[106]).toMatchObject({ result: 'does_not_discriminate', audited_at: f.head });
       expect(byPr[107]).toMatchObject({ result: 'not_audited', reason: 'no_tests' });
       expect(byPr[105].result).toBe('conflict');
-      expect(byPr[105].reason).toContain('src/clamp.ts');
+      expect(byPr[105].reason).toContain('lib/clamp.ts');
       expect(report.exit_code).toBe(1);
 
       const pinned = JSON.parse(readFileSync(join(report.run_dir, 'prs.pinned.json'), 'utf8'));
       expect(pinned.prs[0].head).toMatch(/^[0-9a-f]{40}$/);
       expect(pinned.base).toBe(f.base);
 
-      const md = audit(f.dir, [`${f.base}..${f.head}`, '--resume', '--prs', join(report.run_dir, 'prs.pinned.json'), '--skip-security', '--skip-lanes']);
+      const md = audit(f.dir, [`${f.base}..${f.head}`, '--resume', '--prs', join(report.run_dir, 'prs.pinned.json'), '--skip-security']);
       expect(md.code).toBe(1);
       expect(md.stderr).toContain('resuming: 7 case(s) already done');
       expect(md.stdout).toContain('| **discriminates** |');
@@ -65,10 +65,10 @@ describe('contributor audit on the fixture range', () => {
   test('resume refuses when the PR pins differ from the saved run', () => {
     withFixture(f => {
       const range = `${f.base}..${f.head}`;
-      expect(audit(f.dir, [range, '--prs', f.prsManifest, '--skip-security', '--skip-lanes']).code).toBe(1);
+      expect(audit(f.dir, [range, '--prs', f.prsManifest, '--skip-security']).code).toBe(1);
       const other = join(f.dir, 'other.json');
       writeFileSync(other, JSON.stringify({ prs: [{ head: f.base }] }));
-      const r = audit(f.dir, [range, '--prs', other, '--resume', '--json', '--skip-security', '--skip-lanes']);
+      const r = audit(f.dir, [range, '--prs', other, '--resume', '--json', '--skip-security']);
       expect(r.code).toBe(2);
       const env = JSON.parse(r.stdout);
       expect(env.code).toBe('preview_changed');
@@ -79,14 +79,14 @@ describe('contributor audit on the fixture range', () => {
   test('human verdicts print in their own column and never replace the mechanical result', () => {
     withFixture(f => {
       const verdicts = join(f.dir, 'verdicts.json');
-      const first = audit(f.dir, [`${f.base}..${f.head}`, '--json', '--skip-security', '--skip-lanes']);
+      const first = audit(f.dir, [`${f.base}..${f.head}`, '--json', '--skip-security']);
       const id = Object.values(JSON.parse(first.stdout).cases as Record<string, any>).find(c => c.pr === 102).id;
       writeFileSync(verdicts, JSON.stringify({ [id]: { verdict: 'rework', note: 'test never calls greet' } }));
-      const r = audit(f.dir, [`${f.base}..${f.head}`, '--resume', '--verdicts', verdicts, '--skip-security', '--skip-lanes']);
+      const r = audit(f.dir, [`${f.base}..${f.head}`, '--resume', '--verdicts', verdicts, '--skip-security']);
       expect(r.stdout).toContain('| **does_not_discriminate** |');
       expect(r.stdout).toContain('| rework: test never calls greet |');
       writeFileSync(verdicts, JSON.stringify({ [id]: { verdict: 'lgtm' } }));
-      const bad = audit(f.dir, [`${f.base}..${f.head}`, '--resume', '--verdicts', verdicts, '--json', '--skip-security', '--skip-lanes']);
+      const bad = audit(f.dir, [`${f.base}..${f.head}`, '--resume', '--verdicts', verdicts, '--json', '--skip-security']);
       expect(bad.code).toBe(2);
       expect(JSON.parse(bad.stdout).code).toBe('invalid_params');
     });
@@ -118,7 +118,7 @@ describe('untrusted code runs in a scrubbed environment', () => {
       git('checkout', '-q', 'master');
       git('merge', '-q', '--no-ff', 'probe', '-m', 'Merge pull request #7 from alice-example/probe');
 
-      const r = audit(repo, ['HEAD~1..HEAD', '--json', '--skip-security', '--skip-lanes'], {
+      const r = audit(repo, ['HEAD~1..HEAD', '--json', '--skip-security'], {
         DATABASE_URL: 'postgres://u:p@prod.example.invalid/brain',
         GBRAIN_DATABASE_URL: 'postgres://u:p@prod.example.invalid/brain',
         OPENAI_API_KEY: 'sk-fake-ambient', ANTHROPIC_API_KEY: 'sk-ant-fake', GH_TOKEN: 'ghp_fake', SSH_AUTH_SOCK: '/tmp/agent.sock',
@@ -135,14 +135,6 @@ describe('untrusted code runs in a scrubbed environment', () => {
       const unexpected = Object.keys(seen.env).filter(k => !allowed.has(k) && !k.startsWith('BUN_') && !['_', 'SHLVL', 'PWD', 'OLDPWD', 'NODE_ENV'].includes(k));
       expect(unexpected).toEqual([]);
     } finally { rmSync(dir, { recursive: true, force: true }); }
-  });
-
-  test('--postgres is the only way a database URL reaches the tests, and it must be test-shaped', () => {
-    const env = sandboxEnv({ home: '/h', bunPath: '/x/bun', cacheDir: '/c', postgresUrl: 'postgres://postgres:postgres@localhost:5435/gbrain_test' });
-    expect(env.DATABASE_URL).toBe('postgres://postgres:postgres@localhost:5435/gbrain_test');
-    expect(env.GBRAIN_DATABASE_URL).toBe('');
-    expect(env.GBRAIN_TEST_ALLOW_DATABASE_URL).toBe('1');
-    expect(() => parseArgs(['a..b', '--postgres', 'postgres://u:p@db.example.invalid/brain'])).toThrow(/test-shaped/);
   });
 });
 

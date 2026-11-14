@@ -35,12 +35,11 @@
  *
  * Untrusted code (bun install, the tests) runs under `env -i` with an
  * allowlist: a temporary HOME and GBRAIN_HOME, no credential files, and both
- * DATABASE_URL and GBRAIN_DATABASE_URL cleared unless --postgres names a
- * test-shaped database. Lifecycle scripts are skipped (`--ignore-scripts`).
+ * DATABASE_URL and GBRAIN_DATABASE_URL cleared. Lifecycle scripts are skipped
+ * (`--ignore-scripts`).
  *
- * Global checks run from THIS checkout (never the audited tree's copy):
- * scripts/wave-security-scan.sh over the range and each PR, and
- * scripts/check-postgres-lane-coverage.ts over <head> and each trial merge.
+ * The global check runs from THIS checkout (never the audited tree's copy):
+ * scripts/wave-security-scan.sh over the range and each PR.
  *
  * Exit codes:
  *   0    every change discriminates (or changes no product code) and every check passed
@@ -54,11 +53,37 @@ import { spawn, spawnSync } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import type { Action } from '../src/core/agent-output.ts';
-import { renderCliError } from '../src/core/agent-output.ts';
-import { parseReleasePackage } from '../src/core/bun-floor.ts';
-import { opError } from '../src/core/ops/contract.ts';
-import { assertSafeE2eDatabaseUrl } from '../test/helpers/db-guard.ts';
+
+// ── agent-contract error envelope (this tool's own small copy) ─────────────
+
+interface Action {
+  argv: string[]; consent: string[]; actor: 'agent' | 'user'; why: string; requires_exclusive: boolean;
+  verify?: { argv: string[] }; inputs?: Array<{ name: string; how: string }>;
+}
+class OpError extends Error {
+  constructor(readonly code: string, message: string, readonly suggestion: string, readonly detail: { why?: string; fix?: Action }) { super(message); }
+}
+const opError = (code: string, message: string, suggestion: string, detail: { why?: string; fix?: Action } = {}): OpError =>
+  new OpError(code, message, suggestion, detail);
+
+/** `--json`: the envelope {code,message,suggestion,why,fix} on stdout; otherwise the same facts as text on stderr. */
+function renderCliError(e: unknown, o: { json: boolean; command: string }): { stdout: string; stderr: string } {
+  const err = e instanceof OpError ? e : new OpError('internal_error', e instanceof Error ? e.message : String(e), `Rerun ${o.command}; if it repeats, report the message.`, {});
+  const envelope = { code: err.code, message: err.message, suggestion: err.suggestion, why: err.detail.why, fix: err.detail.fix };
+  if (o.json) return { stdout: JSON.stringify(envelope, null, 2) + '\n', stderr: '' };
+  const lines = [`${o.command}: ${err.message} [${err.code}]`, `  suggestion: ${err.suggestion}`];
+  if (err.detail.why) lines.push(`  why: ${err.detail.why}`);
+  if (err.detail.fix) lines.push(`  fix: ${err.detail.fix.argv.join(' ')}`);
+  return { stdout: '', stderr: lines.join('\n') + '\n' };
+}
+
+/** The Bun floor a package.json declares in engines.bun (">=1.4.4" gives "1.4.4"), or null. */
+function parseReleasePackage(text: string): { floor: string | null } {
+  try {
+    const range = (JSON.parse(text) as { engines?: { bun?: string } }).engines?.bun ?? '';
+    return { floor: /(\d+\.\d+\.\d+)/.exec(range)?.[1] ?? null };
+  } catch { return { floor: null }; }
+}
 
 const TOOL_ROOT = join(import.meta.dir, '..');
 const COMMAND = 'audit:contributors';
@@ -70,21 +95,21 @@ export type HumanVerdict = 'accept' | 'rework' | 'reject' | 'not_yet_proven';
 const HUMAN_VERDICTS: readonly HumanVerdict[] = ['accept', 'rework', 'reject', 'not_yet_proven'];
 
 export interface Options {
-  range: string; prs?: string; json: boolean; postgres?: string; resume: boolean; runDir?: string;
-  stepTimeoutSec: number; verdicts?: string; skipSecurity: boolean; skipLanes: boolean; keepWorktrees: boolean; help: boolean;
+  range: string; prs?: string; json: boolean; resume: boolean; runDir?: string;
+  stepTimeoutSec: number; verdicts?: string; skipSecurity: boolean; keepWorktrees: boolean; help: boolean;
 }
 export interface RunCounts { exit: number; pass: number; fail: number; timedOut: boolean }
 export interface CaseResult {
   id: string; kind: 'merge' | 'pr'; sha: string; parent: string; pr?: number; author: string; subject: string;
   result: Mechanical; reason?: string; audited_at?: string; tests: string[]; product_files: number;
   runs: { baseline?: RunCounts; reversed?: RunCounts; restored?: RunCounts };
-  lanes?: CheckResult; security?: CheckResult; seconds: number;
+  security?: CheckResult; seconds: number;
 }
 export interface CheckResult { status: 'pass' | 'review' | 'skipped'; detail: string }
 interface PinnedPr { number?: number; head: string; ref?: string }
 interface State {
   version: number; base: string; head: string; prs: PinnedPr[];
-  cases: Record<string, CaseResult>; checks: { security?: CheckResult; lanes?: CheckResult };
+  cases: Record<string, CaseResult>; checks: { security?: CheckResult };
 }
 
 const action = (argv: string[], why: string, extra: Partial<Action> = {}): Action =>
@@ -116,12 +141,8 @@ export function classifyReversed(run: RunCounts): { result: Mechanical; reason?:
   return { result: 'discriminates' };
 }
 
-export function isTestShapedDatabaseUrl(url: string): boolean {
-  try { assertSafeE2eDatabaseUrl(url, {}); return true; } catch { return false; }
-}
-
 /** The complete environment untrusted code sees. Nothing from the caller's environment passes through. */
-export function sandboxEnv(o: { home: string; bunPath: string; cacheDir: string; postgresUrl?: string }): Record<string, string> {
+export function sandboxEnv(o: { home: string; bunPath: string; cacheDir: string }): Record<string, string> {
   return {
     PATH: [dirname(o.bunPath), '/usr/local/bin', '/usr/bin', '/bin'].join(':'),
     HOME: o.home,
@@ -136,9 +157,8 @@ export function sandboxEnv(o: { home: string; bunPath: string; cacheDir: string;
     GIT_CONFIG_GLOBAL: '/dev/null',
     GIT_TERMINAL_PROMPT: '0',
     BUN_INSTALL_CACHE_DIR: o.cacheDir,
-    DATABASE_URL: o.postgresUrl ?? '',
+    DATABASE_URL: '',
     GBRAIN_DATABASE_URL: '',
-    ...(o.postgresUrl ? { GBRAIN_TEST_ALLOW_DATABASE_URL: '1' } : {}),
   };
 }
 
@@ -155,16 +175,16 @@ export function renderMarkdown(state: State, verdicts: Record<string, { verdict?
   const lines = [
     `## Contributor audit \`${short(state.base)}..${short(state.head)}\``,
     '',
-    '| Case | PR | Author | Mechanical | Detail | Baseline → reversed → restored | Lanes | Security | Human verdict |',
-    '|---|---|---|---|---|---|---|---|---|',
+    '| Case | PR | Author | Mechanical | Detail | Baseline → reversed → restored | Security | Human verdict |',
+    '|---|---|---|---|---|---|---|---|',
   ];
   for (const c of Object.values(state.cases)) {
     const detail = [c.reason, c.audited_at ? `audited at ${short(c.audited_at)}` : '', c.tests.length ? `${c.tests.length} test file(s)` : ''].filter(Boolean).join('; ');
     const human = verdicts[c.id] ? `${verdicts[c.id].verdict}${verdicts[c.id].note ? `: ${verdicts[c.id].note}` : ''}` : 'pending';
-    lines.push(`| ${c.kind} \`${short(c.sha)}\` ${cell(c.subject.slice(0, 60))} | ${c.pr ? `#${c.pr}` : '–'} | ${cell(c.author)} | **${c.result}** | ${cell(detail || '–')} | ${counts(c.runs.baseline)} → ${counts(c.runs.reversed)} → ${counts(c.runs.restored)} | ${c.lanes?.status ?? '–'} | ${c.security?.status ?? '–'} | ${cell(human)} |`);
+    lines.push(`| ${c.kind} \`${short(c.sha)}\` ${cell(c.subject.slice(0, 60))} | ${c.pr ? `#${c.pr}` : '–'} | ${cell(c.author)} | **${c.result}** | ${cell(detail || '–')} | ${counts(c.runs.baseline)} → ${counts(c.runs.reversed)} → ${counts(c.runs.restored)} | ${c.security?.status ?? '–'} | ${cell(human)} |`);
   }
   const check = (name: string, r?: CheckResult) => `- ${name}: **${r?.status ?? 'not run'}**${r?.detail ? ` (${cell(r.detail)})` : ''}`;
-  lines.push('', check('wave-security-scan over the range', state.checks.security), check('check:postgres-lanes at head', state.checks.lanes), '',
+  lines.push('', check('wave-security-scan over the range', state.checks.security), '',
     'Mechanical results come from the driver; human verdicts come only from the verdicts file. A green mechanical row is evidence, not acceptance.');
   return lines.join('\n') + '\n';
 }
@@ -172,8 +192,8 @@ export function renderMarkdown(state: State, verdicts: Record<string, { verdict?
 export function exitCodeFor(state: State): 0 | 1 {
   const clean = (c: CaseResult) => c.result === 'discriminates' || (c.result === 'not_audited' && c.reason === 'no_product_change');
   const checkOk = (r?: CheckResult) => !r || r.status !== 'review';
-  const casesOk = Object.values(state.cases).every(c => clean(c) && checkOk(c.lanes) && checkOk(c.security));
-  return casesOk && checkOk(state.checks.security) && checkOk(state.checks.lanes) ? 0 : 1;
+  const casesOk = Object.values(state.cases).every(c => clean(c) && checkOk(c.security));
+  return casesOk && checkOk(state.checks.security) ? 0 : 1;
 }
 
 const USAGE = `usage: bun run ${COMMAND} <base>..<head> [flags]
@@ -185,14 +205,12 @@ classify, restore, re-verify green.
   --prs <manifest>     JSON {"prs":[{"number":N}|{"head":"<sha>"}|{"ref":"<ref>"}]}; heads are
                        pinned into <run-dir>/prs.pinned.json — pass that file on reruns
   --json               print the report as JSON instead of the Markdown table
-  --postgres <url>     run tests with DATABASE_URL=<url>; the database name must be test-shaped
   --resume             keep finished cases from <run-dir>/state.json (same refs and pins only)
   --run-dir <dir>      state, logs and pinned manifest (default: <git-dir>/contributor-audit/<base>-<head>)
   --verdicts <file>    human verdicts {"<case id>":{"verdict":"accept|rework|reject|not_yet_proven","note":"…"}}
                        (default: <run-dir>/verdicts.json when present)
   --step-timeout <s>   per-step timeout in seconds (default 900)
   --skip-security      opt out of wave-security-scan (and the gitleaks preflight)
-  --skip-lanes         opt out of check:postgres-lanes
   --keep-worktrees     leave the isolated checkouts on disk for inspection
 
 Exit: 0 clean, 1 needs a human look, 2 usage/preflight refusal, 130 interrupted (rerun with --resume).
@@ -200,7 +218,7 @@ Docs: ${DOCS}
 `;
 
 export function parseArgs(argv: string[]): Options {
-  const o: Options = { range: '', json: false, resume: false, stepTimeoutSec: 900, skipSecurity: false, skipLanes: false, keepWorktrees: false, help: false };
+  const o: Options = { range: '', json: false, resume: false, stepTimeoutSec: 900, skipSecurity: false, keepWorktrees: false, help: false };
   const value = (i: number, flag: string): string => {
     const v = argv[i + 1];
     if (v === undefined || v.startsWith('--')) {
@@ -215,10 +233,8 @@ export function parseArgs(argv: string[]): Options {
       case '--json': o.json = true; break;
       case '--resume': o.resume = true; break;
       case '--skip-security': o.skipSecurity = true; break;
-      case '--skip-lanes': o.skipLanes = true; break;
       case '--keep-worktrees': o.keepWorktrees = true; break;
       case '--prs': o.prs = value(i, a); i++; break;
-      case '--postgres': o.postgres = value(i, a); i++; break;
       case '--run-dir': o.runDir = value(i, a); i++; break;
       case '--verdicts': o.verdicts = value(i, a); i++; break;
       case '--step-timeout': {
@@ -234,16 +250,10 @@ export function parseArgs(argv: string[]): Options {
   }
   if (!o.help && !/^[^.\s]+\.\.[^.\s]+$/.test(o.range)) {
     throw opError('invalid_params', o.range ? `range must be <base>..<head> (got "${o.range}")` : 'a <base>..<head> range is required',
-      'Pass the range of merges to audit, e.g. the commit before the merge train and origin/master.', {
+      'Pass the range of merges to audit, e.g. the commit before the merge train and origin/main.', {
         why: 'The audit needs both ends of the range to list the merges it re-tests.',
-        fix: action(['bun', 'run', COMMAND, '<base>..<head>'], 'Audits every merge between the two refs.', { inputs: [{ name: 'base>..<head', how: 'base = the last commit before the merges to audit; head = usually origin/master' }] }),
+        fix: action(['bun', 'run', COMMAND, '<base>..<head>'], 'Audits every merge between the two refs.', { inputs: [{ name: 'base>..<head', how: 'base = the last commit before the merges to audit; head = usually origin/main' }] }),
       });
-  }
-  if (o.postgres && !isTestShapedDatabaseUrl(o.postgres)) {
-    throw opError('invalid_params', '--postgres must name a test-shaped database', 'Point --postgres at a throwaway database whose name has "test" as a segment (e.g. gbrain_test).', {
-      why: 'The audited tests are untrusted and run destructive SQL against whatever database they are given.',
-      fix: action(['docker', 'run', '-d', '--name', 'gbrain-audit-pg', '-p', '127.0.0.1:5435:5432', '-e', 'POSTGRES_PASSWORD=postgres', '-e', 'POSTGRES_DB=gbrain_test', 'pgvector/pgvector:pg16'], 'Starts a disposable test-shaped database at postgres://postgres:postgres@localhost:5435/gbrain_test.', { consent: ['persistent_install'] }),
-    });
   }
   return o;
 }
@@ -287,7 +297,7 @@ async function runStep(cmd: string[], o: { cwd: string; env?: Record<string, str
 const progress = (msg: string) => process.stderr.write(`[audit] ${msg}\n`);
 
 function refuse(e: unknown, json: boolean): number {
-  const r = renderCliError(e, { json, command: COMMAND, tty: false });
+  const r = renderCliError(e, { json, command: COMMAND });
   if (r.stdout) process.stdout.write(r.stdout);
   if (r.stderr) process.stderr.write(r.stderr);
   return 2;
@@ -331,13 +341,6 @@ async function preflight(o: Options, repo: string): Promise<{ base: string; head
         });
       }
     }
-  }
-  if (o.postgres) {
-    const { default: postgres } = await import('#postgres');
-    const sql = postgres(o.postgres, { max: 1, connect_timeout: 5, onnotice: () => {} });
-    try { await sql`select 1`; } catch (e) {
-      throw opError('config_error', 'the --postgres database is unreachable', 'Start the test database (or fix the URL), then rerun.', { why: `Connecting failed: ${(e instanceof Error ? e.message || (e as { code?: string }).code || e.name : String(e)).replace(/postgres(ql)?:\/\/\S+/g, '<url>')}.`, fix: action(['docker', 'ps'], 'Shows whether the test database container is running.') });
-    } finally { await sql.end({ timeout: 1 }); }
   }
   const gitDir = resolve(repo, git(['rev-parse', '--git-common-dir'], repo).out);
   const runDir = resolve(o.runDir ?? join(gitDir, 'contributor-audit', `${short(base)}-${short(head)}`));
@@ -383,7 +386,7 @@ async function runTests(ctx: Ctx, wt: string, tests: string[], log: string): Pro
   for (const [i, test] of tests.entries()) {
     const home = mkdtempSync(join(ctx.scratch, 'home-'));
     mkdirSync(join(home, 'tmp'));
-    const env = sandboxEnv({ home, bunPath: process.execPath, cacheDir: ctx.cacheDir, postgresUrl: ctx.o.postgres });
+    const env = sandboxEnv({ home, bunPath: process.execPath, cacheDir: ctx.cacheDir });
     const fileLog = tests.length === 1 ? log : log.replace(/\.log$/, `.${i + 1}.log`);
     const r = await runStep([process.execPath, '--no-env-file', 'test', '--timeout=60000', `./${test}`], { cwd: wt, env, log: fileLog, timeoutMs: ctx.timeoutMs });
     rmSync(home, { recursive: true, force: true });
@@ -452,15 +455,6 @@ async function discriminate(ctx: Ctx, wt: string, c: CaseResult, files: string[]
   if (c.runs.restored.exit !== 0) { c.reason = `restore_red (reversed run said ${c.result})`; c.result = 'setup_failed'; }
 }
 
-async function lanesCheck(ctx: Ctx, tree: string, log: string): Promise<CheckResult> {
-  if (ctx.o.skipLanes) return { status: 'skipped', detail: '--skip-lanes' };
-  const r = await runStep([process.execPath, join(TOOL_ROOT, 'scripts', 'check-postgres-lane-coverage.ts')], {
-    cwd: tree, log, timeoutMs: ctx.timeoutMs, env: { ...sandboxEnv({ home: ctx.scratch, bunPath: process.execPath, cacheDir: ctx.cacheDir }), GBRAIN_GUARD_ROOT: tree },
-  });
-  const summary = r.output.trim().split('\n').filter(l => !l.startsWith('$ ') && /postgres-lane|FAIL/.test(l)).slice(-3).join(' / ');
-  return r.exit === 0 ? { status: 'pass', detail: summary } : { status: 'review', detail: `${summary || 'lane check failed'} (log: ${log})` };
-}
-
 async function securityCheck(ctx: Ctx, range: string, log: string): Promise<CheckResult> {
   if (ctx.o.skipSecurity) return { status: 'skipped', detail: '--skip-security' };
   const r = await runStep(['bash', join(TOOL_ROOT, 'scripts', 'wave-security-scan.sh'), '--json', range], { cwd: ctx.repo, log, timeoutMs: ctx.timeoutMs });
@@ -506,8 +500,6 @@ async function auditPr(ctx: Ctx, c: CaseResult, logs: string, step: (s: string) 
     if (!(await install(ctx, wt, join(logs, 'install.log')))) { c.result = 'setup_failed'; c.reason = 'install_failed'; return; }
     const patchFrom = (paths: string[]) => git(['diff', '--cached', '--binary', '--no-renames', ctx.head, '--', ...paths], wt).raw;
     if ((await discriminate(ctx, wt, c, files, patchFrom, logs, step)) === 'reverse_failed') { c.result = 'setup_failed'; c.reason = 'reverse_failed'; }
-    step('lanes on the trial merge');
-    c.lanes = await lanesCheck(ctx, wt, join(logs, 'lanes.log'));
   } finally { removeWorktree(ctx, wt); }
   const mergeBase = git(['merge-base', ctx.head, c.sha], ctx.repo).out;
   step('security scan of the PR commits');
@@ -613,12 +605,6 @@ export async function main(argv: string[]): Promise<number> {
     if (commits.length && !state.checks.security) {
       progress('wave-security-scan over the range');
       state.checks.security = await securityCheck(ctx, `${pre.base}..${pre.head}`, join(pre.runDir, 'logs', 'security-range.log'));
-      writeJson(statePath, state);
-    }
-    if (!state.checks.lanes) {
-      progress('check:postgres-lanes at head');
-      headTree ??= addWorktree(ctx, pre.head, 'head');
-      state.checks.lanes = await lanesCheck(ctx, headTree, join(pre.runDir, 'logs', 'lanes-head.log'));
       writeJson(statePath, state);
     }
   } catch (e) {

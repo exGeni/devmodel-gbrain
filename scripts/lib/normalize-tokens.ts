@@ -1,13 +1,10 @@
 /**
  * Whitespace- and comment-insensitive token normalizer (refactor wave 1, CQ7).
  *
- * One definition shared by the two move proofs:
- * - the migrations full-record golden (`test/migrations-golden.test.ts`), which
- *   hashes the normalized source of every handler / verify body and the helpers
- *   they reference, never `Function.prototype.toString()` (coverage
- *   instrumentation and re-indentation change that text);
- * - `scripts/verify-move-only.ts`, which proves a move-only commit keeps the
- *   same token stream.
+ * One definition for token-stream proofs: `scripts/verify-move-only.ts` proves
+ * a move-only commit keeps the same token stream, and any test that hashes
+ * source text uses it instead of `Function.prototype.toString()` (coverage
+ * instrumentation and re-indentation change that text).
  *
  * Normal form: the TypeScript scanner's token stream with trivia (whitespace,
  * newlines, comments, shebang) dropped, each token rendered as its exact source

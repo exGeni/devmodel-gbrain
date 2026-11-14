@@ -7,8 +7,8 @@
  * are one `gbrain init`-shaped test away from the same class. run-e2e.sh
  * already scrubs these for the E2E lane; test/helpers/operator-env-preload.ts
  * is the unit-lane equivalent, and the repo's own test machinery (the
- * GBRAIN_TEST_ / GBRAIN_CI_ / GBRAIN_E2E_ / GBRAIN_REAL_ prefixes + the exact
- * keeps) must survive it.
+ * GBRAIN_TEST_ / GBRAIN_CI_ / GBRAIN_E2E_ prefixes + the exact keeps) must
+ * survive it.
  *
  * Each case spawns a real `bun test` child on a probe fixture with a
  * controlled environment (the database-url-guard-preload.test.ts pattern), so
@@ -108,47 +108,25 @@ describe('operator-env-preload (#4023)', () => {
   test('keeps the test machinery the runners and CI workflows export', () => {
     const probed = [
       'GBRAIN_MODEL_DISCOVERY',
-      'GBRAIN_PGLITE_SNAPSHOT',
-      'GBRAIN_TEST_DEFAULT_SNAPSHOT',
-      'GBRAIN_NO_SNAPSHOT',
-      'GBRAIN_PGBOUNCER_URL',
-      'GBRAIN_PGBOUNCER_DIRECT_URL',
-      'GBRAIN_CI_REQUIRE_PGBOUNCER',
-      'GBRAIN_COMPILED_BIN',
+      'GBRAIN_AUDIT_DIR',
+      'GBRAIN_SYNC_FAILURES_DIR',
       'GBRAIN_TEST_SENTINEL',
-      'GBRAIN_CI_PG_PORT',
+      'GBRAIN_CI_EXAMPLE_PORT',
       'GBRAIN_E2E_ALLOW_DB',
-      'GBRAIN_REAL_HERMES_E2E',
     ];
     const ambient: Record<string, string> = {
       // '1' (not 'off') so a strip is distinguishable from provider-keys-
       // preload's own default of 'off' when the var is absent.
       GBRAIN_MODEL_DISCOVERY: '1',
-      GBRAIN_PGLITE_SNAPSHOT: 'probe-snapshot.tar',
-      GBRAIN_TEST_DEFAULT_SNAPSHOT: '/probe/default-snapshot.tar',
-      GBRAIN_NO_SNAPSHOT: '0',
-      GBRAIN_PGBOUNCER_URL: 'postgresql://pooler.example/gbrain_test',
-      GBRAIN_PGBOUNCER_DIRECT_URL: 'postgresql://direct.example/gbrain_test',
-      GBRAIN_CI_REQUIRE_PGBOUNCER: '1',
-      GBRAIN_COMPILED_BIN: '/probe/bin/gbrain',
+      GBRAIN_AUDIT_DIR: '/probe/audit',
+      GBRAIN_SYNC_FAILURES_DIR: '/probe/sync-failures',
       GBRAIN_TEST_SENTINEL: 'kept',
-      GBRAIN_CI_PG_PORT: '5434',
+      GBRAIN_CI_EXAMPLE_PORT: '5434',
       GBRAIN_E2E_ALLOW_DB: 'gbrain_probe_db',
-      GBRAIN_REAL_HERMES_E2E: '0',
     };
     const r = runProbe(ambient, probed);
     expect(r.exitCode).toBe(0);
     for (const name of probed) expect({ [name]: r.report[name] }).toEqual({ [name]: ambient[name] });
-  }, 30_000);
-
-  test('cold snapshot opt-out survives preload and clears both inherited snapshot paths', () => {
-    const r = runProbe({
-      GBRAIN_NO_SNAPSHOT: '1',
-      GBRAIN_PGLITE_SNAPSHOT: '/probe/legacy.tar',
-      GBRAIN_TEST_DEFAULT_SNAPSHOT: '/probe/default.tar',
-    }, ['GBRAIN_NO_SNAPSHOT', 'GBRAIN_PGLITE_SNAPSHOT', 'GBRAIN_TEST_DEFAULT_SNAPSHOT']);
-    expect(r.exitCode).toBe(0);
-    expect(r.report).toEqual({ GBRAIN_NO_SNAPSHOT: '1', GBRAIN_PGLITE_SNAPSHOT: null, GBRAIN_TEST_DEFAULT_SNAPSHOT: null });
   }, 30_000);
 
   test('keeps GBRAIN_DATABASE_URL in the opted-in e2e lane', () => {
@@ -177,7 +155,6 @@ describe('operator-env-preload (#4023)', () => {
     // Under the old names the scrub deleted these before any test read them,
     // so the gated tests skipped silently (D7). The preload now exits first.
     for (const [old, next] of [
-      ['GBRAIN_SKIP_SUBPROCESS_TESTS', 'GBRAIN_TEST_SKIP_SUBPROCESS'],
       ['GBRAIN_BASH32_REQUIRE', 'GBRAIN_TEST_BASH32_REQUIRE'],
     ]) {
       // Also with the scrub disabled: the old-name check runs before it.
@@ -191,8 +168,8 @@ describe('operator-env-preload (#4023)', () => {
   }, 60_000);
 
   test('the new opt-in names survive the scrub', () => {
-    const probed = ['GBRAIN_TEST_SKIP_SUBPROCESS', 'GBRAIN_TEST_BASH32_REQUIRE', 'GBRAIN_TEST_PERF_BUDGET_MULTIPLIER'];
-    const ambient = { GBRAIN_TEST_SKIP_SUBPROCESS: '1', GBRAIN_TEST_BASH32_REQUIRE: '1', GBRAIN_TEST_PERF_BUDGET_MULTIPLIER: '3' };
+    const probed = ['GBRAIN_TEST_EXAMPLE_FLAG', 'GBRAIN_TEST_BASH32_REQUIRE', 'GBRAIN_TEST_EXAMPLE_MULTIPLIER'];
+    const ambient = { GBRAIN_TEST_EXAMPLE_FLAG: '1', GBRAIN_TEST_BASH32_REQUIRE: '1', GBRAIN_TEST_EXAMPLE_MULTIPLIER: '3' };
     const r = runProbe(ambient, probed);
     expect(r.exitCode).toBe(0);
     expect(r.report).toEqual(ambient);

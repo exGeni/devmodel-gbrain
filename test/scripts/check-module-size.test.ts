@@ -88,6 +88,29 @@ describe('check-module-size.sh rule-by-rule failing sides', () => {
     expect(runGuard(under, { GBRAIN_MODULE_SIZE_NEWFILE_CAP: '20' }).code).toBe(0);
   });
 
+  test('skip: an empty src/ with no TSV rows prints GBRAIN_CHECK_SKIPPED and exits 0', () => {
+    const root = makeTree([], {});
+    const r = runGuard(root);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('GBRAIN_CHECK_SKIPPED:');
+    expect(r.out).not.toContain('OK: module sizes');
+  });
+
+  test('skip does not hide a stale row: an empty src/ with a TSV row still fails rule 3', () => {
+    const root = makeTree(['src/ghost.ts\t100\tratchet\tfixture'], {});
+    const r = runGuard(root);
+    expect(r.code).toBe(1);
+    expect(r.out).not.toContain('GBRAIN_CHECK_SKIPPED');
+  });
+
+  test('a src file turns the skip off: the guard reports OK', () => {
+    const root = makeTree([], { 'src/one.ts': 5 });
+    const r = runGuard(root);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('OK: module sizes');
+    expect(r.out).not.toContain('GBRAIN_CHECK_SKIPPED');
+  });
+
   test('unknown policy fails loudly instead of skipping the row', () => {
     const root = makeTree(['src/x.ts\t100\tfreeform\tfixture'], { 'src/x.ts': 10 });
     const r = runGuard(root);

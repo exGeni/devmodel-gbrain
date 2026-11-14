@@ -3,8 +3,6 @@
 # files must end with a newline. POSIX-noncompliant trailing data shows up
 # as a phantom diff on every future edit and trips most linters.
 #
-# Sibling to scripts/check-progress-to-stdout.sh and
-# scripts/check-jsonb-pattern.sh per CLAUDE.md's CI guard pattern.
 # Wired into `bun run verify` (check:newlines).
 #
 # Guard fixtures under test/fixtures/guards/ are skipped: their known-bad

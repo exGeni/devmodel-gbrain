@@ -3,9 +3,8 @@
  * security sweep RELEASING.md step 5 gates community-PR waves on.
  *
  * Contract: exit 0 = nothing alarm-worthy; exit 1 = alarm (obfuscation in code,
- * secrets, admin/dist change, or a broken secrets lane); exit 2 = usage/env
- * error. Each case runs against a throwaway fixture git repo (same pattern as
- * scripts/changelog-entry.sh's fixture tests in test/release-workflow.test.ts).
+ * secrets, or a broken secrets lane); exit 2 = usage/env error. Each case runs
+ * against a throwaway fixture git repo.
  *
  * gitleaks may be absent on a dev box; the script treats that as a broken
  * secrets lane (fail-closed exit 1 with a WARNING) — cases that assert exit 0
@@ -93,7 +92,6 @@ describe('wave-security-scan.sh exit-code contract', () => {
       expect(parsed.commits).toBe(0);
       expect(parsed.alarm).toBe(0);
       expect(parsed).toHaveProperty('checks');
-      expect(parsed).toHaveProperty('admin_dist_changed');
       expect(parsed).toHaveProperty('gitleaks_hits');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -119,18 +117,6 @@ describe('wave-security-scan.sh exit-code contract', () => {
       const { out, code } = run(dir, ['HEAD~1..HEAD']);
       expect(code).toBe(1);
       expect(out).toContain('obfuscation');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }, 30000);
-
-  test('exit 1: admin/dist change is an ALARM even though its content is not grepped', () => {
-    const dir = fixtureRepo();
-    try {
-      commitFile(dir, 'admin/dist/assets/index-XYZ.js', 'var x=1;\n', 'bundle');
-      const { out, code } = run(dir, ['HEAD~1..HEAD']);
-      expect(code).toBe(1);
-      expect(out).toContain('admin/dist');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 # CI guard: module-size ratchet (containment sprint).
 #
-# The six giant modules (doctor.ts 10k, operations.ts 7.5k, ...) got that way
-# one innocent commit at a time. This guard freezes every oversized file at a
-# committed ceiling (scripts/module-size-limits.tsv) and caps every UNLISTED
-# src file at a hard limit, so the only way to grow a giant is a reviewer-
-# visible TSV edit.
+# Giant modules get that way one innocent commit at a time. This guard freezes
+# every oversized file at a committed ceiling (scripts/module-size-limits.tsv)
+# and caps every UNLISTED src file at a hard limit, so the only way to grow a
+# giant is a reviewer-visible TSV edit.
 #
 # TSV columns (tab-separated): path  max_lines  policy  note
 #   policy=ratchet        line count (wc -l) must stay <= max_lines
-#                         (the only policy; schema migrations live one per
-#                         file in src/core/schema-migrations/, so no file
-#                         needs a growth-exempt region)
+#                         (the only policy)
 #
 # Rules (all violations reported, then one exit):
 #   1. measured > max_lines            -> FAIL (growth; raise the ceiling
@@ -25,6 +22,10 @@
 # Self-test seams: GBRAIN_GUARD_ROOT (fixture tree root; TSV read from
 # <root>/scripts/module-size-limits.tsv), GBRAIN_MODULE_SIZE_SLACK,
 # GBRAIN_MODULE_SIZE_NEWFILE_CAP.
+#
+# While src/ holds no source file and the TSV has no row, there is nothing to
+# measure: the guard prints `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0, which
+# the verify runner counts as a skip.
 
 set -uo pipefail
 
@@ -70,9 +71,7 @@ while IFS=$'\t' read -r path max policy note; do
     echo "FAIL: $path is $measured $label, over its $max ceiling." >&2
     echo "Why:  growing a size-ratcheted module is a conscious, reviewer-visible decision." >&2
     echo "Fix:  move new logic into a sibling module (preferred), or raise the ceiling to" >&2
-    echo "      $measured in $TSV in this same commit. Engine methods, BrainEngine" >&2
-    echo "      signatures, CLI help lines and interface fields cannot move: raise it." >&2
-    echo "See:  CONTRIBUTING.md#where-does-my-change-go" >&2
+    echo "      $measured in $TSV in this same commit." >&2
     fail=1
   elif [ $((max - measured)) -gt "$SLACK" ]; then
     echo "FAIL: $path shrank to $measured $label but its ceiling is still $max." >&2
@@ -82,7 +81,9 @@ while IFS=$'\t' read -r path max policy note; do
 done < "$TSV"
 
 # Rule 4: every unlisted src .ts file (non-test, non-generated) obeys the cap.
+src_files=0
 while IFS= read -r f; do
+  src_files=$((src_files + 1))
   case " $listed_paths " in *" $f "*) continue ;; esac
   lines=$(wc -l < "$f" | tr -d ' ')
   if [ "$lines" -gt "$NEWFILE_CAP" ]; then
@@ -94,6 +95,13 @@ done < <(find src -name '*.ts' -not -name '*.generated.ts' -not -name '*.test.ts
 
 if [ "$fail" -ne 0 ]; then
   exit 1
+fi
+
+# Nothing to measure: no src/ source file and no TSV row (a stale row already
+# failed above). The runner counts this marker as a skip, not a pass.
+if [ "$src_files" -eq 0 ] && [ -z "$listed_paths" ]; then
+  echo "GBRAIN_CHECK_SKIPPED: no source files under src/ and no rows in $TSV"
+  exit 0
 fi
 
 echo "OK: module sizes within committed ceilings ($TSV; new-file cap $NEWFILE_CAP)."

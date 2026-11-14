@@ -6,13 +6,12 @@
 # "Community PR wave process"). It is NOT a proof of safety — it is a fast net
 # that surfaces the shapes worth a human look: newly-introduced outbound
 # endpoints, obfuscation/eval, new process spawns, new env reads, dependency
-# changes, secrets (gitleaks with the test/skills allowlist STRIPPED), and any
-# change to the committed admin bundle.
+# changes and secrets (gitleaks with the test/skills allowlist STRIPPED).
 #
 # Usage:
 #   scripts/wave-security-scan.sh <base>..<head>     # explicit range
 #   scripts/wave-security-scan.sh <base> <head>      # two refs
-#   scripts/wave-security-scan.sh                    # defaults to origin/master..HEAD
+#   scripts/wave-security-scan.sh                    # defaults to origin/main..HEAD
 #   scripts/wave-security-scan.sh --json <range>     # machine-readable summary
 #
 # Exit code: 0 = nothing high-signal; 1 = high-signal hit(s) worth review;
@@ -43,7 +42,7 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
 fi
 # Operate on the CALLER's repo, but ROOTED at its top level. Without this, a run
 # from a subdirectory would scope every cwd-relative pathspec (`-- .`, root
-# manifests, `admin/dist`) to the subtree and silently report a clean gate.
+# manifests) to the subtree and silently report a clean gate.
 _TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "wave-security-scan: cannot resolve repo top level" >&2; exit 2; }
 cd "$_TOPLEVEL"
 # python3 does the regex/JSON work; without it the checks can't run and set -e
@@ -55,8 +54,8 @@ fi
 
 RANGE=""
 if [ "${#ARGS[@]}" -eq 0 ]; then
-  if git rev-parse --verify -q origin/master >/dev/null; then
-    RANGE="origin/master..HEAD"
+  if git rev-parse --verify -q origin/main >/dev/null; then
+    RANGE="origin/main..HEAD"
   else
     RANGE="HEAD~1..HEAD"
   fi
@@ -86,17 +85,15 @@ if [ "$COMMIT_COUNT" -eq 0 ]; then
   echo "wave-security-scan: empty range ($RANGE) — nothing to scan" >&2
   if [ "$JSON" -eq 1 ]; then
     # Same schema as the main --json path (zero/empty values), safely encoded.
-    python3 -c 'import json,sys; print(json.dumps({"range": sys.argv[1], "commits": 0, "checks": {}, "alarm": 0, "dependency_changed": False, "admin_dist_changed": False, "gitleaks_hits": "n/a"}))' "$RANGE"
+    python3 -c 'import json,sys; print(json.dumps({"range": sys.argv[1], "commits": 0, "checks": {}, "alarm": 0, "dependency_changed": False, "gitleaks_hits": "n/a"}))' "$RANGE"
   fi
   exit 0
 fi
 
 # Generated / minified / vendored artifacts: excluded from the CONTENT greps
-# (they trip every obfuscation heuristic and drown real signal), but admin/dist
-# changes are still surfaced separately below (that is a real threat artifact).
+# (they trip every obfuscation heuristic and drown real signal).
 is_scannable() {
   case "$1" in
-    admin/dist/*|*/admin/dist/*) return 1 ;;
     llms.txt|llms-full.txt) return 1 ;;
     *.snapshot|*.snap|*.tar|*.tgz|*.wasm|*.png|*.jpg|*.jpeg|*.gif|*.pdf|*.ico) return 1 ;;
     bun.lock|*/bun.lock|package-lock.json|yarn.lock) return 1 ;;
@@ -138,10 +135,9 @@ def is_code(f):
     return f.endswith(CODE_EXT)
 def is_test(f):
     return f.startswith('test/') or '/test/' in f or f.startswith('skills/')
-# Execution-reachable source: src/scripts + admin/src (the release job now builds
-# and embeds admin/src, so its spawns/env reads matter too).
+# Execution-reachable source: the src/ and scripts/ trees.
 def is_exec_source(f):
-    return f.startswith(('src/', 'scripts/', 'admin/src/'))
+    return f.startswith(('src/', 'scripts/'))
 def is_comment(f, c):
     # Only suppress lines that genuinely can't execute. Do NOT over-broaden:
     # a leading `#` is a comment only in shell (in JS/TS it's a private field);
@@ -191,13 +187,9 @@ for k, hits in results.items():
 json.dump({'checks': summary, 'alarm': alarm_total}, open(tmp + '/checks.json', 'w'))
 PY
 
-# --- Dependency diff (root AND admin — the release job installs admin deps too) ---
+# --- Dependency diff ---
 DEP_CHANGED=0
-if ! git diff --quiet "$RANGE" -- package.json bun.lock admin/package.json admin/bun.lock 2>/dev/null; then DEP_CHANGED=1; fi
-
-# --- Admin bundle change (WS1 threat artifact — always flag for manual review) ---
-ADMIN_DIST_CHANGED=0
-if git diff --name-only "$RANGE" -- 'admin/dist' 2>/dev/null | grep -q .; then ADMIN_DIST_CHANGED=1; fi
+if ! git diff --quiet "$RANGE" -- package.json bun.lock 2>/dev/null; then DEP_CHANGED=1; fi
 
 # --- gitleaks with the test/skills allowlist STRIPPED (temp config; never edits repo .gitleaks.toml) ---
 # Fail-closed lane: this script's exit code is the RELEASING.md step-5 gate, so a
@@ -229,26 +221,25 @@ LEAK_SIGNAL=0
 if [ "$GITLEAKS_HITS" != "n/a" ] && [ "$GITLEAKS_HITS" != "0" ] && [ "$GITLEAKS_HITS" != "?" ]; then LEAK_SIGNAL=$GITLEAKS_HITS; fi
 
 # Compute the gate result up front so --json carries it (a machine consumer must
-# not read alarm:0 and conclude "clean" while the process exits 1 on an
-# admin/dist change, a gitleaks hit, or a broken secrets lane).
+# not read alarm:0 and conclude "clean" while the process exits 1 on a
+# gitleaks hit or a broken secrets lane).
 GATE_EXIT=0
-if [ "$ALARM" -gt 0 ] || [ "$LEAK_SIGNAL" -gt 0 ] || [ "$ADMIN_DIST_CHANGED" = 1 ] || [ "$LEAK_LANE_BROKEN" = 1 ]; then
+if [ "$ALARM" -gt 0 ] || [ "$LEAK_SIGNAL" -gt 0 ] || [ "$LEAK_LANE_BROKEN" = 1 ]; then
   GATE_EXIT=1
 fi
 
 if [ "$JSON" -eq 1 ]; then
-  python3 - "$TMP/checks.json" "$RANGE" "$COMMIT_COUNT" "$DEP_CHANGED" "$ADMIN_DIST_CHANGED" "$GITLEAKS_HITS" "$GATE_EXIT" "$LEAK_LANE_BROKEN" <<'PY'
+  python3 - "$TMP/checks.json" "$RANGE" "$COMMIT_COUNT" "$DEP_CHANGED" "$GITLEAKS_HITS" "$GATE_EXIT" "$LEAK_LANE_BROKEN" <<'PY'
 import json, sys
 checks = json.load(open(sys.argv[1]))
 out = {
   'range': sys.argv[2], 'commits': int(sys.argv[3]),
   'checks': checks['checks'], 'alarm': checks['alarm'],
   'dependency_changed': sys.argv[4] == '1',
-  'admin_dist_changed': sys.argv[5] == '1',
-  'gitleaks_hits': sys.argv[6],
-  'gitleaks_lane_broken': sys.argv[8] == '1',
-  'exit_code': int(sys.argv[7]),
-  'gate': 'review' if sys.argv[7] == '1' else 'clean',
+  'gitleaks_hits': sys.argv[5],
+  'gitleaks_lane_broken': sys.argv[7] == '1',
+  'exit_code': int(sys.argv[6]),
+  'gate': 'review' if sys.argv[6] == '1' else 'clean',
 }
 print(json.dumps(out))
 PY
@@ -259,7 +250,7 @@ else
   python3 - "$TMP/checks.json" <<'PY'
 import json, sys
 c = json.load(open(sys.argv[1]))['checks']
-labels = {'obfuscation':'obfuscation / eval (code)','outbound_url':'new outbound URLs/hosts','new_spawn_exec':'new spawn/exec (src/scripts)','new_env_read':'new env reads (src)'}
+labels = {'obfuscation':'obfuscation / eval (code)','outbound_url':'new outbound URLs/hosts','new_spawn_exec':'new spawn/exec (src/ + scripts/)','new_env_read':'new env reads (src)'}
 for k, lab in labels.items():
     s = c[k]
     tag = 'ALARM' if s['alarm'] else 'info '
@@ -269,7 +260,6 @@ for k, lab in labels.items():
         print(f"          {f}: {snip[:100]}")
 PY
   echo "  [info ] dependency change (package.json/bun.lock): $([ "$DEP_CHANGED" = 1 ] && echo YES || echo no)"
-  echo "  [ALARM] admin/dist change (bundle-backdoor artifact):  $([ "$ADMIN_DIST_CHANGED" = 1 ] && echo 'YES <-- REVIEW' || echo no)"
   echo "  [ALARM] gitleaks (test/skills allowlist stripped):     $GITLEAKS_HITS"
   echo "-------------------------------------------------------------"
 fi

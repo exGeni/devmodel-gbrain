@@ -14,7 +14,6 @@
         "@aws-sdk/client-s3": "^3.1028.0",
         "@aws-sdk/s3-request-presigner": "3.1028.0",
         "@dqbd/tiktoken": "^1.0.22",
-        "@electric-sql/pglite": "0.4.3",
         "@jsquash/avif": "^2.1.1",
         "@jsquash/png": "^3.1.1",
         "@modelcontextprotocol/sdk": "1.32.1",
@@ -50,9 +49,6 @@
       },
     },
   },
-  "trustedDependencies": [
-    "@electric-sql/pglite",
-  ],
   "overrides": {
     "@ai-sdk/provider-utils": "4.0.56",
     "@aws-sdk/util-format-url": "3.972.9",
@@ -171,8 +167,6 @@
     "@aws/lambda-invoke-store": ["@aws/lambda-invoke-store@0.2.4", "", {}, "sha512-iY8yvjE0y651BixKNPgmv1WrQc+GZ142sb0z4gYnChDDY2YqI4P/jsSopBWrKfAt7LOJAkOXt7rC/hms+WclQQ=="],
 
     "@dqbd/tiktoken": ["@dqbd/tiktoken@1.0.22", "", {}, "sha512-RYhO8xeHkMNX5Ixqf4M1Ve3siCYJY/dI0yLnlX4M4oIEDOvjMIQ+E+3OUpAaZcWTaMtQJzGcDAghYfllpx3i/w=="],
-
-    "@electric-sql/pglite": ["@electric-sql/pglite@0.4.3", "", {}, "sha512-ichuWTgtd4mOM1G4SpyGJa5trT03lWbMypDV0fUXUCXg5hiHqVAz/bZyV68NqmkLB7WcYmj1RMJVSp8HV/v/ZQ=="],
 
     "@hono/node-server": ["@hono/node-server@2.1.8", "", { "peerDependencies": { "hono": "^4 || ^5.0.0-0" } }, "sha512-jdf7FHh6A1lzjpHHQUgxsg2GeER2vMetnAOfeActzcoli6jamlK+NAwL6Dsr5Fl3BS3tYUQzCdtZjU8Qxv7bEA=="],
 

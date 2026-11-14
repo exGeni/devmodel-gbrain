@@ -108,8 +108,6 @@ done
 # (new guards can't silently skip classification).
 for f in scripts/check-*.sh scripts/check-*.mjs scripts/check-*.ts; do
   base="$(basename "$f")"
-  # The .ts companion of check-engine-dynamic-import is an implementation file.
-  [ "$base" = "check-engine-dynamic-import.ts" ] && continue
   if ! grep -q "^${base}	" "$MANIFEST"; then
     echo "FAIL  $base: no row in $MANIFEST — classify it (scanner|buildfresh|repostate)"
     failures=$((failures + 1))

@@ -33,14 +33,3 @@
 # baseline row matches, and verify reports every grandfathered entry as a new
 # violation on a clean checkout.
 *.tsv text eol=lf
-
-# Native source hashes and prebuilds must survive Windows checkout unchanged.
-native/locks/** text eol=lf
-native/locks/prebuilds/*.node binary
-# Preserve the vendored upstream license byte-for-byte, including indentation.
-native/locks/vendor/node-v22.15.0/LICENSE -whitespace
-scripts/native/** text eol=lf
-
-# Generated schema-migration registry: regenerate (bun run build:schema-migrations),
-# never hand-merge; collapsed in GitHub diffs.
-src/core/schema-migrations/registry.generated.ts linguist-generated=true

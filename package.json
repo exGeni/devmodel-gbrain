@@ -2,56 +2,12 @@
   "name": "gbrain",
   "description": "Postgres-native personal knowledge brain with hybrid RAG search",
   "type": "module",
-  "imports": {
-    "#postgres": {
-      "types": "./vendor/postgres/types/index.d.ts",
-      "require": "./vendor/postgres/cjs/src/index.js",
-      "default": "./vendor/postgres/src/index.js"
-    }
-  },
-  "main": "src/core/index.ts",
-  "bin": {
-    "gbrain": "src/cli.ts"
-  },
-  "exports": {
-    ".": "./src/core/index.ts",
-    "./engine": "./src/core/engine.ts",
-    "./types": "./src/core/types.ts",
-    "./operations": "./src/core/operations.ts",
-    "./minions": "./src/core/minions/index.ts",
-    "./engine-factory": "./src/core/engine-factory.ts",
-    "./engine-open": "./src/core/engine-open.ts",
-    "./pglite-engine": "./src/core/pglite-engine.ts",
-    "./link-extraction": "./src/core/link-extraction.ts",
-    "./import-file": "./src/core/import-file.ts",
-    "./transcription": "./src/core/transcription.ts",
-    "./embedding": "./src/core/embedding.ts",
-    "./config": "./src/core/config.ts",
-    "./markdown": "./src/core/markdown.ts",
-    "./backoff": "./src/core/backoff.ts",
-    "./search/hybrid": "./src/core/search/hybrid.ts",
-    "./search/expansion": "./src/core/search/expansion.ts",
-    "./search/evidence-delivery": "./src/core/search/evidence-delivery.ts",
-    "./eval/longmemeval/reader": "./src/eval/longmemeval/reader.ts",
-    "./think": "./src/core/think/index.ts",
-    "./ai/gateway": "./src/core/ai/gateway.ts",
-    "./ai/invocation-guard": "./src/core/ai/invocation-guard.ts",
-    "./core/model-pricing": "./src/core/model-pricing.ts",
-    "./extract": "./src/commands/extract.ts",
-    "./ingestion": "./src/core/ingestion/index.ts",
-    "./ingestion/test-harness": "./src/core/ingestion/test-harness.ts",
-    "./core/guardrails": "./src/core/guardrails.ts",
-    "./core/skillopt": "./src/core/skillopt/index.ts",
-    "./skill-resolver": "./src/core/skills/resolver/index.ts",
-    "./pglite-lock": "./src/core/pglite-lock.ts",
-    "./version": "./src/version.ts"
-  },
   "scripts": {
     "wave-security-scan": "bash scripts/wave-security-scan.sh",
     "audit:contributors": "bun scripts/contributor-audit.ts",
     "weights:mine": "bun run scripts/mine-shard-weights.ts",
     "test": "bash scripts/run-unit-parallel.sh",
-    "test:full": "bun run verify && bash scripts/run-unit-parallel.sh && bun run test:slow && (if [ -n \"$DATABASE_URL\" ]; then bash scripts/run-e2e.sh; else echo '[test:full] skipped E2E (no DATABASE_URL); run docker-compose -f docker-compose.ci.yml up + bun run test:e2e to include' 1>&2; fi)",
+    "test:full": "bun run verify && bash scripts/run-unit-parallel.sh && bun run test:slow && (if [ -n \"$DATABASE_URL\" ]; then bash scripts/run-e2e.sh; else echo '[test:full] skipped E2E (no DATABASE_URL); set it and run bun run test:e2e to include' 1>&2; fi)",
     "verify": "bash scripts/run-verify-parallel.sh",
     "check:file-url-pathname": "bash scripts/check-file-url-pathname.sh",
     "check:doc-history": "bash scripts/check-key-files-current-state.sh",
@@ -75,7 +31,6 @@
     "check:test-env-opt-ins": "bun scripts/check-test-env-opt-ins.ts",
     "check:weight-coverage": "bun scripts/check-weight-coverage.ts",
     "check:fixture-privacy": "bash scripts/check-fixture-privacy.sh",
-    "publish:clawhub": "clawhub package publish . --family bundle-plugin",
     "check:guard-self-test": "bash scripts/guard-self-test.sh",
     "check:module-size": "bash scripts/check-module-size.sh",
     "check:function-size": "bun scripts/check-function-size.ts",
@@ -84,20 +39,11 @@
     "check:shared-tree-git": "bash scripts/check-shared-tree-git.sh",
     "check:bash32": "bash scripts/check-bash32.sh",
     "check:changelog-headings": "bun scripts/check-changelog-headings.ts",
-    "check:compile-autoload": "bash scripts/check-compile-autoload.sh",
     "check:structural-manifest": "bash scripts/check-structural-manifest.sh",
     "regen:all": "bun scripts/regen-all.ts",
     "check:regen-all": "bun scripts/regen-all.ts --check",
     "check:orphan-modules": "node scripts/check-orphan-modules.mjs",
     "check:test-placeholders": "node scripts/check-test-placeholders.mjs"
-  },
-  "openclaw": {
-    "compat": {
-      "pluginApi": ">=2026.4.0"
-    },
-    "extensions": [
-      "./src/openclaw-context-engine.ts"
-    ]
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.125",
@@ -109,7 +55,6 @@
     "@aws-sdk/client-s3": "^3.1028.0",
     "@aws-sdk/s3-request-presigner": "3.1028.0",
     "@dqbd/tiktoken": "^1.0.22",
-    "@electric-sql/pglite": "0.4.3",
     "@jsquash/avif": "^2.1.1",
     "@jsquash/png": "^3.1.1",
     "@modelcontextprotocol/sdk": "1.32.1",
@@ -143,9 +88,6 @@
     "fast-check": "^4.8.0",
     "typescript": "^5.6.0"
   },
-  "trustedDependencies": [
-    "@electric-sql/pglite"
-  ],
   "engines": {
     "bun": ">=1.4.4"
   },

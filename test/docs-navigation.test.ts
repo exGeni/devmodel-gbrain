@@ -6,19 +6,8 @@ import { marked } from 'marked';
 const root = resolve(import.meta.dir, '..');
 const subsystemDir = 'docs/architecture/key-files';
 const subsystems = readdirSync(join(root, subsystemDir)).filter(name => name.endsWith('.md'));
-const guides = [
-  'brain-vs-memory', 'memory-boundaries', 'hosted-harness-access', 'in-agent-setup',
-  'capabilities', 'data-ingestion', 'troubleshooting', 'skill-reference', 'grok-bot', 'muse',
-];
 const documents = [
-  'README.md', 'CLAUDE.md', 'AGENTS.md', 'INSTALL_FOR_AGENTS.md', 'docs/INSTALL.md',
-  'docs/architecture/KEY_FILES.md', 'docs/tutorials/connect-coding-agent.md',
-  'docs/operations/backfill-pacing.md', 'docs/contributing/version-recovery.md',
-  'docs/guides/search-modes.md', 'docs/architecture/RETRIEVAL.md',
-  'docs/architecture/topologies.md', 'docs/guides/concurrent-writes.md',
-  'docs/protocol/DEEP_RESEARCH_IDS_v1.md', 'docs/mcp/CHATGPT.md',
-  'docs/mcp/HERMES-CLI-PIN.md', 'docs/mcp/OPENCODE-CLI-PIN.md',
-  ...guides.map(name => `docs/guides/${name}.md`),
+  'CLAUDE.md', 'AGENTS.md', 'docs/architecture/KEY_FILES.md', 'docs/contributing/version-recovery.md',
   ...subsystems.map(name => `${subsystemDir}/${name}`),
 ];
 

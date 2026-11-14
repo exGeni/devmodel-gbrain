@@ -3,7 +3,7 @@
  * directory inside the source tree. test-reads-source-smell walks test/ in the same lane, and import-file.test.ts
  * creating and removing test/.tmp-import-test mid-walk failed it with ENOENT.
  *
- * Same harness as check-test-isolation-r7.test.ts: the lint runs in a tmpdir on hand-written fake files.
+ * The lint runs in a tmpdir on hand-written fake files.
  */
 
 import { describe, it, expect } from 'bun:test';

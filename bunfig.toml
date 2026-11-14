@@ -1,7 +1,7 @@
 [test]
-# PGLite WASM cold start + initSchema() runs ~5–20s on loaded machines.
-# Default 5s is too short for those tests' beforeAll hooks. 60s is the
-# empirical ceiling we observed for the slowest cold-init paths.
+# Slow cold-start setup runs ~5–20s on loaded machines. Default 5s is too
+# short for those tests' beforeAll hooks. 60s is the empirical ceiling we
+# observed for the slowest cold-init paths.
 #
 # Bun (verified on 1.4.2) does not apply this value: a plain `bun test`
 # still times out at 5s. Every runner passes `--timeout=60000` itself
@@ -9,12 +9,6 @@
 # scripts/regen-all.ts); pass it yourself when running `bun test` directly.
 timeout = 60_000
 
-# v0.37 fix wave: pin gateway defaults to legacy OpenAI/1536 BEFORE any
-# test runs, so the 20+ test files with hardcoded 1536-d Float32Array
-# fixtures still match the schema. The production default is Voyage/1024;
-# tests that want the new default call configureGateway() explicitly in
-# their own beforeAll.
-#
 # #2823: redirect GBRAIN_AUDIT_DIR to a per-run scratch dir BEFORE any test
 # runs, so audit-emitting code paths (content-sanity, shell-audit, etc.)
 # can't leak fixture events into the operator's real ~/.gbrain/audit/. See
@@ -36,8 +30,8 @@ timeout = 60_000
 # after the database-url guard so every later preload — especially
 # legacy-embedding-preload's `env: {...process.env}` snapshot — sees the
 # scrubbed environment. Test-machinery vars the runners/CI export
-# (GBRAIN_TEST_*, GBRAIN_CI_*, GBRAIN_E2E_*, GBRAIN_REAL_*, GBRAIN_HOME,
-# GBRAIN_DATABASE_URL, snapshot/bin fast paths) survive via keep-lists. See
+# (GBRAIN_TEST_*, GBRAIN_CI_*, GBRAIN_E2E_*, GBRAIN_HOME,
+# GBRAIN_DATABASE_URL) survive via keep-lists. See
 # test/helpers/operator-env-preload.ts.
 #
 # gbrain-home-preload: point GBRAIN_HOME at per-run scratch so tests never

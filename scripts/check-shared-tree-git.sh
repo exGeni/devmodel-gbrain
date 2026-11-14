@@ -23,7 +23,6 @@
 # spans are checked; a .sh file is checked whole.
 #
 # Not scanned:
-#   - docs/guides/error-codes.md: generated from src/core/error-registry.ts.
 #   - docs/RELEASING.md, docs/TESTING.md, docs/contributing/ (and
 #     CONTRIBUTING.md, CHANGELOG.md, TODOS.md at the root, which are outside
 #     the scanned set): they describe maintainers working in the gbrain SOURCE
@@ -55,7 +54,7 @@ set -uo pipefail
 ROOT="${GBRAIN_GUARD_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 cd "$ROOT" || exit 2
 
-EXEMPT='^(CHANGELOG\.md|TODOS\.md|CONTRIBUTING\.md|docs/guides/error-codes\.md|docs/RELEASING\.md|docs/TESTING\.md|docs/contributing/|docs/(designs|plans|proposals|research|incidents|issues|test-audit|superpowers)/)'
+EXEMPT='^(CHANGELOG\.md|TODOS\.md|CONTRIBUTING\.md|docs/RELEASING\.md|docs/TESTING\.md|docs/contributing/|docs/(designs|plans|proposals|research|incidents|issues|test-audit|superpowers)/)'
 SEE='docs/guides/shared-checkout-git.md'
 
 LIST="$(mktemp -t gbrain-shared-tree-git-XXXXXX)" || exit 2

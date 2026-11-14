@@ -43,14 +43,14 @@ describe("run-verify-parallel.sh — CLI contract", () => {
     }
   });
 
-  it("includes the load-bearing privacy + jsonb + typecheck checks", () => {
+  it("includes the load-bearing privacy + retired-phrases + typecheck + guard self-test checks", () => {
     const r = spawnSync("bash", [SCRIPT, "--dry-list"], { encoding: "utf8" });
     expect(r.status).toBe(0);
     const set = new Set(r.stdout.trim().split("\n"));
     expect(set.has("check:privacy")).toBe(true);
-    expect(set.has("check:jsonb")).toBe(true);
+    expect(set.has("check:retired-phrases")).toBe(true);
     expect(set.has("typecheck")).toBe(true);
-    expect(set.has("check:operations-filter-bypass")).toBe(true);
+    expect(set.has("check:guard-self-test")).toBe(true);
   });
 
   it("unknown arg exits 2 with usage error", () => {
@@ -83,7 +83,7 @@ describe("guard registration ⇒ execution coverage", () => {
       .split("\n")
       .filter((l) => l.trim() && !l.startsWith("#"));
     const guards = manifestLines.map((l) => l.split("\t")[0]!).filter(Boolean);
-    expect(guards.length).toBeGreaterThan(30);
+    expect(guards.length).toBeGreaterThan(15);
 
     const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
       scripts: Record<string, string>;
@@ -315,18 +315,18 @@ exit 0
       const receipts = join(root, "receipts");
       const r = spawnSync("bash", [join(root, "scripts", "run-verify-parallel.sh")], {
         encoding: "utf8",
-        env: { ...env, STUB_SKIP_CHECK: "check:grok-pin", STUB_FAIL_CHECK: "check:jsonb", GBRAIN_TEST_RECEIPT_DIR: receipts },
+        env: { ...env, STUB_SKIP_CHECK: "check:module-size", STUB_FAIL_CHECK: "check:function-size", GBRAIN_TEST_RECEIPT_DIR: receipts },
       });
       expect(r.status).toBe(1);
       expect(r.stderr).toMatch(/fail=1 skip=1\b/);
-      expect(r.stderr).toContain("check:grok-pin: subject absent in this checkout");
+      expect(r.stderr).toContain("check:module-size: subject absent in this checkout");
       const outcomes = readFileSync(join(root, "logs", "outcomes.tsv"), "utf8");
-      expect(outcomes).toContain("check:grok-pin\tskip\t0\tsubject absent in this checkout");
-      expect(outcomes).toContain("check:jsonb\tfail\t7\t");
+      expect(outcomes).toContain("check:module-size\tskip\t0\tsubject absent in this checkout");
+      expect(outcomes).toContain("check:function-size\tfail\t7\t");
       expect(outcomes).toContain("check:privacy\tpass\t0\t");
       const junit = readFileSync(join(receipts, "verify--all--primary.junit.xml"), "utf8");
-      expect(junit).toContain('<testcase name="check:grok-pin" classname="verify" file="verify"><skipped message="subject absent in this checkout" /></testcase>');
-      expect(junit).toContain('<testcase name="check:jsonb" classname="verify" file="verify"><failure message="fail rc=7" /></testcase>');
+      expect(junit).toContain('<testcase name="check:module-size" classname="verify" file="verify"><skipped message="subject absent in this checkout" /></testcase>');
+      expect(junit).toContain('<testcase name="check:function-size" classname="verify" file="verify"><failure message="fail rc=7" /></testcase>');
       expect(readFileSync(join(receipts, "verify--all--primary.receipt"), "utf8")).toContain("exit=1");
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -339,12 +339,12 @@ exit 0
     try {
       const r = spawnSync("bash", [join(root, "scripts", "run-verify-parallel.sh")], {
         encoding: "utf8",
-        env: { ...defaults, STUB_FAIL_CHECK: "check:jsonb" },
+        env: { ...defaults, STUB_FAIL_CHECK: "check:function-size" },
       });
       expect(r.status).toBe(1);
       const kept = /per-check logs kept in (\S+)/.exec(r.stderr)?.[1];
       expect(kept).toBeDefined();
-      expect(readFileSync(join(kept!, "check_jsonb.log"), "utf8")).toContain("stub check failing: check:jsonb");
+      expect(readFileSync(join(kept!, "check_function-size.log"), "utf8")).toContain("stub check failing: check:function-size");
       rmSync(kept!, { recursive: true, force: true });
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -384,13 +384,10 @@ exit 0
     }
   }, 60_000);
 
-  it("typecheck runs on every platform: only the macOS 26 workflow raises the per-check cap, Linux keeps 120 s (#6056)", () => {
+  it("typecheck runs on every platform: no workflow raises the per-check cap, every runner keeps 120 s (#6056)", () => {
     const workflows = readdirSync(".github/workflows").filter((f) => /\.ya?ml$/.test(f));
     const read = (f: string) => readFileSync(join(".github/workflows", f), "utf8");
-    expect(workflows.filter((f) => read(f).includes("GBRAIN_VERIFY_TIMEOUT"))).toEqual(["macos-validation.yml"]);
-    const mac = read("macos-validation.yml");
-    expect(mac).toMatch(/^\s+runs-on: macos-26$/m);
-    expect(mac).toMatch(/^\s+GBRAIN_VERIFY_TIMEOUT: '240'$/m);
+    expect(workflows.filter((f) => read(f).includes("GBRAIN_VERIFY_TIMEOUT"))).toEqual([]);
     for (const f of workflows) expect(read(f)).not.toContain("TYPECHECK_COVERED_BY");
     expect(readFileSync(SCRIPT, "utf8")).not.toContain("TYPECHECK_COVERED_BY");
     expect(readFileSync(SCRIPT, "utf8")).toContain('TIMEOUT="${GBRAIN_VERIFY_TIMEOUT:-120}"');
@@ -398,7 +395,6 @@ exit 0
     const verifyStart = testYml.indexOf("\n  verify:\n");
     const verifyJob = testYml.slice(verifyStart, testYml.indexOf("\n  serial-tests:\n", verifyStart));
     expect(verifyJob).toContain("- run: bun run verify");
-    expect(verifyJob).toMatch(/runs-on: ubicloud-standard-\d+-ubuntu/);
     const dry = spawnSync("bash", [SCRIPT, "--dry-list"], { encoding: "utf8" }).stdout.split("\n");
     expect(dry).toContain("typecheck");
     const pkgScripts = (JSON.parse(readFileSync("package.json", "utf8")) as { scripts: Record<string, string> }).scripts;
@@ -410,13 +406,13 @@ exit 0
     try {
       const r = spawnSync("bash", [join(root, "scripts", "run-verify-parallel.sh")], {
         encoding: "utf8",
-        env: { ...env, STUB_FAIL_CHECK: "check:jsonb" },
+        env: { ...env, STUB_FAIL_CHECK: "check:function-size" },
       });
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain("--- check:jsonb (rc=7)");
-      expect(r.stderr).toContain("stub check failing: check:jsonb");
+      expect(r.stderr).toContain("--- check:function-size (rc=7)");
+      expect(r.stderr).toContain("stub check failing: check:function-size");
       expect(r.stderr).toMatch(/fail=1\b/);
-      expect(readFileSync(join(root, "logs", "check_jsonb.exit"), "utf8").trim()).toBe("7");
+      expect(readFileSync(join(root, "logs", "check_function-size.exit"), "utf8").trim()).toBe("7");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

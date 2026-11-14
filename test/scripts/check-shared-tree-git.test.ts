@@ -172,8 +172,8 @@ describe('check-shared-tree-git.sh', () => {
     for (const rel of scanned) expect(r.stderr).toContain(`FAIL: ${rel}:1 stash `);
   });
 
-  it('exempts generated error codes, contributor docs about the gbrain repo and historical records', () => {
-    for (const rel of ['docs/guides/error-codes.md', 'docs/RELEASING.md', 'docs/TESTING.md', 'docs/contributing/v.md',
+  it('exempts contributor docs about the gbrain repo and historical records', () => {
+    for (const rel of ['docs/RELEASING.md', 'docs/TESTING.md', 'docs/contributing/v.md',
       'docs/designs/d.md', 'docs/plans/p.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'TODOS.md', 'test/x.md', 'src/x.md']) {
       write(rel, 'Run `git push --force` now.\n');
     }

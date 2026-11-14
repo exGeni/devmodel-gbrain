@@ -8,5 +8,6 @@
   "changelog_fragments": { "dir": "changelog.d" },
   "land": { "merged_checks": ["bun run typecheck", "bun run verify"] },
   "stamp_files": ["VERSION", "package.json", "CHANGELOG.md"],
-  "review_exclude_paths": ["docs/**"]
+  "review_exclude_paths": ["docs/**"],
+  "maintainers": []
 }

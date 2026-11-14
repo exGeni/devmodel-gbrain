@@ -36,10 +36,6 @@ const HISTORICAL = '<!-- repo-paths: historical -->';
 
 /** file -> path -> reason. Paths that live outside this repository. */
 const ALLOWLIST: Record<string, Record<string, string>> = {
-  '.github/workflows/harness-check.yml': {
-    'scripts/gbrain-check.ts': 'a harness-evals script (garrytan/harness-evals), run by the advisory harness-check workflow',
-    'scripts/build-gbrain-image.sh': 'a harness-evals script (garrytan/harness-evals), run by the advisory harness-check workflow',
-  },
   'docs/architecture/key-files/ci-health-and-test-guards.md': {
     'scripts/gbrain-check.ts': 'a harness-evals script (garrytan/harness-evals), run by the advisory harness-check workflow',
   },
@@ -47,48 +43,11 @@ const ALLOWLIST: Record<string, Record<string, string>> = {
     'scripts/gbrain-check.ts': 'a harness-evals script (garrytan/harness-evals), run by the advisory harness-check workflow',
     'scripts/build-gbrain-image.sh': 'a harness-evals script (garrytan/harness-evals), run by the advisory harness-check workflow',
   },
-  'docs/guides/minions-shell-jobs.md': {
-    'scripts/x-garrytan-daily.mjs': 'example shell job running a script in the operator workspace',
-    'scripts/fetch.mjs': 'example shell job running a script in the operator workspace',
-  },
-  'docs/guides/quiet-hours.md': {
-    'scripts/quiet-hours-gate.sh': 'gate script the guide has the operator create in their own workspace',
-  },
-  'docs/guides/multi-source-brains.md': {
-    'scripts/brain-commit-push.sh': 'installed into the brain repo by `gbrain sources harden`',
-  },
   'AGENTS.md': {
-    'scripts/brain-commit-push.sh': 'installed into the brain repo by `gbrain sources harden`',
-  },
-  'INSTALL_FOR_AGENTS.md': {
-    'scripts/brain-commit-push.sh': 'installed into the brain repo by `gbrain sources harden`',
-  },
-  'docs/GBRAIN_RECOMMENDED_SCHEMA.md': {
-    'scripts/brain-commit-push.sh': 'installed into the brain repo by `gbrain sources harden`',
-  },
-  'docs/guides/diligence-ingestion.md': {
-    'scripts/brain-commit-push.sh': 'installed into the brain repo by `gbrain sources harden`',
-  },
-  'docs/guides/live-sync.md': {
     'scripts/brain-commit-push.sh': 'installed into the brain repo by `gbrain sources harden`',
   },
   'docs/guides/shared-checkout-git.md': {
     'scripts/brain-commit-push.sh': 'installed into the brain repo by `gbrain sources harden`',
-  },
-  'docs/architecture/key-files/files-and-sync-1.md': {
-    'scripts/brain-commit-push.sh': 'installed into the brain repo by `gbrain sources harden`',
-  },
-  'docs/architecture/key-files/workspace-push-and-backup.md': {
-    'scripts/brain-commit-push.sh': 'installed into the brain repo by `gbrain sources harden`',
-  },
-  'docs/UPGRADING_DOWNSTREAM_AGENTS.md': {
-    'scripts/validate-frontmatter.mjs': 'downstream agent repo script the upgrade guide tells agents to replace',
-  },
-  'docs/mcp/HERMES-CLI-PIN.md': {
-    'scripts/install.sh': 'the Hermes agent repository installer',
-  },
-  'docs/architecture/key-files/skills.md': {
-    'test/example.test.ts': 'file inside a pack scaffolded by `gbrain skillpack init`',
   },
 };
 
