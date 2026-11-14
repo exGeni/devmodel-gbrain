@@ -41,7 +41,23 @@ describe('check-weight-coverage', () => {
       const r = run(unit, { 'scripts/test-weights.json': weighted }, event);
       expect(r.status, r.stderr).toBe(0);
       expect(r.stdout).toContain('check-weight-coverage: OK');
+      expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
     }
+  });
+
+  test('a tree with no test file in any lane reports a skip, not a pass', () => {
+    const r = run([], {});
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
+    expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: no test files under test/ to weigh');
+    expect(r.stdout).not.toContain('check-weight-coverage: OK');
+  });
+
+  test('an empty tree does not hide a dead weight entry', () => {
+    const r = run([], { 'scripts/test-weights.json': { 'test/deleted.test.ts': 5 } });
+    expect(r.status).toBe(1);
+    expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+    expect(r.stderr).toContain('test/deleted.test.ts');
   });
 
   test('an entry naming a deleted file fails on a pull request and names the fix', () => {

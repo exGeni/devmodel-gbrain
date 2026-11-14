@@ -19,7 +19,8 @@
 #   scripts/check-privacy.sh --help
 #
 # Exit codes:
-#   0  clean
+#   0  clean, or nothing to scan (then it prints `GBRAIN_CHECK_SKIPPED: <reason>`,
+#      which `bun run verify` records as a skip, not a pass)
 #   1  banned name found (or --help printed)
 #   2  git / grep not available
 
@@ -87,7 +88,13 @@ else
   FILES=$(git ls-files 2>/dev/null || true)
 fi
 
+# Nothing to scan: the runner counts this marker as a skip, not a pass.
 if [ -z "$FILES" ]; then
+  if [ "$MODE" = staged ]; then
+    echo "GBRAIN_CHECK_SKIPPED: no staged files to scan"
+  else
+    echo "GBRAIN_CHECK_SKIPPED: git lists no tracked files to scan"
+  fi
   exit 0
 fi
 

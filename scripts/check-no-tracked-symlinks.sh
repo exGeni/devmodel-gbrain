@@ -21,7 +21,9 @@
 # defensible; an absolute one almost never is.
 #
 # Usage: scripts/check-no-tracked-symlinks.sh
-# Exit:  0 when clean, 1 when a tracked symlink is found.
+# Exit:  0 when clean (or when git lists no tracked file: it then prints
+#        `GBRAIN_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a
+#        skip, not a pass), 1 when a tracked symlink is found.
 
 set -euo pipefail
 
@@ -34,7 +36,13 @@ ALLOWLIST=()
 # Git records symlinks with mode 120000. Field 4 of `ls-files -s` is the path
 # (tab-separated from the stage number), so cut on the tab to keep paths with
 # spaces intact.
-found="$(git ls-files -s | awk '$1 == "120000"' | cut -f2- || true)"
+index="$(git ls-files -s || true)"
+# Nothing to check: the runner counts the marker as a skip, not a pass.
+if [ -z "$index" ]; then
+  echo "GBRAIN_CHECK_SKIPPED: git lists no tracked files"
+  exit 0
+fi
+found="$(printf '%s\n' "$index" | awk '$1 == "120000"' | cut -f2- || true)"
 
 if [ -n "$found" ]; then
   filtered="$found"

@@ -38,7 +38,20 @@ describe('check:changelog-headings', () => {
   test('a new entry on top of every master heading passes', () => {
     const root = repo();
     writeFileSync(join(root, 'CHANGELOG.md'), changelog('0.60.323.0', '0.60.322.0', '0.60.321.0', '0.60.46.0'));
-    expect(run(root).code).toBe(0);
+    const r = run(root);
+    expect(r.code).toBe(0);
+    expect(r.out).not.toContain('GBRAIN_CHECK_SKIPPED');
+  });
+
+  test('a base changelog with no release heading reports a skip, not a pass', () => {
+    const root = repo();
+    writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n\nNothing released yet.\n');
+    git(root, 'commit', '-q', '-am', 'drop the releases');
+    git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+    const r = run(root);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('GBRAIN_CHECK_SKIPPED: origin/main:CHANGELOG.md has no release headings');
+    expect(r.out).not.toContain('check-changelog-headings: ok');
   });
 
   test('a truncated changelog (the old entries cut off) is refused with a fix line', () => {

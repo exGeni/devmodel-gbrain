@@ -14,6 +14,9 @@
  *     on the scheduled run (GITHUB_EVENT_NAME=schedule), where nightly-watch
  *     turns it into an issue. Both print the lane's miner command.
  *
+ * With no test file in any lane it prints `GBRAIN_CHECK_SKIPPED: <reason>` and
+ * exits 0, which `bun run verify` records as a skip, not a pass.
+ *
  * Seam: GBRAIN_GUARD_ROOT (fixture tree root); there `*.test.fixture.ts` files
  * count as their `*.test.ts` names so fixtures stay out of bun's discovery.
  */
@@ -86,5 +89,10 @@ if (warnings.length) {
 if (failures.length) {
   console.error(`check-weight-coverage: FAIL\n${failures.join('\n')}\n${why}\nDocs: ${DOCS}`);
   process.exit(1);
+}
+if (LANES.every(l => l.files.length === 0)) {
+  // Nothing to weigh: the runner counts the marker as a skip, not a pass.
+  console.log('GBRAIN_CHECK_SKIPPED: no test files under test/ to weigh');
+  process.exit(0);
 }
 console.log(`check-weight-coverage: OK (${LANES.map(l => `${l.lane} ${l.files.length} files`).join(', ')}; no dead entries)`);

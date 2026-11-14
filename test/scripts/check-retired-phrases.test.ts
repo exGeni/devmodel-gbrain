@@ -56,6 +56,16 @@ describe('check-retired-phrases.sh', () => {
     const r = run();
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('✓ retired phrases');
+    expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+  });
+
+  it('reports a skip, not a pass, when none of the scanned paths exists', () => {
+    write('CHANGELOG.md', 'the MIGRATIONS array\n');
+    const r = run();
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('✓ retired phrases: nothing to scan');
+    expect(r.stdout).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
+    expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: none of the scanned docs, scripts or package.json exist');
   });
 
   for (const [sentence, match] of RETIRED) {

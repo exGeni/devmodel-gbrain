@@ -3,7 +3,7 @@
 # Fix misclassifications in the classifier, never by hand-editing rows.
 # Columns: file	suite	cases	detector
 test/docs-navigation.test.ts	primary documentation navigation	2	readFileSync
-test/scripts/check-dynamic-ci.test.ts	check-dynamic-ci.ts	1	exec-scan,readFileSync
+test/scripts/check-dynamic-ci.test.ts	check-dynamic-ci.ts	2	exec-scan,readFileSync
 test/scripts/check-function-size.test.ts	check-function-size.ts rules	13	readFileSync
 test/scripts/ci-executed-counts.test.ts	CLI	2	readFileSync
 test/scripts/ci-gates.test.ts	CI execution evidence	7	readFileSync
@@ -33,5 +33,5 @@ test/scripts/serial-files.test.ts	scripts/serial-files.tsv (serial lane manifest
 test/scripts/stress-gate.test.ts	docs anchors	1	readFileSync
 test/scripts/stress-gate.test.ts	gate plan	6	readFileSync
 test/scripts/stress-plan.test.ts	shards	5	readFileSync
-test/scripts/test-env-opt-ins-guard.test.ts	check-test-env-opt-ins	3	readFileSync
+test/scripts/test-env-opt-ins-guard.test.ts	check-test-env-opt-ins	4	readFileSync
 test/scripts/test-shard.slow.test.ts	test-shard.sh — LPT balance contract	5	readFileSync

@@ -49,4 +49,9 @@ if [ -n "$missing" ]; then
   exit 1
 fi
 
+# Nothing to check: the runner counts the marker as a skip, not a pass.
+if [ "$total" -eq 0 ]; then
+  echo "GBRAIN_CHECK_SKIPPED: no non-empty tracked text files (src/, test/, gbrain.yml, *.md) to check"
+  exit 0
+fi
 echo "trailing-newline check: ok ($total files)"

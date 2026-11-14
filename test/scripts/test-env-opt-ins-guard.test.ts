@@ -7,7 +7,8 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const REPO = resolve(import.meta.dir, '..', '..');
@@ -41,11 +42,29 @@ describe('check-test-env-opt-ins', () => {
     const r = run(join(FIXTURES, 'good'));
     expect(r.stderr).toBe('');
     expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+  });
+
+  test('a tree with no TypeScript file under test/ or evals/ reports a skip, not a pass', () => {
+    const root = mkdtempSync(join(tmpdir(), 'gbrain-env-opt-ins-'));
+    try {
+      for (const setup of [() => {}, () => mkdirSync(join(root, 'test'), { recursive: true }), () => writeFileSync(join(root, 'test', 'notes.md'), 'GBRAIN_X\n')]) {
+        setup();
+        const r = run(root);
+        expect(r.status, r.stderr).toBe(0);
+        expect(r.stdout).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
+        expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: no TypeScript files under test/ or evals/ to scan');
+        expect(r.stdout).not.toContain('✓ test env opt-ins');
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test('the real tree is clean', () => {
     const r = run();
     expect(r.stderr).toBe('');
     expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
   });
 });

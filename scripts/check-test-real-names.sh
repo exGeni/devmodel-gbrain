@@ -20,7 +20,9 @@
 # for this guard.
 #
 # Usage: scripts/check-test-real-names.sh
-# Exit:  0 clean, 1 banned reference found, 2 setup error (rg + grep missing).
+# Exit:  0 clean (or nothing to scan: it then prints `GBRAIN_CHECK_SKIPPED:
+#        <reason>`, which `bun run verify` records as a skip, not a pass),
+#        1 banned reference found, 2 setup error (rg + grep missing).
 
 set -euo pipefail
 
@@ -81,16 +83,25 @@ IFS='|' eval 'PATTERN="${PATTERN_PARTS[*]}"'
 # Find tool.
 # evals/ joins the scan: its *.test.ts files are collected into the CI
 # matrix (scripts/test-shard.sh) and carry the same privacy bar.
+# SUBJECT_NAMES is what the chosen tool scans, so an empty tree is told apart
+# from a clean one below.
 if command -v rg >/dev/null 2>&1; then
   matches="$(rg -niH --no-heading -t ts "$PATTERN" test evals 2>/dev/null || true)"
+  SUBJECT_NAMES=(-name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts')
 elif command -v grep >/dev/null 2>&1; then
   matches="$(grep -rniE --include='*.test.ts' "$PATTERN" test evals 2>/dev/null || true)"
+  SUBJECT_NAMES=(-name '*.test.ts')
 else
   echo "check-test-real-names: ERROR: neither rg nor grep available." >&2
   exit 2
 fi
 
 if [ -z "$matches" ]; then
+  # No match is a pass only when something was scanned; the runner counts the
+  # marker as a skip, not a pass.
+  if [ -z "$(find test evals -type f \( "${SUBJECT_NAMES[@]}" \) 2>/dev/null | head -n 1 || true)" ]; then
+    echo "GBRAIN_CHECK_SKIPPED: no TypeScript files under test/ or evals/ to scan"
+  fi
   exit 0
 fi
 

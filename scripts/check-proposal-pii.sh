@@ -27,7 +27,8 @@
 #   scripts/check-proposal-pii.sh --help
 #
 # Exit codes:
-#   0  clean
+#   0  clean, or nothing to lint (then it prints `GBRAIN_CHECK_SKIPPED: <reason>`,
+#      which `bun run verify` records as a skip, not a pass)
 #   1  PII pattern found
 #   2  setup error
 
@@ -107,7 +108,9 @@ for arg in "$@"; do
 done
 
 if [ ! -d "$PROPOSALS_DIR" ]; then
-  # No proposals dir yet — nothing to lint. Not a failure.
+  # No proposals dir yet — nothing to lint. Not a failure; the runner counts
+  # the marker as a skip, not a pass.
+  echo "GBRAIN_CHECK_SKIPPED: no docs/proposals/ directory to lint"
   exit 0
 fi
 
@@ -126,6 +129,11 @@ else
 fi
 
 if [ -z "$FILES" ]; then
+  if [ "$MODE" = staged ]; then
+    echo "GBRAIN_CHECK_SKIPPED: no staged files under docs/proposals/ to lint"
+  else
+    echo "GBRAIN_CHECK_SKIPPED: no *.md files under docs/proposals/ to lint"
+  fi
   exit 0
 fi
 

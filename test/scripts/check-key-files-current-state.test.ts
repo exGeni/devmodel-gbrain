@@ -55,6 +55,22 @@ describe("check-key-files-current-state.sh", () => {
     const r = run();
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("ok");
+    expect(r.stdout).not.toContain("GBRAIN_CHECK_SKIPPED");
+  });
+
+  it("reports a skip, not a pass, when none of the docs it reads exists", () => {
+    const r = run();
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
+    expect(r.stdout).not.toContain("ok (reference docs");
+  });
+
+  it("does not skip when a single doc it reads exists", () => {
+    writeDoc("CLAUDE.md", "# CLAUDE.md\n\norientation only\n");
+    const r = run();
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("ok");
+    expect(r.stdout).not.toContain("GBRAIN_CHECK_SKIPPED");
   });
 
   it("FAILS when a reference doc carries a bolded release-clause marker", () => {

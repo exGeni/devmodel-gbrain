@@ -28,6 +28,10 @@
 # carries audit evidence that quotes eval data.
 #
 # Seam: GBRAIN_GUARD_ROOT (fixture tree root, used by scripts/guard-self-test.sh).
+#
+# Nothing to scan (no such path, or no file in them): prints
+# `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0, which `bun run verify` records
+# as a skip, not a pass.
 
 set -euo pipefail
 
@@ -54,8 +58,15 @@ EXISTING_SCOPED=()
 for d in "${SCOPED_DIRS[@]}"; do
   [ -d "$d" ] && EXISTING_SCOPED+=("$d")
 done
+# Nothing to scan: the runner counts the marker as a skip, not a pass.
 if [ ${#EXISTING_DIRS[@]} -eq 0 ] && [ ${#EXISTING_SCOPED[@]} -eq 0 ]; then
   echo "[check-fixture-privacy] no fixture dirs exist; nothing to check"
+  echo "GBRAIN_CHECK_SKIPPED: none of the fixture, eval or audit paths exist"
+  exit 0
+fi
+if [ -z "$(find ${EXISTING_DIRS[@]+"${EXISTING_DIRS[@]}"} ${EXISTING_SCOPED[@]+"${EXISTING_SCOPED[@]}"} -type f 2>/dev/null | head -n 1 || true)" ]; then
+  echo "[check-fixture-privacy] fixture dirs hold no files; nothing to check"
+  echo "GBRAIN_CHECK_SKIPPED: the fixture, eval and audit paths hold no files"
   exit 0
 fi
 

@@ -153,4 +153,9 @@ if [ $violations -gt 0 ]; then
   exit 1
 fi
 
+# Nothing to lint: the runner counts the marker as a skip, not a pass.
+if [ "$file_count" -eq 0 ]; then
+  echo "GBRAIN_CHECK_SKIPPED: no non-serial unit test files under $TARGET_DIR${EXTRA_DIRS:+ or $EXTRA_DIRS}"
+  exit 0
+fi
 echo "check-test-isolation: OK ($file_count non-serial unit files scanned)"

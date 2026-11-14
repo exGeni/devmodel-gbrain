@@ -17,6 +17,10 @@
  * The policy (keep-lists, RENAMED map, naming rule) is imported from
  * test/helpers/operator-env-policy.ts, the module the preload applies.
  *
+ * With no TypeScript file under test/ or evals/ it prints
+ * `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0, which `bun run verify` records
+ * as a skip, not a pass.
+ *
  * Seam: GBRAIN_GUARD_ROOT (fixture tree root).
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -203,7 +207,13 @@ function productNames(): Set<string> {
 }
 
 const PRODUCT = productNames();
-const findings = SCAN_DIRS.flatMap(dir => tsFiles(join(ROOT, dir))).flatMap(scanFile);
+const files = SCAN_DIRS.flatMap(dir => tsFiles(join(ROOT, dir)));
+const findings = files.flatMap(scanFile);
+if (files.length === 0) {
+  // Nothing to scan: the runner counts the marker as a skip, not a pass.
+  console.log('GBRAIN_CHECK_SKIPPED: no TypeScript files under test/ or evals/ to scan');
+  process.exit(0);
+}
 if (findings.length === 0) {
   console.log('✓ test env opt-ins: no test gates execution on a GBRAIN_* name the operator-env scrub strips');
   process.exit(0);

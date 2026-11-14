@@ -41,6 +41,37 @@ describe('check-test-placeholders fixtures', () => {
     const { status, out } = run(join(FIXTURES, 'good'));
     expect(status).toBe(0);
     expect(out).toContain('check-test-placeholders: OK (1 test files, 0 allowlisted placeholder site(s))');
+    expect(out).not.toContain('GBRAIN_CHECK_SKIPPED');
+  });
+
+  test('a test/ with no scannable test file reports a skip, not a pass', () => {
+    const noScannableFile: Array<Record<string, string>> = [
+      { 'test/README.md': 'no tests here\n' },
+      { 'test/fixtures/a.test.ts': 'expect(true).toBe(true);\n' },
+    ];
+    for (const files of noScannableFile) {
+      const dir = tree(files);
+      try {
+        const { status, out } = run(dir);
+        expect(status).toBe(0);
+        expect(out).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
+        expect(out).toContain('GBRAIN_CHECK_SKIPPED: no *.test.ts files under test/ to scan');
+        expect(out).not.toContain('check-test-placeholders: OK');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  test('a tree with no test/ is still an infra failure, not a skip', () => {
+    const dir = tree({ 'README.md': 'x\n' });
+    try {
+      const { status, out } = run(dir);
+      expect(status).toBe(2);
+      expect(out).not.toContain('GBRAIN_CHECK_SKIPPED');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

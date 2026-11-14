@@ -17,7 +17,9 @@ import { tmpdir } from 'node:os';
 
 const SCRIPT_PATH = join(import.meta.dir, '..', '..', 'scripts', 'check-proposal-pii.sh');
 
-function runLintIn(content: string | null): { exitCode: number; stderr: string } {
+const SKIP_LINE = /^GBRAIN_CHECK_SKIPPED: \S/m;
+
+function runLintIn(content: string | null): { exitCode: number; stdout: string; stderr: string } {
   const dir = mkdtempSync(join(tmpdir(), 'gbrain-pii-lint-'));
   try {
     // Initialize as git repo so `git rev-parse --show-toplevel` resolves.
@@ -27,7 +29,7 @@ function runLintIn(content: string | null): { exitCode: number; stderr: string }
       writeFileSync(join(dir, 'docs', 'proposals', 'test.md'), content);
     }
     const r = spawnSync('bash', [SCRIPT_PATH], { cwd: dir, encoding: 'utf8' });
-    return { exitCode: r.status ?? -1, stderr: r.stderr ?? '' };
+    return { exitCode: r.status ?? -1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -42,6 +44,7 @@ alice-example, acme-corp, fund-a. Two roles, one decision.
 `);
     expect(r.exitCode).toBe(0);
     expect(r.stderr).toBe('');
+    expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
   });
 
   test('garrytan/brain private repo reference is flagged', () => {
@@ -131,9 +134,44 @@ B: permanent separation per the couples session
     expect(r.stderr).toContain('4 PII pattern hit(s)');
   });
 
-  test('no proposals dir → exits 0 (not a failure)', () => {
+  test('no proposals dir → exits 0 (not a failure) and reports a skip, not a pass', () => {
     const r = runLintIn(null);
     expect(r.exitCode).toBe(0);
+    expect(r.stdout).toMatch(SKIP_LINE);
+    expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: no docs/proposals/ directory to lint');
+  });
+
+  test('a proposals dir with no *.md file reports a skip', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gbrain-pii-lint-empty-'));
+    try {
+      spawnSync('git', ['init', '-q'], { cwd: dir });
+      mkdirSync(join(dir, 'docs', 'proposals'), { recursive: true });
+      writeFileSync(join(dir, 'docs', 'proposals', 'notes.txt'), 'garrytan/brain\n');
+      const r = spawnSync('bash', [SCRIPT_PATH], { cwd: dir, encoding: 'utf8' });
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: no *.md files under docs/proposals/ to lint');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('--staged with no staged proposal reports a skip; a staged proposal is linted', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gbrain-pii-lint-staged-'));
+    try {
+      spawnSync('git', ['init', '-q'], { cwd: dir });
+      mkdirSync(join(dir, 'docs', 'proposals'), { recursive: true });
+      writeFileSync(join(dir, 'docs', 'proposals', 'draft.md'), 'A: trial separation\n');
+      const unstaged = spawnSync('bash', [SCRIPT_PATH, '--staged'], { cwd: dir, encoding: 'utf8' });
+      expect(unstaged.status).toBe(0);
+      expect(unstaged.stdout).toContain('GBRAIN_CHECK_SKIPPED: no staged files under docs/proposals/ to lint');
+      spawnSync('git', ['add', 'docs/proposals/draft.md'], { cwd: dir });
+      const staged = spawnSync('bash', [SCRIPT_PATH, '--staged'], { cwd: dir, encoding: 'utf8' });
+      expect(staged.status).toBe(1);
+      expect(staged.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+      expect(staged.stderr).toContain('trial separation');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test('--help exits 1 with usage text', () => {

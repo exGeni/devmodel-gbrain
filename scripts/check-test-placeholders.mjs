@@ -27,7 +27,9 @@
 // named *.test.fixture.ts are scanned too (fixtures under the repo's test/ tree
 // must not end in .test.ts, or the unit runner would execute them).
 //
-// Exit: 0 clean · 1 violations or stale allowlist entries · 2 infra error.
+// Exit: 0 clean (or no test files to scan: it then prints
+// `GBRAIN_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a skip,
+// not a pass) · 1 violations or stale allowlist entries · 2 infra error.
 
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -192,6 +194,11 @@ function main() {
     console.error(problems.join('\n\n'));
     console.error(`\ncheck-test-placeholders: ${problems.length} problem(s). Rerun: ${RERUN}. See ${DOC}`);
     process.exit(1);
+  }
+  if (scan.files.length === 0) {
+    // Nothing to scan: the runner counts the marker as a skip, not a pass.
+    console.log('GBRAIN_CHECK_SKIPPED: no *.test.ts files under test/ to scan');
+    process.exit(0);
   }
   console.log(`check-test-placeholders: OK (${scan.files.length} test files, ${allowedSites} allowlisted placeholder site(s))`);
 }

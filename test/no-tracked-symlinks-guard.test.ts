@@ -30,6 +30,22 @@ describe('check-no-tracked-symlinks.sh', () => {
     const r = spawnSync('bash', [GUARD], { cwd: REPO_ROOT, encoding: 'utf-8' });
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('OK');
+    expect(r.stdout).not.toContain('GBRAIN_CHECK_SKIPPED');
+  });
+
+  it('reports a skip, not a pass, when git lists no tracked file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gbrain-symlink-guard-empty-'));
+    try {
+      spawnSync('git', ['init', '-q'], { cwd: dir });
+      writeFileSync(join(dir, 'untracked.md'), '# not tracked\n');
+      const r = spawnSync('bash', [GUARD], { cwd: dir, encoding: 'utf-8' });
+      expect(r.status).toBe(0);
+      expect(r.stdout).toMatch(/^GBRAIN_CHECK_SKIPPED: \S/m);
+      expect(r.stdout).toContain('GBRAIN_CHECK_SKIPPED: git lists no tracked files');
+      expect(r.stdout).not.toContain('OK (no tracked symlinks)');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('fails and names the offender when a symlink is tracked', () => {

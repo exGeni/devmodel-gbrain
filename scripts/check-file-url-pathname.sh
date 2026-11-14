@@ -13,7 +13,9 @@
 #
 # Usage: bash scripts/check-file-url-pathname.sh
 # Self-test seam: GBRAIN_GUARD_ROOT points at a fixture tree.
-# Exit: 0 when clean, 1 with one line per finding.
+# Exit: 0 when clean (or when test/ holds no such file: it then prints
+# `GBRAIN_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a skip,
+# not a pass), 1 with one line per finding.
 
 set -uo pipefail
 
@@ -31,5 +33,12 @@ if [ -n "$hits" ]; then
   echo "check-file-url-pathname: FAIL. A file URL's .pathname keeps %20 and other escapes, so the path breaks under a directory with a space."
   echo "Fix: fileURLToPath(new URL(rel, import.meta.url)) from node:url, or import.meta.dir / import.meta.path (#6845)."
   exit 1
+fi
+# Nothing to scan: no source file under test/ outside the guard fixtures. The
+# runner counts the marker as a skip, not a pass.
+scanned="$(find test -type f \( -name '*.ts' -o -name '*.mts' -o -name '*.js' -o -name '*.mjs' \) -not -path 'test/fixtures/guards/*' 2>/dev/null | head -n 1 || true)"
+if [ -z "$scanned" ]; then
+  echo "GBRAIN_CHECK_SKIPPED: no .ts, .mts, .js or .mjs files under test/ to scan"
+  exit 0
 fi
 echo "check-file-url-pathname: ok"

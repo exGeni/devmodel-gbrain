@@ -28,6 +28,10 @@
 # row to RETIRED below (ERE pattern, TAB, the current instruction, and
 # optionally TAB, why it is retired).
 #
+# Nothing to scan (none of the paths above exist): prints
+# `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0, which `bun run verify` records
+# as a skip, not a pass.
+#
 # Run: bash scripts/check-retired-phrases.sh
 # Wired into `bun run verify` via package.json `check:retired-phrases`.
 # Self-test seam: GBRAIN_GUARD_ROOT points at a fixture tree.
@@ -43,6 +47,7 @@ for p in CLAUDE.md AGENTS.md CONTRIBUTING.md docs skills scripts .github package
 done
 if [ "${#SCAN[@]}" -eq 0 ]; then
   echo "✓ retired phrases: nothing to scan under $ROOT"
+  echo "GBRAIN_CHECK_SKIPPED: none of the scanned docs, scripts or package.json exist"
   exit 0
 fi
 

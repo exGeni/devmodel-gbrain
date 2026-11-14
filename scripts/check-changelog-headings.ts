@@ -9,7 +9,8 @@
  * branch that lands without containing main is behind main's newest releases,
  * and its merged tree carries them.
  * Base ref: $GBRAIN_CHANGELOG_BASE_REF, default origin/main; unavailable: fails
- * under CI=true, skips locally. Exit 0 ok or skipped, 1 refused.
+ * under CI=true, skips locally; a base file with no release heading skips too
+ * (nothing to compare). Exit 0 ok or skipped, 1 refused.
  * Docs: docs/RELEASING.md#changelog--version-are-branch-scoped
  */
 import { spawnSync } from 'node:child_process';
@@ -45,7 +46,13 @@ export function main(opts: { cwd?: string; env?: Record<string, string | undefin
   const file = join(root, 'CHANGELOG.md');
   const have = new Set(existsSync(file) ? releaseHeadings(readFileSync(file, 'utf8')) : []);
   const own = existsSync(join(root, 'VERSION')) ? versionParts(readFileSync(join(root, 'VERSION'), 'utf8').trim()) : null;
-  const absent = releaseHeadings(base.stdout).filter((heading) => !have.has(heading));
+  const baseHeadings = releaseHeadings(base.stdout);
+  if (baseHeadings.length === 0) {
+    // The base file lists no release, so there is nothing to compare against.
+    log(`GBRAIN_CHECK_SKIPPED: ${ref}:CHANGELOG.md has no release headings`);
+    return 0;
+  }
+  const absent = baseHeadings.filter((heading) => !have.has(heading));
   const newer = absent.filter((heading) => {
     const v = versionParts(/^## \[([^\]]+)\]/.exec(heading)?.[1] ?? '');
     return own !== null && v !== null && compareParts(v, own) > 0;

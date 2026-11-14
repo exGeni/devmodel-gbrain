@@ -34,7 +34,9 @@
 #   GBRAIN_TESTING_MD_MAX_BYTES  docs/TESTING.md hard cap (default: 120000)
 #
 # Exit codes:
-#   0   clean
+#   0   clean, or none of the docs it reads exists (then it prints
+#       `GBRAIN_CHECK_SKIPPED: <reason>`, which `bun run verify` records as a
+#       skip, not a pass)
 #   1   a hard gate failed
 
 set -uo pipefail
@@ -144,5 +146,16 @@ done
 
 if [ "$fail" -ne 0 ]; then
   exit 1
+fi
+
+# Nothing to check: none of the docs the gates read exists. The runner counts
+# the marker as a skip, not a pass.
+checked=0
+for rel in "${REFERENCE_DOCS[@]}" CLAUDE.md; do
+  [ -f "$ROOT/$rel" ] && checked=$((checked + 1))
+done
+if [ "$checked" -eq 0 ]; then
+  echo "GBRAIN_CHECK_SKIPPED: none of CLAUDE.md, docs/TESTING.md or the docs/architecture reference docs exist"
+  exit 0
 fi
 echo "check-key-files-current-state: ok (reference docs history-free; entry and subsystem docs within caps)"

@@ -28,6 +28,9 @@
  *     release aggregate (full-suite, test-status, executed-receipts,
  *     reused-full-suite, cheap-tier) is gated.
  *
+ * With no workflow file it prints `GBRAIN_CHECK_SKIPPED: <reason>` and exits 0,
+ * which `bun run verify` records as a skip, not a pass.
+ *
  * Fix: copy the form of an existing gated job in .github/workflows/test.yml.
  * Seam: GBRAIN_GUARD_ROOT (fixture tree root).
  */
@@ -123,6 +126,11 @@ if (import.meta.main) {
   const dir = join(ROOT, '.github/workflows');
   const files = existsSync(dir) ? readdirSync(dir).filter(f => /\.ya?ml$/.test(f)).sort() : [];
   const problems = files.flatMap(f => checkWorkflow(f, load(readFileSync(join(dir, f), 'utf8')) as Workflow));
+  if (files.length === 0) {
+    // Nothing to check: the runner counts the marker as a skip, not a pass.
+    console.log('GBRAIN_CHECK_SKIPPED: no workflow files under .github/workflows');
+    process.exit(0);
+  }
   if (problems.length) {
     console.error(`check-dynamic-ci: ${problems.length} problem(s)\n${problems.map(p => `  ✗ ${p}`).join('\n')}\nFix: copy the form of an existing gated job in .github/workflows/test.yml (docs/ci-event-parity.md#trunk-dynamic-ci).`);
     process.exit(1);
