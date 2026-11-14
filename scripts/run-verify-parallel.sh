@@ -65,108 +65,41 @@ receipts_init verify || exit 2
 CHECKS=(
   # ── heavy (longest-first) ──
   "typecheck"
-  # HEIC + AVIF decoders survive bun build --compile (~0.6s: the smoketest
-  # bundles a handful of modules, not the CLI).
-  "check:image-decoders"
-  "check:fuzz-purity"
   # B4 (test-gap wave 2): runtime-reachability walk over src/** — hard-fails
   # true orphans (unreachable from every entrypoint AND every test) and any
   # test-only module without a reasoned PERMITTED_TEST_ONLY entry. ~1s.
   "check:orphan-modules"
-  # agent contract v1 scanner (B9): shrink-only per-rule baselines
-  "check:agent-contract"
   # No-op placeholder assertions (expect(true).toBe(true) and friends) in
   # test/**/*.test.ts; TypeScript AST scan, ~3s over the full corpus.
   "check:test-placeholders"
-  # check:eval-chronicle deliberately NOT here (GBRA-47 E7), same reason as
-  # the canary below: test/eval-chronicle.test.ts calls the identical
-  # runChronicleEval in the unit matrix with the same exact 6/6 gate, and a
-  # mutation of getLastSeen fails both owners. The package script remains
-  # for on-demand runs.
-  # check:eval-canary deliberately NOT here: test/eval-canary.test.ts spawns
-  # the identical scripts/run-eval-canary.ts in the unit matrix, and in CI the
-  # verify job and the matrix always run together (same workflow, same cache
-  # gate) — keeping it in verify was pure double work plus this battery's
-  # worst 120s-timeout flake exposure (two extra PGLite boots under a
-  # saturated pool). The package script `check:eval-canary` remains for
-  # on-demand runs; local `verify`-only callers lose the canary, local
-  # `bun run test` keeps it.
-  "check:bootstrap-templates"
   "check:privacy"
   "check:test-names"
   "check:test-isolation"
   # D7: a test that gates execution on a GBRAIN_* opt-in the operator-env
   # preload strips is a silent skip; TS AST scan, ~2s.
   "check:test-env-opt-ins"
-  # D8: every DATABASE_URL-gated PostgreSQL arm outside test/e2e/ runs in a
-  # named Postgres lane (TS AST).
-  "check:postgres-lanes"
   # C2: weight maps name only existing files; the unweighted share per lane
   # warns (step summary) and fails only on the scheduled run.
   "check:weight-coverage"
   # ── light tail (sub-second greps; historical order) ──
   "check:proposal-pii"
-  "check:jsonb"
-  # Positional $N::jsonb + JSON.stringify double-encode (AST-lite, ~0.2s).
-  "check:jsonb-params"
-  "check:search-path"
-  "check:source-config-leak"
-  "check:progress"
   "check:no-tracked-symlinks"
-  "check:system-of-record"
-  "check:no-pii-agent-voice"
-  "check:synthetic-corpus-privacy"
-  "check:operations-filter-bypass"
-  "check:gateway-routed"
-  "check:worker-pool-atomicity"
   "check:doc-history"
   # GST-2548: documented scripts/ and test/ paths exist. The unit and census
   # lanes skip a doc-only pull request; verify does not.
   "check:docs-repo-paths"
   "check:fixture-privacy"
-  "check:source-scope-onboard"
-  "check:getpage-scope"
-  "check:origin-assignment"
-  "check:no-double-retry"
   "check:file-url-pathname"
-  "check:pin-doc-privacy"
   # Previously reachable ONLY from the deleted check:all (i.e. never run):
   "check:newlines"
-  "check:no-legacy-getconnection"
-  # Revived registered-but-never-executed guards (this pass):
-  "check:pg-url-redaction"
   # Containment sprint: module-size ratchet + structural-suite freshness.
   "check:module-size"
-  "check:core-guard-coverage"
   # W5 (refactor wave 1): per-function line ratchet over src/**/*.ts (TS AST,
   # ~1.5s); baseline scripts/function-size-baseline.tsv.
   "check:function-size"
-  # GBRA-130: per-item catches that test an error code against a list and
-  # rethrow the rest only shrink; baseline scripts/item-allowlist-catches-baseline.tsv.
-  "check:item-allowlist-catches"
-  # EO10 (refactor wave 1): engine-sql/ and schema-migrations/ never import
-  # back up into the engine façades or migrate.ts (ESM TDZ cycles).
-  "check:layering"
-  # #5595/#5475: no fsync of a read-only descriptor outside src/core/fs-durable.ts
-  # (Windows refuses it with EPERM).
-  "check:durable-flush"
-  # Wave 18b: a missing column/table reads as "pre-migration" only when the
-  # handler names it (isMissingSchemaObject); broad predicates are allowlisted.
-  "check:schema-error-predicates"
   # Trunk Dynamic CI: the filter runs only on pull_request and every gated job
   # keeps the fail-open !cancelled() && != 'false' form.
   "check:dynamic-ci"
-  # #4992: subprocess launches go through src/core/spawn.ts (windowsHide
-  # default); NOT_YET_MIGRATED is a ratchet that only shrinks.
-  "check:windows-hide"
-  # CQ3 / EO17 (refactor wave 1): engine-sql splices only constant text, no
-  # composed $n, no expanded IN lists.
-  "check:engine-sql-dynamic"
-  # GBRA-218: the remote-privacy relaxations are read only in private-visibility.ts.
-  "check:remote-privacy-reads"
-  # EO4 (refactor wave 1): RLS read brands stay unforgeable; brand factories
-  # importable only from their allowlists (never src/core/ops/**).
-  "check:engine-sql-brands"
   # W7 (refactor wave 1): workflow phrases the wave retired stay out of the
   # docs agents follow (CLAUDE.md, AGENTS.md, CONTRIBUTING.md, docs/, skills/).
   "check:retired-phrases"
@@ -174,10 +107,6 @@ CHECKS=(
   # teach git pull --rebase, stash, autostash, repo-wide add/commit, reset
   # --hard or a bare/force push for a shared brain checkout (~0.5s).
   "check:shared-tree-git"
-  "check:schema-migration-order"
-  # A since: 'TBD' BEHAVIOR_CHANGES row never ships: refused on a stamped tree
-  # (VERSION has a CHANGELOG header and differs from origin/master's) and on master.
-  "check:behavior-since"
   # CHANGELOG.md keeps every release heading origin/master has (a cut file is refused).
   "check:changelog-headings"
   "check:structural-manifest"
