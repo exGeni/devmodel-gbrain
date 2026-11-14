@@ -101,10 +101,6 @@ CHECKS=(
   # docs agents follow (CLAUDE.md, AGENTS.md, CONTRIBUTING.md, docs/, skills/),
   # and so does the vocabulary of the product code that was cut.
   "check:retired-phrases"
-  # #6530: skills, recipes, templates, docs, plugin trees and agent docs never
-  # teach git pull --rebase, stash, autostash, repo-wide add/commit, reset
-  # --hard or a bare/force push for a shared brain checkout (~0.5s).
-  "check:shared-tree-git"
   # CHANGELOG.md keeps every release heading origin/main has (a cut file is refused).
   "check:changelog-headings"
   "check:structural-manifest"

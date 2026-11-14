@@ -36,7 +36,6 @@
     "check:function-size": "bun scripts/check-function-size.ts",
     "check:dynamic-ci": "bun scripts/check-dynamic-ci.ts",
     "check:retired-phrases": "bash scripts/check-retired-phrases.sh",
-    "check:shared-tree-git": "bash scripts/check-shared-tree-git.sh",
     "check:bash32": "bash scripts/check-bash32.sh",
     "check:changelog-headings": "bun scripts/check-changelog-headings.ts",
     "check:structural-manifest": "bash scripts/check-structural-manifest.sh",

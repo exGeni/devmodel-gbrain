@@ -29,7 +29,6 @@
   "test/scripts/check-orphan-modules.test.ts": 249,
   "test/scripts/check-proposal-pii.test.ts": 501,
   "test/scripts/check-retired-phrases.test.ts": 246,
-  "test/scripts/check-shared-tree-git.test.ts": 763,
   "test/scripts/check-test-isolation-r8.test.ts": 132,
   "test/scripts/check-test-isolation.test.ts": 940,
   "test/scripts/check-test-placeholders.test.ts": 729,

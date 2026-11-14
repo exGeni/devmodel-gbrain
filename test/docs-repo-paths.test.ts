@@ -43,12 +43,6 @@ const ALLOWLIST: Record<string, Record<string, string>> = {
     'scripts/gbrain-check.ts': 'a harness-evals script (garrytan/harness-evals), run by the advisory harness-check workflow',
     'scripts/build-gbrain-image.sh': 'a harness-evals script (garrytan/harness-evals), run by the advisory harness-check workflow',
   },
-  'AGENTS.md': {
-    'scripts/brain-commit-push.sh': 'installed into the brain repo by `gbrain sources harden`',
-  },
-  'docs/guides/shared-checkout-git.md': {
-    'scripts/brain-commit-push.sh': 'installed into the brain repo by `gbrain sources harden`',
-  },
 };
 
 function scannedFiles(): string[] {
