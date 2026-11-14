@@ -25,8 +25,8 @@
  *   - every other job that needs a filter only reads its outputs: its `if`
  *     starts with always(), and it is not a filter output;
  *   - every filter output is a job that needs that filter, and no merge or
- *     release aggregate (full-suite, e2e-full-suite, test-status, e2e-status,
- *     executed-receipts, reused-full-suite, cheap-tier) is gated.
+ *     release aggregate (full-suite, test-status, executed-receipts,
+ *     reused-full-suite, cheap-tier) is gated.
  *
  * Fix: copy the form of an existing gated job in .github/workflows/test.yml.
  * Seam: GBRAIN_GUARD_ROOT (fixture tree root).
@@ -41,7 +41,7 @@ type Workflow = { on?: unknown; jobs?: Record<string, Job> };
 
 const ROOT = process.env.GBRAIN_GUARD_ROOT ?? join(import.meta.dir, '..');
 const ACTION = 'trunk-io/dynamic-ci@';
-const NEVER_GATED = new Set(['full-suite', 'e2e-full-suite', 'test-status', 'e2e-status', 'executed-receipts', 'reused-full-suite', 'cheap-tier']);
+const NEVER_GATED = new Set(['full-suite', 'test-status', 'executed-receipts', 'reused-full-suite', 'cheap-tier']);
 
 const expr = (value: unknown) => String(value ?? '').trim().replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/, '$1').replace(/\s+/g, ' ');
 const needsOf = (job: Job) => (job.needs === undefined ? [] : Array.isArray(job.needs) ? job.needs : [job.needs]);
