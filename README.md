@@ -1,13 +1,39 @@
 # devmodel-gbrain
 
-This repository is a development model cut from [gbrain](https://github.com/garrytan/gbrain): the test lanes, guards, CI workflows and
-contributor tools that agents and people run to build and ship software, shipped with
+The development model of [gbrain](https://github.com/garrytan/gbrain), taken out of gbrain so
+that another project can start from it: the test lanes, guards, CI workflows and contributor
+tools that agents and people run to build and ship software, shipped with
 [gstack](https://github.com/garrytan/gstack). gstack ships, lands and releases it: `/ship`
 opens the pull request, `gstack-ship-queue land` merges it and `gstack-release-stamp open`
 opens a release PR, under the policy in `.gstack/ship-policy.json`.
 
 It holds no product code. A product is built on this repository and adds its own `src/`,
 its own tests and its own section in the operator contract.
+
+## Where this comes from
+
+This is Garry Tan's and the gbrain contributors' work. gbrain is a knowledge brain for AI
+agents, and around it they built a way of developing in which agents write, test and ship most
+of the code. That way of working is useful well beyond gbrain, so this repository keeps it and
+leaves gbrain itself where it lives.
+
+- **Source:** [github.com/garrytan/gbrain](https://github.com/garrytan/gbrain) at tag
+  `v0.60.711.0` (commit `e9e0954b0f78`), MIT license. The first commit here is that tree as it
+  was, without `.gbrain-evals/eval-results.jsonl`, which gbrain's own `.gitignore` excludes.
+  [LICENSE](LICENSE) keeps gbrain's license and copyright line unchanged.
+- **Kept:** the test runners, guards, CI workflows, CI watchers, contributor tools and the
+  documents that describe them, rewritten where they described gbrain's product.
+- **Removed:** gbrain's product: its CLI and MCP server, brains and pages, search, sync, the
+  database engines, skills, plugins, install and upgrade, binaries, and gbrain's own release
+  layer. Releases here go through gstack.
+- **Renamed:** this repository's own settings use `DEVMODEL_*`. The `GBRAIN_*` names that are
+  left belong to a real gbrain running beside the repository, which the test preloads keep
+  out of every test.
+- **Not an official gbrain project.** It is not made or endorsed by gbrain's authors. Report a
+  problem with this repository here, and a problem with gbrain
+  [to gbrain](https://github.com/garrytan/gbrain/issues).
+
+To use gbrain or gstack themselves, install them from upstream; nothing here replaces them.
 
 ## What it gives you
 
