@@ -16,8 +16,8 @@
 #
 # *.slow.test.ts is deliberately INCLUDED here. CI's matrix is the only
 # default place these run; the local fast loop (run-unit-shard.sh)
-# excludes them. See CLAUDE.md "CI vs local: intentionally divergent file
-# sets" for the rationale.
+# excludes them. See docs/TESTING.md "CI vs local: intentionally divergent
+# file sets" for the rationale.
 #
 # Partition: weight-aware LPT bin-packing via scripts/sharding.ts. Reads
 # per-file runtime weights from scripts/test-weights.json (mined from real

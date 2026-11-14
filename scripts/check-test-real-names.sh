@@ -32,7 +32,7 @@ cd "$ROOT"
 # Banned real-name strings (matched as whole words, case-insensitive).
 # Add an entry when CLAUDE.md flags a new real-person name.
 BANNED_NAMES=(
-  'Diana'           # Diana Hu, named in CLAUDE.md privacy example
+  'Diana'           # a real person's first name banned from fixtures
   'Wintermute'      # private OpenClaw fork name (CLAUDE.md rule)
   # 'Hermes' removed (hermes-harness wave): here it names NousResearch/hermes-agent,
   # a PUBLIC platform gbrain documents (README hero, INSTALL_FOR_AGENTS.md) and now

@@ -12,7 +12,7 @@
  *
  *  2. INCLUDE *.slow.test.ts. CI is the only default place slow files
  *     run; the local fast loop excludes them via run-unit-shard.sh. See
- *     CLAUDE.md "CI vs local: intentionally divergent file sets".
+ *     docs/TESTING.md "CI vs local: intentionally divergent file sets".
  *
  *  3. LPT balance: file counts across shards are within 5% of each other
  *     under the default (no-weights / cold-start) configuration. Once
