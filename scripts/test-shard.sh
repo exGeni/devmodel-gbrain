@@ -6,7 +6,7 @@
 #   total-shards: positive integer
 #
 # Excluded from sharding:
-#   - test/e2e/*           — need DATABASE_URL; run via bun run test:e2e
+#   - test/e2e/*           — run via bun run test:e2e
 #   - *.serial.test.ts     — concurrency-unsafe (file-wide mock.module / env
 #                            leaks); run via bun run test:serial on its
 #                            own runner in CI. Including these here lets
@@ -65,31 +65,10 @@ receipts_init unit
 # header comment. Local run-unit-shard.sh excludes slow files (different
 # policy by design).
 #
-# Heavy atoms ride dedicated CI jobs (see .github/workflows/test.yml) so no
-# single file dominates a shard: entity-resolve-perf.slow.test.ts (~159s,
-# non-subdivisible) and entity-card-perf → job slow-entity-resolve-perf;
-# eval-brainbench-e2e (98s mined, 10% of the corpus weight) → job
-# slow-brainbench-e2e. eval-longmemeval-e2e.slow.test.ts is back in the matrix
-# (GBRA-47 E6): engine sharing cut it from ~200s to ~8s, under the ~40s
-# keep-in-matrix bar.
-# export-scale.slow.test.ts (571s at its 100,001-page master scale) rides the
-# slow-entity-resolve-perf job, which sets GBRAIN_TEST_EXPORT_SCALE_PAGES per
-# event. reconcile-crash-*.slow.test.ts (244s) is not duplicated here: the
-# persistence-validation invariants job already runs it on PGLite for every
-# event, before and after activation.
-# evals/ is included: its *.test.ts files (eval-harness unit tests) were
-# previously collected by NO runner — 45+ real tests never executed anywhere.
-# Every collected evals file must be KEYLESS (no API keys, no network) —
-# enforced by the allowlist guard in test/scripts/evals-collection.test.ts.
-# The local fast loop (run-unit-shard.sh) stays test-only by design (see
-# docs/TESTING.md "CI vs local: intentionally divergent file sets").
-ALL_FILES=$(find test evals -name '*.test.ts' \
+# A heavy file that would dominate a shard rides a dedicated CI job (see
+# .github/workflows/test.yml) and is excluded here with a `-not -name` line.
+ALL_FILES=$(find test -name '*.test.ts' \
   -not -name '*.serial.test.ts' \
-  -not -name 'entity-resolve-perf.slow.test.ts' \
-  -not -name 'entity-card-perf.slow.test.ts' \
-  -not -name 'eval-brainbench-e2e.slow.test.ts' \
-  -not -name 'export-scale.slow.test.ts' \
-  -not -name 'reconcile-crash-*.slow.test.ts' \
   -not -path 'test/e2e/*' | sort)
 
 if [ -z "$ALL_FILES" ]; then
@@ -108,12 +87,6 @@ if [ "$DRY_RUN_LIST" = "1" ]; then
   exit 0
 fi
 
-# Snapshot fast-path (after the dry-run exit so list-only calls stay
-# instant): ~370 PGLite-booting matrix files pay ~3.1s cold init each
-# without it. The echo inside makes silent cold-init regressions visible
-# in CI logs.
-ensure_pglite_snapshot "test-shard"
-
 ALL_COUNT=$(printf '%s\n' "$ALL_FILES" | grep -c '^' || true)
 SHARD_COUNT=$(printf '%s\n' "$SHARD_FILES" | grep -c '^' || true)
 # grep -c on empty input returns 0 even with trailing newline edge cases
@@ -121,8 +94,7 @@ SHARD_COUNT=$(printf '%s\n' "$SHARD_FILES" | grep -c '^' || true)
 
 # Predicted weight of this shard (read-only over scripts/test-weights.json,
 # same p75 fallback the partition used). A measured shard far above it is a
-# runner or process-wide slowdown (GBRA-79: a leaked GBRAIN_PGLITE_SNAPSHOT
-# delete cold-booted every later engine), not a partition problem.
+# runner or process-wide slowdown, not a partition problem.
 SHARD_WEIGHT=$(printf '%s\n' "$SHARD_FILES" | bun run scripts/sharding.ts --sum 2>/dev/null || echo "predicted weight unavailable")
 echo "shard $SHARD_INDEX/$TOTAL_SHARDS: ${SHARD_COUNT}/${ALL_COUNT} files (LPT-balanced); $SHARD_WEIGHT"
 
@@ -160,8 +132,8 @@ while IFS= read -r f; do [ -n "$f" ] && shard_file_args+=("$f"); done <<< "$SHAR
 receipt_begin primary "s${SHARD_INDEX}of${TOTAL_SHARDS}" "$SHARD_INDEX" "$TOTAL_SHARDS" "" "${shard_file_args[@]}"
 [ "${#RECEIPT_ARGS[@]}" -eq 0 ] || XARGS_FLAGS=(-n 100000 -x)
 # --max-concurrency mirrors the local runner: unbounded intra-process
-# concurrency under parallel PGLite boots produced real shard deaths (the
-# matrix job's timeout-minutes in test.yml records 13 of them).
+# concurrency under parallel heavy test processes produced real shard deaths
+# (the matrix job's timeout-minutes in test.yml records them).
 #
 # The `./` prefix makes each argument a path, not a name filter: Bun runs
 # bare `test/x.test.ts` arguments in directory-scan order (filesystem

@@ -17,8 +17,7 @@
 #   GBRAIN_TEST_SHARD_KILL_AFTER grace after TERM before KILL (default 30)
 #   GBRAIN_TEST_MAX_CONCURRENCY  passed through to bun test (default 4)
 #   GBRAIN_TEST_MEM_PER_FILE_MB  memory budget per concurrent test file used by
-#                                the adaptive sizing below (default 1536 — a
-#                                PGLite WASM instance reserves ~1-1.5GB)
+#                                the adaptive sizing below (default 1536)
 #   GBRAIN_TEST_NO_MEM_ADAPT=1   disable memory-aware concurrency reduction
 #   GBRAIN_TEST_NO_OOM_FALLBACK=1 disable the serial OOM-rescue pass
 #
@@ -30,7 +29,7 @@
 #      automatically instead of OOMing each other.
 #   2. SERIAL PHANTOM RESCUE — two phantom classes are re-run serially
 #      (--max-concurrency 1) after the parallel pass: (a) failures whose
-#      shard log carries the PGLite WASM out-of-memory signature, and
+#      shard log carries the WASM out-of-memory signature, and
 #      (b) shards killed EXTERNALLY (SIGTERM/SIGKILL well before the shard
 #      timeout — sibling Conductor workspaces' process cleanup, macOS memory
 #      jetsam). Phantoms pass serially and the run goes green with an
@@ -64,22 +63,10 @@ unset GBRAIN_HOME
 
 cd "$(dirname "$0")/.."
 
-# ──────────────────────────────────────────────────────────────────────────
-# W0 fix-wave (Tier-1 #16): PGLite schema snapshot, DEFAULT-ON for the plain
-# `bun run test` loop. 500+ test files each cold-boot PGLite + replay 126
-# migrations without it; the fixture was previously enabled ONLY inside
-# scripts/ci-local.sh, so the everyday loop paid the full cost. The build
-# script is idempotent (hash short-circuit) and concurrency-safe (mkdir
-# lock, D5.8), and its hash folds handler-migration source (D5.13), so an
-# unconditional call here is cheap and always current. Runs BEFORE the shard
-# fan-out — shards inherit a finished fixture. Opt out: GBRAIN_NO_SNAPSHOT=1
-# (the migration-replay canary tests clear the env themselves regardless).
-# ──────────────────────────────────────────────────────────────────────────
-# detect_cpus / detect_available_mem_mb / ensure_pglite_snapshot live in the
-# shared lib (also sourced by test-shard.sh, run-serial-tests.sh,
-# run-slow-tests.sh) — one implementation, no copy drift.
+# detect_cpus / detect_available_mem_mb live in the shared lib (also sourced
+# by test-shard.sh, run-serial-tests.sh, run-slow-tests.sh) — one
+# implementation, no copy drift.
 . scripts/lib/test-env.sh
-ensure_pglite_snapshot "run-unit-parallel"
 
 # ──────────────────────────────────────────────────────────────────────────
 # Argument parsing. --shards N override wins over $SHARDS; both are clamped.
@@ -102,33 +89,25 @@ N="${SHARDS_OVERRIDE:-${SHARDS:-$(detect_cpus)}}"
 if ! printf '%s' "$N" | grep -qE '^[0-9]+$' || [ "$N" -lt 1 ]; then
   echo "ERROR: invalid shard count: $N" >&2; exit 2
 fi
-# v0.40.10 flake-hardening: clamp default to 4 (was 8) to match CI's
+# Flake-hardening: clamp the default to 4 (was 8) to match CI's
 # test-shard.sh fan-out. At 8-shard parallel on Apple Silicon we observed
-# shard 5 SIGKILL during source-health.test.ts's PGLite migration replay —
-# 8 parallel PGLite WASM inits contend severely on the lockfile, and the
-# 92-migration replay × 8 simultaneous can wedge past even 900s. CI uses
-# 4 and is stable. Trade ~2x wallclock for reliability + parity with CI's
-# fan-out. Override via --shards N or SHARDS=N (still capped at 8).
+# a shard SIGKILL under contention between heavy parallel test processes.
+# CI uses 4 and is stable. Trade ~2x wallclock for reliability + parity with
+# CI's fan-out. Override via --shards N or SHARDS=N (still capped at 8).
 [ "$N" -gt 8 ] && N=8
 if [ -z "${SHARDS_OVERRIDE:-}" ] && [ -z "${SHARDS:-}" ] && [ "$N" -gt 4 ]; then
   N=4
 fi
 
 INTRA_CONC="${MAX_CONCURRENCY_OVERRIDE:-${GBRAIN_TEST_MAX_CONCURRENCY:-4}}"
-# v0.40.10 flake-hardening: bump per-shard cap 600 → 1500 (was 900). At
-# 4-shard default each shard runs 159 files / ~2420 tests with internal
-# wallclock 960-1020s. The 900s value (sized for 8-shard's ~80 files /
-# 1100 tests at 620-770s) false-killed shard 1 at 900s even though it
-# had completed in 968s. The cap must track suite growth: the suite roughly
-# tripled since the 1500s cap was set (June: ~3900 tests, 92-migration PGLite
-# replay; now: 13k+ tests with the agent-bootstrap wave, 120-migration replay
-# per PGLite init). The split balances file COUNT, not weight — the heaviest
-# count-balanced shard is still making steady per-test progress at 1800s under
-# 4-way contention while its siblings finish at 1150-1550s. 3000s keeps the
-# ~55%-headroom doctrine over observed wallclock; genuinely hung TESTS still
-# die at bun's per-test timeout, mid-run stalls still hit this cap, and
+# Per-shard cap: 3000s. The split balances file COUNT, not weight — the
+# heaviest count-balanced shard is still making steady per-test progress
+# under 4-way contention while its siblings finish much earlier. 3000s keeps
+# the ~55%-headroom doctrine over observed wallclock; genuinely hung TESTS
+# still die at bun's per-test timeout, mid-run stalls still hit this cap, and
 # post-completion exit-hangs are classified separately (see the EXIT-HANG
-# block below). Override via GBRAIN_TEST_SHARD_TIMEOUT=N.
+# block below). The cap must track suite growth. Override via
+# GBRAIN_TEST_SHARD_TIMEOUT=N.
 SHARD_TIMEOUT="${GBRAIN_TEST_SHARD_TIMEOUT:-3000}"
 SHARD_KILL_AFTER="${GBRAIN_TEST_SHARD_KILL_AFTER:-30}"
 if ! printf '%s' "$SHARD_KILL_AFTER" | grep -qE '^[0-9]+$' || [ "$SHARD_KILL_AFTER" -lt 1 ]; then
@@ -137,11 +116,9 @@ fi
 
 # ──────────────────────────────────────────────────────────────────────────
 # Memory-aware concurrency (layer 1). Total concurrent test files =
-# N shards × INTRA_CONC; each concurrent file can hold a PGLite WASM
-# instance (~1-1.5GB reserved). 4×4 = 16 concurrent instances OOM'd on a
-# 128GB machine when other Conductor workspaces ran their suites at the
-# same time — every PGLite connect across every shard failed at once
-# ("Out of memory" at PGlite.create). Cap total concurrency to what's
+# N shards × INTRA_CONC; each concurrent file can hold ~1-1.5GB. 4×4 = 16
+# concurrent files OOM'd on a 128GB machine when other Conductor workspaces
+# ran their suites at the same time. Cap total concurrency to what's
 # actually available, keeping a 4GB reserve for the OS + bun itself.
 # Applies to explicit --shards overrides too (an operator who wants an
 # over-committed run sets GBRAIN_TEST_NO_MEM_ADAPT=1).
@@ -410,18 +387,6 @@ shard_total_files() {
   echo "${n:-0}"
 }
 
-# shard_pglite_init_count: count "Schema version" lines as a proxy for "test
-# files initialized so far." Each PGLite-using test file's beforeAll triggers
-# one initSchema() which prints this. Undercounts because not every test file
-# opens a PGLite engine, but it's the only real-time progress signal bun's
-# default reporter leaves in the log (bun has no per-file progress markers,
-# only a final shard-end summary).
-shard_pglite_init_count() {
-  local file="$1"
-  [ -f "$file" ] || { echo 0; return; }
-  grep -cE 'Schema version [0-9]+ → [0-9]+' "$file" 2>/dev/null || echo 0
-}
-
 # log_size_kb: total stderr+stdout written by the shard so far. Strictly
 # monotonic — useful as a "definitely alive" signal when other heuristics
 # read 0 (e.g. very early in shard startup before initSchema fires).
@@ -471,12 +436,11 @@ heartbeat() {
         local lf="$LOG_DIR/shard-$i.log"
         if [ -f "$lf" ]; then
           # Bun's default reporter has no per-file progress markers, only a
-          # final shard-end summary, so we surface three complementary signals
-          # mid-run: (1) PGLite initSchema() count as a "files started" proxy,
-          # (2) total files this shard was assigned (from the runner banner),
-          # (3) log size in KB as a strictly-monotonic liveness signal.
+          # final shard-end summary, so we surface two complementary signals
+          # mid-run: (1) total files this shard was assigned (from the runner
+          # banner), (2) log size in KB as a strictly-monotonic liveness
+          # signal.
           local total; total=$(shard_total_files "$lf")
-          local pglite; pglite=$(shard_pglite_init_count "$lf")
           local kb; kb=$(log_size_kb "$lf")
           local et; et=$(fmt_elapsed "$hb_elapsed")
           # Progress stamp for the exit-hang classifier: any log growth counts
@@ -489,7 +453,7 @@ heartbeat() {
             echo "$now" > "$LOG_DIR/shard-$i.lastprogress"
           fi
           if [ "$total" -gt 0 ]; then
-            line="$line [s$i: ~${pglite}/${total}f ${kb}KB ${et}]"
+            line="$line [s$i: ${total}f ${kb}KB ${et}]"
           else
             line="$line [s$i: starting ${kb}KB ${et}]"
           fi
@@ -688,11 +652,10 @@ for i in $(seq 1 "$N"); do
   fi
 
   if [ -f "$WEDGED_FILE" ]; then
-    # EXIT-HANG classifier (pre-existing PGLite-adjacent leak, TODOS.md
-    # "unit-shard exit hang"): a shard killed by the watchdog whose log shows
-    # every assigned file STARTED and zero (fail) markers did all its work and
-    # then failed to exit (a leaked ref'd handle; reproduces on master with
-    # the same file combination). Bun's per-test --timeout turns a genuinely
+    # EXIT-HANG classifier (TODOS.md "unit-shard exit hang"): a shard killed
+    # by the watchdog whose log shows every assigned file STARTED and zero
+    # (fail) markers did all its work and then failed to exit (a leaked ref'd
+    # handle; reproduces on main with the same file combination). Bun's per-test --timeout turns a genuinely
     # hung TEST into a (fail), so this cannot mask one — the residual
     # maskable case is a file-level import hang in the very last file, which
     # the loud banner keeps visible. Classified shards warn instead of
@@ -726,7 +689,7 @@ for i in $(seq 1 "$N"); do
         {
           echo "⚠️  shard $i/$N: EXIT-HANG after ${SHARD_TIMEOUT}s — log silent for ${idle_secs}s with 0 failures"
           echo "    and every assigned file started; the process finished its work, leaked a handle, and"
-          echo "    never exited (pre-existing, master-reproducible; see TODOS.md 'unit-shard exit hang')."
+          echo "    never exited (pre-existing, main-reproducible; see TODOS.md 'unit-shard exit hang')."
           echo "    Treating as pass-with-warning."
         } >&2
         echo "shard $i/$N: EXIT-HANG (idle ${idle_secs}s, 0 fails, all files started) rc=$rc — warn-pass" >> "$SUMMARY_FILE"
@@ -898,8 +861,8 @@ if [ "$TOTAL_RC" != "0" ] && [ "${RESCUE_COUNT:-0}" -gt 0 ]; then
   # (run-serial-tests.sh's isolation contract — top-level mock.module leaks
   # across files in a shared registry); the remainder batches in one process.
   # Both lanes mirror the shard invocation's --timeout=60000 — bun's default
-  # 5s per-test timeout would re-fail PGLite phantoms (120-migration replay)
-  # and mislabel them 'confirmed real'.
+  # 5s per-test timeout would re-fail slow-to-start phantoms and mislabel
+  # them 'confirmed real'.
   grep -v '\.serial\.test\.ts$' "$OOM_RESCUE_LIST" > "$LOG_DIR/oom-rescue-batch.txt" || true
   grep '\.serial\.test\.ts$' "$OOM_RESCUE_LIST" > "$LOG_DIR/oom-rescue-serial.txt" || true
   RESCUE_RC=0

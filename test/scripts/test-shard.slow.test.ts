@@ -7,10 +7,8 @@
  *     files share file-wide state (top-level mock.module, module
  *     singletons) that leaks across files in the same `bun test` shard
  *     process. Before v0.31.4.1 they were hashed into the same buckets
- *     as parallel files, which broke the quarantine —
- *     `eval-takes-quality-runner.serial.test.ts` stubbed `gateway.ts`
- *     and broke every `gateway.embedMultimodal` test in
- *     `voyage-multimodal.test.ts` on shard 2.
+ *     as parallel files, which broke the quarantine: one serial file's
+ *     stub of a shared module broke another file's tests on shard 2.
  *
  *  2. INCLUDE *.slow.test.ts. CI is the only default place slow files
  *     run; the local fast loop excludes them via run-unit-shard.sh. See
@@ -76,35 +74,6 @@ describe('test-shard.sh — exclusion contract', () => {
       const leaks = files.filter(f => f.startsWith('test/e2e/'));
       expect(leaks, `shard ${shard} contains e2e files`).toEqual([]);
     }
-  });
-
-  it('leaves the dedicated entity-card performance gate out of the unit matrix', () => {
-    const allFiles = [1, 2, 3, 4].flatMap(s => dryRunList(s, 4));
-    expect(allFiles).not.toContain('test/entity-card-perf.slow.test.ts');
-    const fs = require('fs');
-    const yaml = require('js-yaml');
-    const workflow = yaml.load(fs.readFileSync(resolve(REPO_ROOT, '.github/workflows/test.yml'), 'utf8'));
-    expect(workflow.jobs['slow-entity-resolve-perf'].steps.some((step: { run?: string }) =>
-      step.run?.includes('bun test test/entity-card-perf.slow.test.ts'))).toBe(true);
-    expect(workflow.jobs['test-status'].needs).toContain('slow-entity-resolve-perf');
-  });
-
-  it('runs export-scale and reconcile-crash exactly once per event outside the unit matrix', () => {
-    const allFiles = [1, 2, 3, 4].flatMap(s => dryRunList(s, 4));
-    expect(allFiles).not.toContain('test/export-scale.slow.test.ts');
-    const reconcileCrash = require('fs').readdirSync(resolve(REPO_ROOT, 'test')).filter((f: string) => /^reconcile-crash-.*\.slow\.test\.ts$/.test(f));
-    expect(reconcileCrash.length).toBe(4);
-    for (const file of reconcileCrash) expect(allFiles).not.toContain(`test/${file}`);
-    const fs = require('fs');
-    const yaml = require('js-yaml');
-    const workflow = yaml.load(fs.readFileSync(resolve(REPO_ROOT, '.github/workflows/test.yml'), 'utf8'));
-    const exportStep = workflow.jobs['slow-entity-resolve-perf'].steps.find((step: { run?: string }) =>
-      step.run?.includes('bun test test/export-scale.slow.test.ts'));
-    expect(exportStep.env.GBRAIN_TEST_EXPORT_SCALE_PAGES).toContain("'100001'");
-    const persistence = yaml.load(fs.readFileSync(resolve(REPO_ROOT, '.github/workflows/persistence-validation.yml'), 'utf8'));
-    expect(persistence.jobs.reconciliation.strategy.matrix.engine).toContain('pglite');
-    expect(persistence.jobs.reconciliation.steps.some((step: { run?: string }) =>
-      step.run?.includes('test/reconcile-crash-*.slow.test.ts'))).toBe(true);
   });
 
   it('INCLUDES *.slow.test.ts files (CI matrix is where slow files run)', () => {
@@ -216,7 +185,7 @@ describe('test-shard.sh — LPT balance contract', () => {
 
   it('no stale weight keys — every entry names a tracked file', () => {
     const tracked = new Set(
-      execFileSync('git', ['ls-files', 'test', 'evals'], { cwd: REPO_ROOT, encoding: 'utf-8' })
+      execFileSync('git', ['ls-files', 'test'], { cwd: REPO_ROOT, encoding: 'utf-8' })
         .split('\n')
         .map((s) => s.trim())
         .filter(Boolean),
@@ -246,7 +215,7 @@ describe('test-shard.sh — execution order contract', () => {
     const { join } = require('path');
     const root = mkdtempSync(join(tmpdir(), 'gbrain-test-shard-order-'));
     try {
-      for (const dir of ['scripts/lib', 'test', 'evals', 'bin']) mkdirSync(join(root, dir), { recursive: true });
+      for (const dir of ['scripts/lib', 'test', 'bin']) mkdirSync(join(root, dir), { recursive: true });
       copyFileSync(SHARD_SH, join(root, 'scripts/test-shard.sh'));
       copyFileSync(resolve(REPO_ROOT, 'scripts/lib/test-env.sh'), join(root, 'scripts/lib/test-env.sh'));
       const names = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'];
@@ -272,7 +241,6 @@ exec "$REAL_BUN" "$@"
         REAL_BUN: process.execPath,
         ORDER_LOG: join(root, 'order.log'),
         ARGV_LOG: join(root, 'argv.log'),
-        GBRAIN_NO_SNAPSHOT: '1',
         GBRAIN_TEST_RECEIPT_DIR: join(root, 'receipts'),
         COVERAGE_DIR: '',
       };

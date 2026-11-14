@@ -1,7 +1,7 @@
 /**
  * test.yml's unit shards run inside the `test` job's timeout-minutes. A
  * shard's mined weight must fit that timeout twice over, after setup, with a
- * minute to spare: master shards ran up to 1.4x their prediction, and shard
+ * minute to spare: main shards ran up to 1.4x their prediction, and shard
  * 5/10 of run 39121354115 was cancelled at the timeout with no failing test.
  * test/scripts/ci-gates.test.ts pins the workflows' shard counts to UNIT_SHARDS.
  */
@@ -24,7 +24,6 @@ const jobs = (name: string) => (load(readFileSync(join(REPO, '.github', 'workflo
 describe('unit shard budget', () => {
   test('the unit jobs\' timeouts are UNIT_JOB_TIMEOUT_MS or longer', () => {
     expect(jobs('test.yml').test['timeout-minutes']).toBe(UNIT_JOB_TIMEOUT_MS / 60_000);
-    expect(jobs('e2e.yml')['coverage-full-unit']['timeout-minutes']).toBeGreaterThanOrEqual(UNIT_JOB_TIMEOUT_MS / 60_000);
   });
 
   test('every unit shard\'s mined weight fits the job twice over, after setup, with a minute to spare', () => {

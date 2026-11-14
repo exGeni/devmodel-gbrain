@@ -13,7 +13,7 @@ function setup() {
   return root;
 }
 for (const githubActions of ['', 'true']) describe(`sequential E2E runner (GITHUB_ACTIONS=${githubActions})`, () => {
-  const env = { ...process.env, GITHUB_ACTIONS: githubActions, GBRAIN_NO_SNAPSHOT: '1', DATABASE_URL: '', GBRAIN_DATABASE_URL: '', SHARD: '', COVERAGE_DIR: '' };
+  const env = { ...process.env, GITHUB_ACTIONS: githubActions, DATABASE_URL: '', GBRAIN_DATABASE_URL: '', SHARD: '', COVERAGE_DIR: '' };
   function run(root: string, args: string[], shard = '') {
     return spawnSync('bash', ['scripts/run-e2e.sh', ...args], { cwd: root, encoding: 'utf8', env: { ...env, SHARD: shard } });
   }
@@ -29,6 +29,25 @@ for (const githubActions of ['', 'true']) describe(`sequential E2E runner (GITHU
       expect(selected.sort()).toEqual(files);
       expect(run(root, files, '3/3').stdout).toContain('No files for shard 3/3');
       for (const bad of ['2', '0/2', '3/2', '1/0', '1/2x', '1/2/3']) expect(run(root, files, bad).status).not.toBe(0);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+  test('the default corpus is the test/e2e glob minus the live-key list; an empty corpus selects nothing and every shard exits clean', () => {
+    const root = setup();
+    try {
+      writeFileSync(join(root, 'scripts/e2e-live-key-only.txt'), '# key-gated files\n');
+      expect(run(root, ['--dry-run-list']).stdout.trim().split('\n').sort()).toEqual(['test/e2e/a.test.ts', 'test/e2e/b.test.ts']);
+      writeFileSync(join(root, 'scripts/e2e-live-key-only.txt'), '# key-gated files\ntest/e2e/b.test.ts\n');
+      expect(run(root, ['--dry-run-list']).stdout.trim().split('\n')).toEqual(['test/e2e/a.test.ts']);
+      rmSync(join(root, 'test/e2e/a.test.ts'));
+      rmSync(join(root, 'test/e2e/b.test.ts'));
+      for (const shard of ['', '1/4']) {
+        const listed = run(root, ['--dry-run-list'], shard);
+        expect(listed.status, listed.stderr).toBe(0);
+        expect(listed.stdout).toBe('');
+      }
+      const empty = run(root, [], '1/4');
+      expect(empty.status, empty.stderr).toBe(0);
+      expect(empty.stdout).toContain('No files for shard 1/4');
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
   test('runs each file and preserves an assertion failure in the final status', () => {
@@ -294,7 +313,7 @@ printf '%s' '${output}'
 });
 
 describe('per-file HOME cleanup and receipts', () => {
-  const env = { ...process.env, GBRAIN_NO_SNAPSHOT: '1', DATABASE_URL: '', GBRAIN_DATABASE_URL: '', SHARD: '', COVERAGE_DIR: '' };
+  const env = { ...process.env, DATABASE_URL: '', GBRAIN_DATABASE_URL: '', SHARD: '', COVERAGE_DIR: '' };
   const files = ['test/e2e/a.test.ts', 'test/e2e/b.test.ts'];
 
   test('a HOME that cannot be removed fails that file by name and the partition continues (B2)', () => {
@@ -312,7 +331,7 @@ test('leaves an unremovable HOME entry',()=>{
 });`);
       const r = spawnSync('bash', ['scripts/run-e2e.sh', ...files], { cwd: root, encoding: 'utf8', env: { ...env, TMPDIR: tmp } });
       expect(r.status, r.stdout + r.stderr).toBe(1);
-      expect(r.stdout).toMatch(/FAILED: a\.test\.ts left a process writing to its HOME; cleanup could not remove \S+file-1-direct/);
+      expect(r.stdout).toMatch(/FAILED: a\.test\.ts left a process writing to its HOME; cleanup could not remove \S+file-1\b/);
       expect(r.stdout).toContain('Fix: make the test wait for or stop its children; reproduce with: bash scripts/run-e2e.sh test/e2e/a.test.ts');
       expect(r.stdout).toContain('=== b.test.ts ===');
       expect(r.stdout).toContain('Files: 2 total, 1 passed, 1 failed');
@@ -354,10 +373,10 @@ test('leaks a detached child',()=>{
       const r = spawnSync('bash', ['scripts/run-e2e.sh', ...files], { cwd: root, encoding: 'utf8', env: { ...env, GBRAIN_TEST_RECEIPT_DIR: receipts, GBRAIN_TEST_RECEIPT_LANE: 'tier9' } });
       expect(r.status).toBe(1);
       const ids = readdirSync(receipts).filter(n => n.endsWith('.receipt')).sort();
-      expect(ids).toEqual(['tier9--run-f1-direct--primary.receipt', 'tier9--run-f2-direct--primary.receipt']);
+      expect(ids).toEqual(['tier9--run-f1--primary.receipt', 'tier9--run-f2--primary.receipt']);
       expect(readFileSync(join(receipts, ids[1]), 'utf8')).toContain('exit=1');
-      expect(readFileSync(join(receipts, 'tier9--run-f2-direct--primary.junit.xml'), 'utf8')).toContain('<failure');
-      expect(readFileSync(join(receipts, 'tier9--run-f2-direct--primary.files'), 'utf8')).toBe('test/e2e/b.test.ts\n');
+      expect(readFileSync(join(receipts, 'tier9--run-f2--primary.junit.xml'), 'utf8')).toContain('<failure');
+      expect(readFileSync(join(receipts, 'tier9--run-f2--primary.files'), 'utf8')).toBe('test/e2e/b.test.ts\n');
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 });

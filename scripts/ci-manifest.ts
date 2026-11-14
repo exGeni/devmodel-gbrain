@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Failure and execution manifest (green master wave, Lane 4 evidence).
+ * Failure and execution manifest (green main wave, Lane 4 evidence).
  *
  *   bun scripts/ci-manifest.ts --receipts-dir <dir> --out <file> [--summary <file>] [--deltas <tsv>]
  *
@@ -9,8 +9,8 @@
  * writes one versioned JSON manifest bound to the workflow, event, SHA, run id
  * and run attempt taken from the GitHub Actions environment
  * (GITHUB_WORKFLOW, GITHUB_EVENT_NAME, GITHUB_SHA, GITHUB_RUN_ID,
- * GITHUB_RUN_ATTEMPT). test.yml and e2e.yml upload it as the `ci-manifest`
- * artifact from their `executed-receipts` job; nightly-watch
+ * GITHUB_RUN_ATTEMPT). test.yml uploads it as the `ci-manifest`
+ * artifact from its `executed-receipts` job; nightly-watch
  * (scripts/nightly-issue.ts) reads it to name every failing test and to
  * prove which files ran and passed before it clears a master-red failure.
  *

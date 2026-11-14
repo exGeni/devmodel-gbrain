@@ -66,7 +66,7 @@ cd "$(dirname "$0")/.."
 
 # --dry-run-list prints the selection; --dry-run-list-exclusive prints only
 # the machine-exclusive entries. Positional FILE arguments replace discovery
-# (scripts/ci-ubicloud.ts dispatches explicit batches through this wrapper).
+# (explicit batches go through this wrapper).
 DRY_RUN_MODE=""
 case "${1:-}" in
   --dry-run-list|--dry-run-list-exclusive) DRY_RUN_MODE="$1"; shift ;;
@@ -89,38 +89,14 @@ fi
 # AFTER the pool drains, without the wall-clock kill (a SIGKILL
 # mid-registration could strand a real scheduled job). Growth guard:
 # test/scripts/serial-files.test.ts fails when this list grows past 4
-# entries — every addition needs a justification comment like the entries
-# below.
+# entries — every addition needs a justification comment.
 # ──────────────────────────────────────────────────────────────────────────
 EXCLUSIVE_FILES=(
-  # launchd/cron lifecycle arc: install → self-disable → reinstall →
-  # uninstall ordering against (PATH-shimmed) launchctl; the arc asserts
-  # machine-level sequencing and is the flake-class canary.
-  "test/autopilot-launchd-lifecycle.serial.test.ts"
-  # hardenBrainRepo({installCron:true}) executes REAL launchctl/crontab
-  # (src/core/brain-repo-durability.ts) — a concurrent or killed run could
-  # strand a real scheduled job on the machine.
-  "test/brain-durability-hook.serial.test.ts"
-  # hardenBrainRepo's own scaffolding commit fires the just-installed
-  # post-commit hook (background push) which races the synchronous
-  # push-probe on the same bare remote ("cannot lock ref" →
-  # needs_attention non-empty). The race is intra-call; pooled CPU
-  # contention widens the window past what the assertions tolerate
-  # (observed on a 4-vCPU CI runner, never locally). Sequential lane
-  # restores master-era timing until the probe learns to retry ref-lock
-  # contention.
-  "test/brain-repo-durability.serial.test.ts"
-  # Pins a REAL serve's answer inside the hook's 1 s IPC client timeout (Pin 3
-  # and Pin 3b need an `ok` round trip). The serve answers in ~10 ms on an
-  # idle machine; pooled beside three heavy files its main thread is starved
-  # (160-1,200 ms with the file pinned to one core beside three CPU hogs), and
-  # Pin 3b timed out at 1,008 ms in #7409's full gate.
-  "test/bootstrap-hook-under-serve.serial.test.ts"
 )
 
 is_exclusive() {
   local f="$1" e
-  for e in "${EXCLUSIVE_FILES[@]}"; do
+  for e in ${EXCLUSIVE_FILES[@]+"${EXCLUSIVE_FILES[@]}"}; do
     [ "$f" = "$e" ] && return 0
   done
   return 1
@@ -171,15 +147,13 @@ if [ "$DRY_RUN_MODE" = "--dry-run-list-exclusive" ]; then
   exit 0
 fi
 
-if [ "${#ordered_files[@]}" -gt 0 ]; then
-  ensure_pglite_snapshot "serial-tests"
-else
+if [ "${#ordered_files[@]}" -eq 0 ]; then
   receipt_empty "$RECEIPT_TAG" "$RECEIPT_SHARD" "$RECEIPT_OF"
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
-# Pool sizing: min(detect_cpus, 4) — each pooled bun process can hold a
-# PGLite WASM instance (~1.5GB) — then clamped by available memory (same
+# Pool sizing: min(detect_cpus, 4) — each pooled bun process can hold up to
+# ~1.5GB — then clamped by available memory (same
 # layer-1 doctrine as run-unit-parallel.sh, 4GB OS reserve).
 # ──────────────────────────────────────────────────────────────────────────
 POOL="${GBRAIN_SERIAL_POOL:-}"

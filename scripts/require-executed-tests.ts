@@ -4,8 +4,7 @@
  *
  * A key-gated test file self-skips when its provider keys or tools are
  * missing, and `bun test` exits 0 on an all-skip run, so a job that ran
- * nothing reads green. The keyed Tier 2 nightly (e2e.yml `tier2`) runs this
- * after its test step: a keyless run, an all-skip run, a partial skip or a
+ * nothing reads green. A keyed lane runs this after its test step: a keyless run, an all-skip run, a partial skip or a
  * missing JUnit report fails the job instead of passing as coverage.
  *
  * Reads the receipts scripts/run-with-receipt.sh writes

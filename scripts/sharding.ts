@@ -51,10 +51,10 @@ const REPO_ROOT = resolve(__dirname, "..");
 const DEFAULT_WEIGHTS_PATH = resolve(REPO_ROOT, "scripts/test-weights.json");
 
 /**
- * test.yml's unit matrix size, also e2e.yml's coverage-full-unit matrix;
- * test/scripts/unit-shard-budget.test.ts pins both workflows to it.
+ * test.yml's unit matrix size; test/scripts/unit-shard-budget.test.ts pins
+ * the workflow to it.
  */
-export const UNIT_SHARDS = 30;
+export const UNIT_SHARDS = 4;
 /** Unit shards each test.yml `test` job runs at once (scripts/test-shard-pack.sh); test/scripts/ci-gates.test.ts pins the matrix to it. */
 export const UNIT_SHARDS_PER_JOB = 2;
 /** test.yml's `test` job `timeout-minutes: 22`: the only bound on a unit shard, its setup steps included. */
@@ -63,7 +63,7 @@ export const UNIT_JOB_TIMEOUT_MS = 22 * 60 * 1000;
 export const UNIT_SETUP_ALLOWANCE_MS = 60 * 1000;
 /**
  * A unit shard's mined weight may be at most this: on a runner twice as slow
- * as the mined weights (master shards ran 0.8-1.4x their prediction, and one
+ * as the mined weights (main shards ran 0.8-1.4x their prediction, and one
  * cancelled at the timeout) it still ends a minute inside the job timeout
  * after setup.
  */
@@ -82,7 +82,7 @@ export type WeightMap = Map<string, number>;
 
 /**
  * test.yml's unit partition with each shard's mined weight (`root`'s scripts/test-weights.json): the plan
- * test/scripts/unit-shard-budget.test.ts and the ci:ubicloud gate both hold to UNIT_SHARD_BUDGET_MS.
+ * test/scripts/unit-shard-budget.test.ts holds to UNIT_SHARD_BUDGET_MS.
  */
 export function unitShardPlan(root: string): { shard: number; files: string[]; ms: number }[] {
   const weights = loadWeights(join(root, "scripts/test-weights.json"));
@@ -198,7 +198,7 @@ export function partition(
   // Compute fallback weight from the p75 of present weights, unless the
   // caller supplied an explicit override. p75, not median: the weight
   // distribution is extremely right-skewed (median ~27ms, mean ~800ms —
-  // most files are trivial greps, the tail boots PGLite), and files
+  // most files are trivial greps, the tail boots heavy fixtures), and files
   // MISSING from the map skew heavy (new integration tests land unweighted
   // more often than new pure-unit tests). A median fallback modeled 45% of
   // the corpus at ~30ms and let one shard silently carry the unweighted

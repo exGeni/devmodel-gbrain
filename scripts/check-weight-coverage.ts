@@ -14,9 +14,6 @@
  *     on the scheduled run (GITHUB_EVENT_NAME=schedule), where nightly-watch
  *     turns it into an issue. Both print the lane's miner command.
  *
- * scripts/ubicloud/weights.json (`<lane>:<path>` keys) gets the dead-entry
- * check only; ci:ubicloud --record-weights refreshes it.
- *
  * Seam: GBRAIN_GUARD_ROOT (fixture tree root); there `*.test.fixture.ts` files
  * count as their `*.test.ts` names so fixtures stay out of bun's discovery.
  */
@@ -28,7 +25,7 @@ const TEST_FILE = process.env.GBRAIN_GUARD_ROOT ? /\.test(\.fixture)?\.ts$/ : /\
 const DOCS = 'docs/TESTING.md#keeping-ci-partitions-balanced';
 const SCHEDULED = process.env.GITHUB_EVENT_NAME === 'schedule';
 const latestRun = (workflow: string, event: string) =>
-  `$(gh run list --workflow ${workflow} --branch master --event ${event} --status success --limit 1 --json databaseId --jq '.[0].databaseId')`;
+  `$(gh run list --workflow ${workflow} --branch main --event ${event} --status success --limit 1 --json databaseId --jq '.[0].databaseId')`;
 
 function walk(dir: string): string[] {
   const abs = join(ROOT, dir);
@@ -45,7 +42,7 @@ function walk(dir: string): string[] {
 const exists = (path: string) => existsSync(join(ROOT, path)) || existsSync(join(ROOT, path.replace(/\.test\.ts$/, '.test.fixture.ts')));
 const readMap = (path: string): Record<string, number> => existsSync(join(ROOT, path)) ? JSON.parse(readFileSync(join(ROOT, path), 'utf8')) : {};
 
-const tests = [...walk('test'), ...walk('evals')];
+const tests = walk('test');
 const LANES = [
   {
     lane: 'unit', map: 'scripts/test-weights.json', threshold: 0.05,
@@ -60,7 +57,7 @@ const LANES = [
   {
     lane: 'e2e', map: 'scripts/e2e-weights.json', threshold: 0.10,
     files: tests.filter(f => /^test\/e2e\/[^/]+\.test\.ts$/.test(f)),
-    miner: `bun run weights:mine --lane e2e --e2e-profile full --run ${latestRun('e2e.yml', 'schedule')}`,
+    miner: `bun run weights:mine --lane e2e --e2e-profile full --run ${latestRun('test.yml', 'schedule')}`,
   },
 ];
 
@@ -79,9 +76,6 @@ for (const { lane, map, threshold, files, miner } of LANES) {
     (SCHEDULED ? failures : warnings).push(line);
   }
 }
-const ubicloud = readMap('scripts/ubicloud/weights.json');
-const ubicloudDead = Object.keys(ubicloud).filter(key => !exists(key.slice(key.indexOf(':') + 1)));
-if (ubicloudDead.length) failures.push(`${deadHeader('scripts/ubicloud/weights.json', ubicloudDead.length)}\n${listDead(ubicloudDead)}\n  Fix: delete ${ubicloudDead.length === 1 ? 'that entry' : 'those entries'}, or refresh with: bun run ci:ubicloud --record-weights`);
 
 const why = 'Why: shard weights pack each CI lane; stale maps leave one shard far slower than the rest.';
 if (warnings.length) {

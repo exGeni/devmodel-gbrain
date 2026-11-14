@@ -25,7 +25,7 @@ describe('wrapped', () => {
   return root;
 }
 const run = (root: string, args: string[], env: Record<string, string> = {}) =>
-  spawnSync('bash', ['scripts/run-with-receipt.sh', ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, GBRAIN_NO_SNAPSHOT: '1', ...env } });
+  spawnSync('bash', ['scripts/run-with-receipt.sh', ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, ...env } });
 
 describe('run-with-receipt.sh', () => {
   test('records lane, files, exit and the native JUnit report for one bun invocation', () => {

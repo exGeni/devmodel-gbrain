@@ -3,8 +3,8 @@
 // builder in scripts/update-coverage-baseline.ts.
 //
 // The git-show source is injected via the documented test seam
-// COVERAGE_BASELINE_JSON_OVERRIDE (literal JSON; sentinels ABSENT_ON_MASTER
-// and GIT_FAILURE), so tests never depend on the real origin/master.
+// COVERAGE_BASELINE_JSON_OVERRIDE (literal JSON; sentinels ABSENT_ON_MAIN
+// and GIT_FAILURE), so tests never depend on the real origin/main.
 
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -214,9 +214,9 @@ describe("ungated first landings", () => {
     expect(res.stdout).toContain("ungated first landing");
   });
 
-  it("baseline absent on master → ungated, exit 0", () => {
+  it("baseline absent on main → ungated, exit 0", () => {
     const summary = writeSummary({ pct: 10 }, {});
-    const res = runGate({ summary, enforce: "1", baseline: "ABSENT_ON_MASTER" });
+    const res = runGate({ summary, enforce: "1", baseline: "ABSENT_ON_MAIN" });
     expect(res.code).toBe(0);
     expect(res.stdout).toContain("ungated first landing");
   });
@@ -230,7 +230,7 @@ describe("infrastructure errors", () => {
     expect(res.stderr).toContain("infrastructure error");
   });
 
-  it("deletion defense: baseline on master but working-tree copy missing → exit 2", () => {
+  it("deletion defense: baseline on main but working-tree copy missing → exit 2", () => {
     const summary = writeSummary({ pct: 80 }, { "src/core": { pct: 70 } });
     const res = runGate({ summary, worktreePath: join(tmp, "deleted-baseline.json") });
     expect(res.code).toBe(2);

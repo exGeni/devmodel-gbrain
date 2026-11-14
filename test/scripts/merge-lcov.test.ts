@@ -20,9 +20,9 @@ interface RunResult {
   stderr: string;
 }
 
-function runMerge(args: string[], env: Record<string, string> = {}): RunResult {
+function runMerge(args: string[], env: Record<string, string> = {}, cwd: string = REPO_ROOT): RunResult {
   const res = Bun.spawnSync(["bun", join(REPO_ROOT, "scripts", "merge-lcov.ts"), ...args], {
-    cwd: REPO_ROOT,
+    cwd,
     env: { ...process.env, GENERATED_AT: "2026-08-15T00:00:00.000Z", ...env },
     stdout: "pipe",
     stderr: "pipe",
@@ -398,11 +398,17 @@ describe("merge: JSON metrics scope + hand-computed totals", () => {
   it("neverLoaded inventories real src files absent from the data — count + sorted list, no percentage", () => {
     const c = laneDir("never-c", LANE_C);
     const out = outPaths("never");
-    runMerge(["--out-lcov", out.lcov, "--out-json", out.json, c]);
+    // A temp repo root with its own src/ tree: the scan resolves against the cwd.
+    const root = join(tmp, "never-root");
+    for (const file of ["src/cli.ts", "src/core/never-loaded.ts", "src/skipped.test.ts", "src/types.d.ts"]) {
+      mkdirSync(join(root, file, ".."), { recursive: true });
+      writeFileSync(join(root, file), "export {};\n", "utf8");
+    }
+    runMerge(["--out-lcov", out.lcov, "--out-json", out.json, c], {}, root);
     const json = readSummary(out.json);
     // The fixture files are "loaded" (present in data); every real src file is not.
     expect(json.neverLoaded.count).toBe(json.neverLoaded.files.length);
-    expect(json.neverLoaded.files).toContain("src/cli.ts");
+    expect(json.neverLoaded.files).toEqual(["src/cli.ts", "src/core/never-loaded.ts"]);
     expect(json.neverLoaded.files).not.toContain("src/fixture-tot-one.ts");
     const sorted = [...json.neverLoaded.files].sort();
     expect(json.neverLoaded.files).toEqual(sorted);

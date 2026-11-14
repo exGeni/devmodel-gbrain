@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
 # Smoke-test run-e2e.sh's argv and shard handling (called by ci-local.sh).
 # The expected default corpus is the test/e2e glob minus the shared live-key
-# list (scripts/e2e-live-key-only.txt, the same file run-e2e.sh skips) plus
-# phantom-redirect-engine-parity, which lives in test/ but whose Postgres arm
-# is only reachable through the DATABASE_URL-bearing E2E lane.
+# list (scripts/e2e-live-key-only.txt, the same file run-e2e.sh skips).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-live_key_only=$(grep -v '^[[:space:]]*#' scripts/e2e-live-key-only.txt | sed '/^[[:space:]]*$/d')
-EXPECTED_ALL=$(( $(ls test/e2e/*.test.ts | grep -vxF -e "${live_key_only:-/}" | wc -l | tr -d ' ') + 1 ))
+live_key_only=$({ grep -v '^[[:space:]]*#' scripts/e2e-live-key-only.txt || true; } | sed '/^[[:space:]]*$/d')
+EXPECTED_ALL=0
+if [ -d test/e2e ]; then
+  EXPECTED_ALL=$(find test/e2e -maxdepth 1 -name '*.test.ts' | { grep -vxF -e "${live_key_only:-/}" || true; } | wc -l | tr -d ' ')
+fi
 
 SMOKE_NO_ARGS=$(bash scripts/run-e2e.sh --dry-run-list | wc -l | tr -d ' ')
 if [ "$SMOKE_NO_ARGS" != "$EXPECTED_ALL" ]; then
   echo "[ci-local] ERROR: --dry-run-list (no args) printed $SMOKE_NO_ARGS, expected $EXPECTED_ALL" >&2
   exit 1
 fi
-SMOKE_ONE_ARG=$(bash scripts/run-e2e.sh --dry-run-list test/e2e/sync.test.ts)
-if [ "$SMOKE_ONE_ARG" != "test/e2e/sync.test.ts" ]; then
+SMOKE_ONE_ARG=$(bash scripts/run-e2e.sh --dry-run-list test/e2e/smoke.test.ts)
+if [ "$SMOKE_ONE_ARG" != "test/e2e/smoke.test.ts" ]; then
   echo "[ci-local] ERROR: --dry-run-list with 1 arg printed '$SMOKE_ONE_ARG'" >&2
   exit 1
 fi

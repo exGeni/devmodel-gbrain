@@ -1,14 +1,12 @@
 /**
- * scripts/stress/plan.ts: the planning half of `bun run test:stress`, the
- * PR stress gate and the race hunt (docs/TESTING.md#stress-gate).
+ * scripts/stress/plan.ts: the planning half of `bun run test:stress` and the
+ * PR stress gate (docs/TESTING.md#stress-gate).
  */
 import { afterEach, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runInNewContext } from 'node:vm';
-import { load } from 'js-yaml';
 import {
   HELPER_FAN_IN_LIMIT, SPECIAL_FILES, allTestFiles, changedFiles, defaultSeed, directImporters, expandHelper, iterationEstimateMs,
   mineStressIterations, notStressedReason, parseFileList, planShards, profileFor, redact, reproduceLine, seededSample, validRef,
@@ -22,7 +20,7 @@ function repo(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'gbrain-stress-plan-'));
   dirs.push(root);
   const git = (...args: string[]) => { const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' }); if (r.status !== 0) throw new Error(r.stderr); return r.stdout.trim(); };
-  git('init', '-q', '-b', 'master');
+  git('init', '-q', '-b', 'main');
   git('config', 'user.email', 'stress@example.invalid');
   git('config', 'user.name', 'stress');
   git('config', 'commit.gpgsign', 'false');
@@ -34,26 +32,19 @@ function repo(files: Record<string, string>): string {
 const sh = (root: string, ...args: string[]) => spawnSync('git', args, { cwd: root, encoding: 'utf8' }).stdout.trim();
 
 describe('execution profiles', () => {
-  test('suffix and location pick the lane; a gated arm with Postgres runs both arms', () => {
-    expect(profileFor('test/a.test.ts', { armed: false, postgres: true })).toMatchObject({ name: 'unit', env: 'no-database', arm: 'pglite', timeoutMs: 60_000 });
-    expect(profileFor('test/a.serial.test.ts', { armed: false, postgres: true })).toMatchObject({ name: 'serial', env: 'no-database', timeoutMs: 120_000 });
-    expect(profileFor('test/a.slow.test.ts', { armed: false, postgres: false })).toMatchObject({ name: 'slow', env: 'no-database' });
-    expect(profileFor('test/e2e/a.test.ts', { armed: false, postgres: false })).toMatchObject({ name: 'e2e', env: 'database', arm: 'postgres' });
-    expect(profileFor('test/a.serial.test.ts', { armed: true, postgres: true })).toMatchObject({ name: 'postgres-arm', env: 'database', arm: 'pglite+postgres', timeoutMs: 120_000 });
-    expect(profileFor('test/a.test.ts', { armed: true, postgres: false })).toMatchObject({ name: 'unit', env: 'no-database' });
+  test('suffix and location pick the lane', () => {
+    expect(profileFor('test/a.test.ts')).toMatchObject({ name: 'unit', timeoutMs: 60_000, vars: {} });
+    expect(profileFor('test/a.serial.test.ts')).toMatchObject({ name: 'serial', timeoutMs: 120_000 });
+    expect(profileFor('test/a.slow.test.ts')).toMatchObject({ name: 'slow', timeoutMs: 120_000 });
+    expect(profileFor('test/e2e/a.test.ts')).toMatchObject({ name: 'e2e', timeoutMs: 60_000 });
   });
 
-  test('slow-file specifics mirror the workflow values a pull request uses', () => {
-    const wf = load(readFileSync(join(REPO, '.github/workflows/test.yml'), 'utf8')) as { jobs: Record<string, { steps: Array<{ run?: string; env?: Record<string, string> }> }> };
-    const exportStep = wf.jobs['slow-entity-resolve-perf']!.steps.find(s => s.run?.includes('test/export-scale.slow.test.ts'))!;
-    const pages = runInNewContext(exportStep.env!.GBRAIN_TEST_EXPORT_SCALE_PAGES!.replace(/^\$\{\{\s*|\s*\}\}$/g, ''), { github: { event_name: 'pull_request' } });
-    expect(profileFor('test/export-scale.slow.test.ts', { armed: true, postgres: false }).vars).toEqual({ GBRAIN_TEST_EXPORT_SCALE_PAGES: pages });
-    expect(exportStep.run).toContain('--timeout=900000');
-    expect(SPECIAL_FILES['test/export-scale.slow.test.ts']!.timeoutMs).toBe(900_000);
-    const oldBinary = wf.jobs['shared-skills-compatibility']!.steps.find(s => s.run?.includes('test/persistence-skill-old-binary.slow.test.ts'))!;
-    expect(Object.keys(oldBinary.env!)).toContain('GBRAIN_TEST_OLD_BINARY');
-    expect(oldBinary.run).toContain('--timeout 180000');
-    expect(profileFor('test/persistence-skill-old-binary.slow.test.ts', { armed: false, postgres: false })).toMatchObject({ prereq: 'old-binary', timeoutMs: 180_000 });
+  test('every per-file specific names an existing test file and changes only its timeout or variables', () => {
+    for (const [file, special] of Object.entries(SPECIAL_FILES)) {
+      expect(existsSync(join(REPO, file)), `${file} no longer exists; delete its SPECIAL_FILES row`).toBe(true);
+      expect(profileFor(file)).toMatchObject(special);
+      expect(Object.keys(special).filter(k => k !== 'timeoutMs' && k !== 'vars')).toEqual([]);
+    }
   });
 
   test('paid-provider files are listed as not stressed with the reason', () => {
@@ -66,8 +57,8 @@ describe('execution profiles', () => {
 
 describe('reproduce lines and inputs', () => {
   test('a reproduce line is the local command with every replay value and no credential', () => {
-    expect(reproduceLine({ file: 'test/a.test.ts', iterations: 10, firstIteration: 7, seed: 123, postgres: true })).toBe('bun run test:stress test/a.test.ts --iterations 10 --first-iteration 7 --seed 123 --postgres');
-    expect(reproduceLine({ file: 'test/a.test.ts', iterations: 3, firstIteration: 1, seed: 5, postgres: false, randomize: true })).toBe('bun run test:stress test/a.test.ts --iterations 3 --seed 5 --randomize');
+    expect(reproduceLine({ file: 'test/a.test.ts', iterations: 10, firstIteration: 7, seed: 123 })).toBe('bun run test:stress test/a.test.ts --iterations 10 --first-iteration 7 --seed 123');
+    expect(reproduceLine({ file: 'test/a.test.ts', iterations: 3, firstIteration: 1, seed: 5, randomize: true })).toBe('bun run test:stress test/a.test.ts --iterations 3 --seed 5 --randomize');
     expect(redact('DATABASE_URL=postgres://gbrain_test:hunter2@127.0.0.1:5432/gbrain_test bun test')).toBe('DATABASE_URL=postgres://gbrain_test:***@127.0.0.1:5432/gbrain_test bun test');
     expect(redact('PGPASSWORD=hunter2 GH_TOKEN=abc')).toBe('PGPASSWORD=*** GH_TOKEN=***');
     expect(defaultSeed('a'.repeat(40), 'test/a.test.ts')).toBe(defaultSeed('a'.repeat(40), 'test/a.test.ts'));
@@ -77,7 +68,7 @@ describe('reproduce lines and inputs', () => {
   test('dispatch values are validated: test paths only, refs by git check-ref-format or 40-hex', () => {
     expect(parseFileList('test/a.test.ts, test/b/c.serial.test.ts test/a.test.ts')).toEqual({ files: ['test/a.test.ts', 'test/b/c.serial.test.ts'], invalid: [] });
     expect(parseFileList('test/a.test.ts;rm -rf / ../x.test.ts test/../etc.test.ts').invalid).toEqual(['test/a.test.ts;rm', '-rf', '/', '../x.test.ts', 'test/../etc.test.ts']);
-    expect(validRef('origin/master')).toBe(true);
+    expect(validRef('origin/main')).toBe(true);
     expect(validRef('a'.repeat(40))).toBe(true);
     expect(validRef('$(id)')).toBe(false);
     expect(validRef('-x')).toBe(false);
@@ -108,14 +99,14 @@ describe('changed files', () => {
     const root = repo({ 'test/a.test.ts': 'a' });
     writeFileSync(join(root, 'test/a.test.ts'), 'b');
     writeFileSync(join(root, 'test/new.test.ts'), 'n');
-    expect(changedFiles(root, 'master').tests).toEqual(['test/a.test.ts', 'test/new.test.ts']);
+    expect(changedFiles(root, 'main').tests).toEqual(['test/a.test.ts', 'test/new.test.ts']);
   });
 
   test('an unreachable merge base fails with the next step instead of guessing', () => {
     const root = repo({ 'test/a.test.ts': 'a' });
-    const changed = changedFiles(root, 'origin/master', 'HEAD');
+    const changed = changedFiles(root, 'origin/main', 'HEAD');
     expect(changed.error).toContain('cannot compute the merge base');
-    expect(changed.error).toContain('git fetch --no-tags origin master');
+    expect(changed.error).toContain('git fetch --no-tags origin main');
   });
 });
 
@@ -174,24 +165,25 @@ describe('shards', () => {
   });
 
   test('a measured stress iteration outranks the lane weight, so a file slower under stress than in its lane splits', () => {
-    // #6963: recovery-budget-ceiling weighs ~150 s in its arms lane but runs ~228 s a stress iteration; nine packed
-    // into one 25-minute shard ran past the 35-minute job timeout.
+    // A file that weighs ~150 s in its lane can run ~228 s a stress iteration; nine packed into one 25-minute shard
+    // ran past the 35-minute job timeout.
     const log = [
-      '2026-10-18T05:23:43.7Z   ✓ test/large-pages/x.slow.test.ts iteration 1 (seed 43165) 239.1s, 2 executed',
-      '2026-10-18T05:27:44.2Z   ✓ test/large-pages/x.slow.test.ts iteration 2 (seed 43166) 227.5s, 2 executed',
-      '2026-10-18T05:31:01.0Z   ✗ test/large-pages/x.slow.test.ts iteration 3 (seed 43167) 199.8s, 2 executed',
-      '2026-10-18T05:31:02.0Z   ✓ test/large-pages/y.test.ts iteration 1 (seed 1) 5.0s, 1 executed',
+      '2026-10-18T05:23:43.7Z   ✓ test/sized/x.slow.test.ts iteration 1 (seed 43165) 239.1s, 2 executed',
+      '2026-10-18T05:27:44.2Z   ✓ test/sized/x.slow.test.ts iteration 2 (seed 43166) 227.5s, 2 executed',
+      '2026-10-18T05:31:01.0Z   ✗ test/sized/x.slow.test.ts iteration 3 (seed 43167) 199.8s, 2 executed',
+      '2026-10-18T05:31:02.0Z   ✓ test/sized/y.test.ts iteration 1 (seed 1) 5.0s, 1 executed',
     ].join('\n');
     const mined = mineStressIterations([log]);
-    expect(Object.fromEntries(mined)).toEqual({ 'test/large-pages/x.slow.test.ts': 227_500, 'test/large-pages/y.test.ts': 5_000 });
-    const lane = { unit: new Map(), serialSeconds: new Map(), e2e: new Map(), arms: new Map([['test/large-pages/x.slow.test.ts', 150_000]]) };
-    expect(iterationEstimateMs('test/large-pages/x.slow.test.ts', 'postgres-arm', lane)).toBe(150_000);
+    expect(Object.fromEntries(mined)).toEqual({ 'test/sized/x.slow.test.ts': 227_500, 'test/sized/y.test.ts': 5_000 });
+    const lane = { unit: new Map([['test/sized/x.slow.test.ts', 150_000]]), serialSeconds: new Map(), e2e: new Map() };
+    expect(iterationEstimateMs('test/sized/x.slow.test.ts', 'slow', lane)).toBe(150_000);
     const measured = { ...lane, stress: mined };
-    const per = iterationEstimateMs('test/large-pages/x.slow.test.ts', 'postgres-arm', measured);
+    const per = iterationEstimateMs('test/sized/x.slow.test.ts', 'slow', measured);
     expect(per).toBe(227_500);
-    const shards = planShards([{ file: 'test/large-pages/x.slow.test.ts', perIterationMs: per }], 10, 25 * 60_000);
+    const shards = planShards([{ file: 'test/sized/x.slow.test.ts', perIterationMs: per }], 10, 25 * 60_000);
     expect(shards.map(s => s.items.reduce((n, i) => n + i.count, 0))).toEqual([6, 4]);
-    expect(iterationEstimateMs('test/other.test.ts', 'postgres-arm', measured)).toBe(150_000);
+    expect(iterationEstimateMs('test/sized/other.slow.test.ts', 'slow', measured)).toBe(120_000);
+    expect(iterationEstimateMs('test/other.test.ts', 'unit', { ...measured, unit: new Map([['test/other.test.ts', 7_000]]) })).toBe(7_000);
   });
 
   test('scripts/stress/iteration-weights.json keeps the shape mine-iterations writes: sorted test paths, positive whole milliseconds', () => {

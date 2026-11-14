@@ -78,7 +78,6 @@ describe('EXCLUSIVE_FILES (pooled-runner opt-out) guards', () => {
   it('every exclusive entry exists on disk and is discovered by the runner', () => {
     const listed = dryRunList(SERIAL_SH);
     const e = entries();
-    expect(e.length).toBeGreaterThan(0);
     for (const f of e) {
       expect(existsSync(resolve(REPO_ROOT, f))).toBe(true);
       expect(listed).toContain(f);

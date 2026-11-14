@@ -34,7 +34,14 @@ function stageSandbox(): string {
     mkdirSync(dirname(join(root, 'scripts', s)), { recursive: true });
     copyFileSync(resolve(REPO_ROOT, 'scripts', s), join(root, 'scripts', s));
   }
-  chmodSync(join(root, 'scripts', 'run-serial-tests.sh'), 0o755);
+  // The checked-in EXCLUSIVE_FILES list is empty; give the sandbox copy one entry
+  // so the exclusive path (run after the pool drains, shard 1 only) stays exercised.
+  const script = join(root, 'scripts', 'run-serial-tests.sh');
+  const emptyList = 'EXCLUSIVE_FILES=(\n)';
+  const sandboxScript = readFileSync(script, 'utf-8');
+  if (!sandboxScript.includes(emptyList)) throw new Error('run-serial-tests.sh no longer declares an empty EXCLUSIVE_FILES list');
+  writeFileSync(script, sandboxScript.replace(emptyList, 'EXCLUSIVE_FILES=(\n  "test/exclusive-example.serial.test.ts"\n)'));
+  chmodSync(script, 0o755);
 
   const bin = join(root, 'bin');
   mkdirSync(bin);
@@ -83,8 +90,6 @@ beforeAll(() => {
     PATH: join(ROOT, 'bin'),
     HOME: process.env.HOME ?? ROOT,
     TMPDIR: process.env.TMPDIR ?? '/tmp',
-    // Sandbox has no package.json — skip the snapshot build path entirely.
-    GBRAIN_NO_SNAPSHOT: '1',
     GBRAIN_SERIAL_POOL: '2',
   };
 });
@@ -257,7 +262,7 @@ it('passes after one external SIGTERM', () => {
   }, 60000);
 
   it('shards weighted files exactly once, with exclusive work only on shard 1 and no SHARD in children', () => {
-    const names = ['a-heavy', 'b-mid', 'c-small', 'd-light', 'brain-repo-durability'];
+    const names = ['a-heavy', 'b-mid', 'c-small', 'd-light', 'exclusive-example'];
     const files = names.map(name => `test/${name}.serial.test.ts`);
     writeFileSync(join(ROOT, 'fixture-module.ts'), 'export const answer = () => 42;\n');
     const child = `import { it, expect } from 'bun:test'; import { answer } from '../fixture-module.ts'; it('routing is consumed', () => { expect(process.env.SHARD).toBeUndefined(); expect(answer()).toBe(42); });`;
@@ -349,7 +354,7 @@ it('keeps a child alive', async () => {
 
   it.each([false, true])('exclusive cancellation allows graceful cleanup and records incomplete timing (rescue: %s)', async (rescue) => {
     const root = stageSandbox();
-    const file = 'test/brain-repo-durability.serial.test.ts';
+    const file = 'test/exclusive-example.serial.test.ts';
     const marker = join(root, 'exclusive.pid');
     const cleanup = join(root, 'cleanup-complete');
     const coverage = join(root, 'coverage');

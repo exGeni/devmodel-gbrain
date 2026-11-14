@@ -2,16 +2,14 @@
  * scripts/stress/run.ts end to end against fixture trees (GBRAIN_STRESS_ROOT):
  * per-iteration receipts, seeded replay, failure detection with the
  * reproduce line, zero-executed and unexpected-skip failures, and the
- * platform-only "not stressed" path. The Postgres paths live in
- * test/scripts/test-stress-postgres.test.ts.
+ * platform-only "not stressed" path.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { failureSignature, parseArgs, readReport, skipReason } from '../../scripts/stress/run.ts';
-import { withEnv } from '../helpers/with-env.ts';
+import { failureSignature, parseArgs, readReport } from '../../scripts/stress/run.ts';
 
 const RUNNER = join(import.meta.dir, '..', '..', 'scripts', 'stress', 'run.ts');
 const dirs: string[] = [];
@@ -41,7 +39,7 @@ describe('test:stress runner', () => {
     const r = stress(root, 'test/stable.test.ts', '--iterations', '3', '--seed', '40');
     expect(r.code, r.out).toBe(0);
     const file = r.manifest.files[0];
-    expect(file).toMatchObject({ file: 'test/stable.test.ts', profile: 'unit', env: 'no-database', status: 'pass', seedBase: 40 });
+    expect(file).toMatchObject({ file: 'test/stable.test.ts', profile: 'unit', status: 'pass', seedBase: 40 });
     expect(file.iterations.map((it: { index: number; seed: number; executed: number }) => [it.index, it.seed, it.executed])).toEqual([[1, 40, 2], [2, 41, 2], [3, 42, 2]]);
     for (const it of file.iterations) {
       const dir = it.receipt;
@@ -56,7 +54,7 @@ describe('test:stress runner', () => {
     const r = stress(root, 'test/flaky.test.ts', '--iterations', '4', '--seed', '1');
     expect(r.code, r.out).toBe(1);
     expect(r.manifest.failures.map((f: { iteration: number }) => f.iteration)).toEqual([2, 4]);
-    expect(r.manifest.failures[0]).toMatchObject({ test: 'odd seeds only', backend: 'pglite', signature: 'expect(received).toBe(expected) Expected: N Received: N' });
+    expect(r.manifest.failures[0]).toMatchObject({ test: 'odd seeds only', signature: 'expect(received).toBe(expected) Expected: N Received: N' });
     expect(r.out).toContain('FAIL [stress_failure]: test/flaky.test.ts failed in 2 iteration(s) (first: iteration 2');
     expect(r.out).toContain('bun run test:stress test/flaky.test.ts --iterations 4 --first-iteration 2 --seed 1');
     expect(r.out).toContain('iteration 2, seed 2');
@@ -79,73 +77,6 @@ describe('test:stress runner', () => {
     expect(r.manifest.not_stressed.map((n: { file: string }) => n.file)).toEqual(['test/platform.test.ts']);
   });
 
-  test('a file that skips without a prerequisite its owning heavy-tests job installs is not stressed', () => {
-    const root = tree({
-      'test/door.serial.test.ts': "import { describe, test } from 'bun:test';\nconst BIN = Bun.which('some-agent-cli-not-installed');\ndescribe.skipIf(!BIN)('door', () => { test('install', () => {}); });\n",
-      '.github/workflows/heavy-tests.yml': 'jobs:\n  door:\n    steps:\n      - run: bun test --timeout=600000 test/door.serial.test.ts\n',
-    });
-    const r = stress(root, 'test/door.serial.test.ts', '--iterations', '2');
-    expect(r.code, r.out).toBe(0);
-    expect(r.manifest.files[0]).toMatchObject({ status: 'not-stressed', reason: expect.stringContaining('owning job in .github/workflows/heavy-tests.yml') });
-  });
-
-  test('a file that skips without the PgBouncer fixture its owning pooled job requires is not stressed', () => {
-    const body = "import { test } from 'bun:test';\nconst pooled = process.env.GBRAIN_PGBOUNCER_URL;\ntest.skipIf(!pooled)('pooled', () => {});\n";
-    const root = tree({
-      'test/pooled.test.ts': body,
-      'test/orphan-pooled.test.ts': body,
-      '.github/workflows/persistence-validation.yml': 'jobs:\n  pooled:\n    steps:\n      - env:\n          GBRAIN_CI_REQUIRE_PGBOUNCER: \'1\'\n        run: bun test test/pooled.test.ts\n',
-    });
-    const owned = stress(root, 'test/orphan-pooled.test.ts', 'test/pooled.test.ts', '--iterations', '2');
-    const byFile = Object.fromEntries(owned.manifest.files.map((f: { file: string }) => [f.file, f]));
-    expect(byFile['test/pooled.test.ts']).toMatchObject({ status: 'not-stressed', reason: expect.stringContaining('owning pooled job in .github/workflows/persistence-validation.yml') });
-    expect(byFile['test/orphan-pooled.test.ts']).toMatchObject({ status: 'fail' });
-    expect(owned.code, owned.out).toBe(1);
-  });
-
-  test('a pooled file whose owning job picks it in a CI script under scripts/ is not stressed', () => {
-    const root = tree({
-      'test/script-pooled.test.ts': "import { test } from 'bun:test';\nconst pooled = process.env.GBRAIN_PGBOUNCER_URL;\ntest.skipIf(!pooled)('pooled', () => {});\n",
-      '.github/workflows/e2e.yml': 'jobs:\n  e2e:\n    steps:\n      - run: bash scripts/run-e2e.sh\n',
-      'scripts/run-e2e.sh': 'if [ "$f" = "test/script-pooled.test.ts" ] && [ "${GBRAIN_CI_REQUIRE_PGBOUNCER:-0}" = "1" ]; then exit 1; fi\n',
-    });
-    const r = stress(root, 'test/script-pooled.test.ts', '--iterations', '2');
-    expect(r.code, r.out).toBe(0);
-    expect(r.manifest.files[0]).toMatchObject({ status: 'not-stressed', reason: expect.stringContaining('owning pooled runner scripts/run-e2e.sh') });
-  });
-
-  test('the pooled owner must name the file in the step or statement that requires the pooler, not anywhere in the same file (#8702)', () => {
-    const body = "import { test } from 'bun:test';\nconst pooled = process.env.GBRAIN_PGBOUNCER_URL;\ntest.skipIf(!pooled)('pooled', () => {});\n";
-    const root = tree({
-      'test/other-step.test.ts': body,
-      'test/far-script.test.ts': body,
-      '.github/workflows/e2e.yml': "jobs:\n  matrix:\n    steps:\n      - name: pooled matrix\n        env:\n          GBRAIN_CI_REQUIRE_PGBOUNCER: '1'\n        run: bash scripts/run-e2e.sh\n  graduation:\n    steps:\n      - name: graduation\n        run: bun test test/other-step.test.ts\n",
-      'scripts/run-e2e.sh': 'if [ "${GBRAIN_CI_REQUIRE_PGBOUNCER:-0}" = "1" ]; then echo pooled; fi\n' + '#\n'.repeat(10) + 'for f in test/far-script.test.ts; do bun test "$f"; done\n',
-    });
-    const r = stress(root, 'test/other-step.test.ts', 'test/far-script.test.ts', '--iterations', '2');
-    const byFile = Object.fromEntries(r.manifest.files.map((f: { file: string }) => [f.file, f]));
-    expect(byFile['test/other-step.test.ts']).toMatchObject({ status: 'fail' });
-    expect(byFile['test/far-script.test.ts']).toMatchObject({ status: 'fail' });
-    expect(r.code, r.out).toBe(1);
-  });
-
-  test('test/e2e/graduation-cli-topologies.test.ts is not pooler-owned: the job that runs it does not require the pooler (#8702)', async () => {
-    const reason = await withEnv({ GBRAIN_PGBOUNCER_URL: undefined }, () => skipReason('test/e2e/graduation-cli-topologies.test.ts'));
-    expect(reason).toBeNull();
-  });
-
-  test('test/e2e/pgbouncer-teardown.test.ts is pooler-owned in this repository', async () => {
-    const reason = await withEnv({ GBRAIN_PGBOUNCER_URL: undefined }, () => skipReason('test/e2e/pgbouncer-teardown.test.ts'));
-    expect(reason).toContain('PgBouncer fixture');
-  });
-
-  test('a file that skips without an external Supavisor URL no CI job holds is not stressed', () => {
-    const root = tree({ 'test/supavisor.test.ts': "import { test } from 'bun:test';\nconst url = process.env.GBRAIN_SUPAVISOR_URL;\ntest.skipIf(!url)('through supavisor', () => {});\n" });
-    const r = stress(root, 'test/supavisor.test.ts', '--iterations', '2');
-    expect(r.code, r.out).toBe(0);
-    expect(r.manifest.files[0]).toMatchObject({ status: 'not-stressed', reason: expect.stringContaining('GBRAIN_SUPAVISOR_URL (a credentialed external service no CI job holds)') });
-  });
-
   test('a test that ran in the first iteration and skips later is an unexpected skip', () => {
     const root = tree({ 'test/vanish.test.ts': "import { test } from 'bun:test';\nif (Number(process.env.GBRAIN_TEST_SEED) % 2 === 1) test('sometimes', () => {});\ntest('always', () => {});\n" });
     const r = stress(root, 'test/vanish.test.ts', '--iterations', '2', '--seed', '1');
@@ -154,11 +85,12 @@ describe('test:stress runner', () => {
     expect(r.manifest.files[0].iterations[1].missing).toEqual(['sometimes']);
   });
 
-  test('an E2E file without --postgres is listed as not stressed with the next step', () => {
+  test('an E2E file is planned in the e2e profile and needs no database server', () => {
     const root = tree({ 'test/e2e/x.test.ts': "import { test } from 'bun:test';\ntest('x', () => {});\n" });
-    const r = stress(root, 'test/e2e/x.test.ts', '--iterations', '1');
+    const r = stress(root, 'test/e2e/x.test.ts', '--iterations', '1', '--dry-run');
     expect(r.code, r.out).toBe(0);
-    expect(r.manifest.not_stressed[0].reason).toContain('re-run with --postgres');
+    expect(r.out).toMatch(/\be2e\s+test\/e2e\/x\.test\.ts\n/);
+    expect(r.out).not.toContain('not stressed');
   });
 });
 
@@ -170,7 +102,8 @@ describe('arguments, reports and signatures', () => {
     expect(parseArgs(['--work', '[{"file":"test/a.test.ts","first":0,"count":1}]'])).toContain('--work must be');
     expect(parseArgs(['--work', '[{"file":"test/../x.test.ts","first":1,"count":1}]'])).toContain('--work must be');
     expect(parseArgs(['--bogus'])).toBe('unknown flag --bogus');
-    expect(parseArgs(['test/a.test.ts', '--postgres', '--seed', '9'])).toMatchObject({ files: ['test/a.test.ts'], postgres: true, seed: 9, iterations: 10, base: 'origin/master' });
+    expect(parseArgs(['--postgres'])).toBe('unknown flag --postgres');
+    expect(parseArgs(['test/a.test.ts', '--seed', '9'])).toMatchObject({ files: ['test/a.test.ts'], seed: 9, iterations: 10, base: 'origin/main' });
   });
 
   test('failure messages come out of the JUnit report in order', () => {

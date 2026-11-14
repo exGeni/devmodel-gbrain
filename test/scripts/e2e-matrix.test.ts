@@ -31,36 +31,34 @@ describe('frozen E2E matrix', () => {
     expect(prepareMatrix(paths, weights)).toEqual(matrix);
     expect(prepareMatrix(paths.slice(0, 2), weights).include).toHaveLength(2);
   });
-  test('filters only the existing named/live exclusions and emits an explicit empty sentinel', () => {
-    expect(prepareMatrix([...E2E_EXCLUSIONS, paths[0]], weights).include).toEqual([{ shard: 1, files: [paths[0]], empty: false }]);
-    expect(prepareMatrix([], weights).include).toEqual([{ shard: 1, files: [], empty: true }]);
-    expect(prepareMatrix([...E2E_EXCLUSIONS], weights).include[0].empty).toBe(true);
-  });
-  test('drops the persistence-validation.yml crash suites and names their owner', () => {
+  test('filters only the named exclusions and emits an explicit empty sentinel', () => {
+    const owned = 'test/e2e/owned-by-another-job.test.ts';
+    E2E_EXCLUSIONS.add(owned);
     const notices: string[] = [];
     const spy = spyOn(console, 'error').mockImplementation((line: string) => { notices.push(line); });
     try {
-      expect(prepareMatrix(['test/e2e/reconcile-crash.test.ts', 'test/e2e/reconcile-crash-unactivated.test.ts', paths[0]], weights).include)
-        .toEqual([{ shard: 1, files: [paths[0]], empty: false }]);
-    } finally { spy.mockRestore(); }
-    expect(notices).toEqual([
-      'excluded: test/e2e/reconcile-crash.test.ts (owned by persistence-validation.yml)',
-      'excluded: test/e2e/reconcile-crash-unactivated.test.ts (owned by persistence-validation.yml)',
-    ]);
+      expect(prepareMatrix([owned, paths[0]], weights).include).toEqual([{ shard: 1, files: [paths[0]], empty: false }]);
+      expect(prepareMatrix([owned], weights).include[0].empty).toBe(true);
+    } finally { spy.mockRestore(); E2E_EXCLUSIONS.delete(owned); }
+    expect(notices).toEqual([`excluded (named-job / live-key lane): ${owned}`, `excluded (named-job / live-key lane): ${owned}`]);
+    expect(prepareMatrix([...E2E_EXCLUSIONS, paths[0]], weights).include).toEqual([{ shard: 1, files: [paths[0]], empty: false }]);
+    expect(prepareMatrix([], weights).include).toEqual([{ shard: 1, files: [], empty: true }]);
   });
-  test('drops every backend-matrix file and names the Tier 1 backend matrix as its owner', () => {
+  test('drops every backend-matrix file and names the backend matrix as its owner', () => {
     const rows = readFileSync(join(repo, 'scripts/e2e-backend-matrix.txt'), 'utf8').split('\n')
       .filter(row => row && !row.startsWith('#') && !row.startsWith('!')).map(row => row.split('\t')[0]);
     const e2eRows = rows.filter(row => row.startsWith('test/e2e/'));
-    expect(e2eRows.length).toBeGreaterThan(30);
     expect([...BACKEND_MATRIX_OWNED].sort()).toEqual([...e2eRows].sort());
+    const matrixFile = 'test/e2e/owned-by-the-matrix.test.ts';
+    BACKEND_MATRIX_OWNED.add(matrixFile);
+    E2E_EXCLUSIONS.add(matrixFile);
     const notices: string[] = [];
     const spy = spyOn(console, 'error').mockImplementation((line: string) => { notices.push(line); });
     try {
-      expect(prepareMatrix([...e2eRows, paths[0]], weights).include).toEqual([{ shard: 1, files: [paths[0]], empty: false }]);
-    } finally { spy.mockRestore(); }
-    expect(notices).toContain('excluded: test/e2e/executor-binding-matrix.test.ts (owned by the Tier 1 backend matrix, scripts/e2e-backend-matrix.txt)');
-    expect(notices).toHaveLength(e2eRows.length);
+      expect(prepareMatrix([...e2eRows, matrixFile, paths[0]], weights).include).toEqual([{ shard: 1, files: [paths[0]], empty: false }]);
+    } finally { spy.mockRestore(); BACKEND_MATRIX_OWNED.delete(matrixFile); E2E_EXCLUSIONS.delete(matrixFile); }
+    expect(notices).toContain(`excluded: ${matrixFile} (owned by the backend matrix, scripts/e2e-backend-matrix.txt)`);
+    expect(notices).toHaveLength(e2eRows.length + 1);
   });
   test('refuses invalid selections and duplicate paths', () => {
     for (const files of [[paths[0], paths[0]], ['../outside.test.ts'], ['test/e2e/../escape.test.ts'], ['test/e2e/$(touch marker).test.ts']]) expect(() => prepareMatrix(files, weights)).toThrow();
@@ -79,7 +77,12 @@ describe('frozen E2E matrix', () => {
   test('worker rejects missing, excluded, duplicate and symlink-escaping files', () => fixture(root => {
     writeFileSync(join(root, 'outside.test.ts'), '// outside');
     symlinkSync(join(root, 'outside.test.ts'), join(root, 'test/e2e/escape.test.ts'));
-    for (const files of [['test/e2e/missing.test.ts'], [paths[0], paths[0]], ['test/e2e/escape.test.ts'], ['test/e2e/mechanical.test.ts']]) expect(() => validateRow({ shard: 1, files, empty: false }, root)).toThrow();
+    writeFileSync(join(root, 'test/e2e/owned.test.ts'), '// owned by another job');
+    E2E_EXCLUSIONS.add('test/e2e/owned.test.ts');
+    try {
+      for (const files of [['test/e2e/missing.test.ts'], [paths[0], paths[0]], ['test/e2e/escape.test.ts'], ['test/e2e/owned.test.ts']]) expect(() => validateRow({ shard: 1, files, empty: false }, root)).toThrow();
+      expect(() => validateRow({ shard: 1, files: ['test/e2e/owned.test.ts'], empty: false }, root)).toThrow('excluded E2E worker file: test/e2e/owned.test.ts');
+    } finally { E2E_EXCLUSIONS.delete('test/e2e/owned.test.ts'); }
   }));
   test('propagates runner failure without marking an executed partition successful', () => fixture(root => {
     writeFileSync(join(root, 'scripts/run-e2e.sh'), 'exit 17\n');

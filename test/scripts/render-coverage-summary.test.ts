@@ -4,7 +4,7 @@
 // structural TSV); these tests assert the key markdown lines appear.
 
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseStructuralTsv } from "../../scripts/render-coverage-summary.ts";
@@ -67,7 +67,7 @@ function runRender(args: string[]): RunResult {
 }
 
 describe("render: key lines", () => {
-  it("prints corpus, lane completeness, totals, dir table, worst files, neverLoaded, cli.ts note", () => {
+  it("prints corpus, lane completeness, totals, dir table, worst files, neverLoaded", () => {
     const res = runRender(["--summary", summaryFixture()]);
     expect(res.code).toBe(0);
     const out = res.stdout;
@@ -80,21 +80,28 @@ describe("render: key lines", () => {
     expect(out).toContain("### Never-loaded src files: 12");
     expect(out).toContain("- src/never/loaded-00.ts");
     expect(out).toContain("+2 more");
-    expect(out).toContain("[subprocess-undercount]");
     expect(out).not.toContain("DEGRADED");
   });
 
   it("prioritizes watchlist files in the worst-covered table", () => {
-    // src/core/operations.ts is on the committed watchlist
-    // (scripts/coverage-baseline.json); src/other-file.ts is worse (5%) but
-    // must sort AFTER the watchlist entry.
-    const res = runRender(["--summary", summaryFixture()]);
-    const out = res.stdout;
-    const opsIdx = out.indexOf("| src/core/operations.ts | 10% | 100 | yes |");
-    const otherIdx = out.indexOf("| src/other-file.ts | 5% | 100 |  |");
-    expect(opsIdx).toBeGreaterThan(-1);
-    expect(otherIdx).toBeGreaterThan(-1);
-    expect(opsIdx).toBeLessThan(otherIdx);
+    // The renderer reads the watchlist from the coverage-baseline.json next to
+    // it: run a copy beside a baseline that lists src/core/operations.ts.
+    // src/other-file.ts is worse (5%) but must sort AFTER the watchlist entry.
+    const dir = mkdtempSync(join(tmpdir(), "render-coverage-watchlist-"));
+    try {
+      copyFileSync(join(REPO_ROOT, "scripts", "render-coverage-summary.ts"), join(dir, "render-coverage-summary.ts"));
+      writeFileSync(join(dir, "coverage-baseline.json"), JSON.stringify({ watchlist: ["src/core/operations.ts"] }), "utf8");
+      const res = Bun.spawnSync(["bun", join(dir, "render-coverage-summary.ts"), "--summary", summaryFixture()], { cwd: REPO_ROOT, env: { ...process.env }, stdout: "pipe", stderr: "pipe" });
+      expect(res.exitCode).toBe(0);
+      const out = res.stdout.toString();
+      const opsIdx = out.indexOf("| src/core/operations.ts | 10% | 100 | yes |");
+      const otherIdx = out.indexOf("| src/other-file.ts | 5% | 100 |  |");
+      expect(opsIdx).toBeGreaterThan(-1);
+      expect(otherIdx).toBeGreaterThan(-1);
+      expect(opsIdx).toBeLessThan(otherIdx);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("prints the DEGRADED banner when the summary is degraded", () => {

@@ -1,62 +1,43 @@
 /**
  * Planning half of `bun run test:stress` (scripts/stress/run.ts) and of the
- * CI stress gate and race hunt (scripts/stress/gate.ts): which files a diff
- * touches, which execution profile each file needs, what a run costs, how
- * work splits into shards, and the replayable reproduce line.
+ * CI stress gate (scripts/stress/gate.ts): which files a diff touches, which
+ * execution profile each file needs, what a run costs, how work splits into
+ * shards, and the replayable reproduce line.
  *
  * Pure except for the git helpers, which take an explicit cwd.
- * Docs: docs/TESTING.md#stress-gate and docs/TESTING.md#race-hunt.
+ * Docs: docs/TESTING.md#stress-gate.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, normalize, relative } from 'node:path';
-import { postgresArm, postgresLanes } from '../check-postgres-lane-coverage.ts';
 
 export const STRESS_DOCS = 'docs/TESTING.md#stress-gate';
-export const RACE_HUNT_DOCS = 'docs/TESTING.md#race-hunt';
 export const TEST_PATH_RE = /^test\/[\w./-]+\.test\.ts$/;
 export const DEFAULT_ITERATIONS = 10;
 /** Helpers with more direct test importers than this are sampled (Eng fan-in rule). */
 export const HELPER_FAN_IN_LIMIT = 25;
 export const HELPER_SAMPLE = 10;
-/** Estimated per-iteration overhead beyond a file's measured time: Bun startup plus database creation. */
+/** Estimated per-iteration overhead beyond a file's measured time: Bun startup. */
 export const ITERATION_OVERHEAD_MS = 3000;
 
-export type ProfileName = 'unit' | 'serial' | 'slow' | 'postgres-arm' | 'e2e';
+export type ProfileName = 'unit' | 'serial' | 'slow' | 'e2e';
 
 export interface Profile {
   name: ProfileName;
-  /** `database` runs get a fresh database per iteration; `no-database` runs have DATABASE_URL unset. */
-  env: 'database' | 'no-database';
-  /** Backend arm recorded in receipts and failure identities. */
-  arm: 'pglite' | 'pglite+postgres' | 'postgres';
   timeoutMs: number;
   /** Extra environment, mirroring the workflow's pull-request values. */
   vars: Record<string, string>;
-  /** A prerequisite the runner builds once before the first iteration. */
-  prereq?: 'old-binary';
 }
 
 export interface NotStressed { file: string; reason: string }
 
 /**
  * Per-file execution specifics that differ from the suffix default. Values
- * mirror test.yml / persistence-validation.yml on pull requests; a test pins
- * the export-scale and old-binary rows to the workflow.
+ * mirror the workflow step that runs the file on pull requests; every row
+ * names an existing test file.
  */
-export const SPECIAL_FILES: Record<string, Partial<Profile>> = {
-  'test/export-scale.slow.test.ts': { timeoutMs: 900_000, vars: { GBRAIN_TEST_EXPORT_SCALE_PAGES: '10001' } },
-  'test/entity-resolve-perf.slow.test.ts': { timeoutMs: 300_000 },
-  'test/entity-card-perf.slow.test.ts': { timeoutMs: 300_000 },
-  'test/eval-brainbench-e2e.slow.test.ts': { timeoutMs: 300_000 },
-  'test/persistence-skill-old-binary.slow.test.ts': { timeoutMs: 180_000, prereq: 'old-binary' },
-  'test/reconcile-crash-unactivated-1.slow.test.ts': { timeoutMs: 180_000 },
-  'test/reconcile-crash-unactivated-2.slow.test.ts': { timeoutMs: 180_000 },
-  'test/reconcile-crash-activated-1.slow.test.ts': { timeoutMs: 180_000 },
-  'test/reconcile-crash-activated-2.slow.test.ts': { timeoutMs: 180_000 },
-  'test/persistence-crash-robot.slow.test.ts': { timeoutMs: 300_000 },
-};
+export const SPECIAL_FILES: Record<string, Partial<Profile>> = {};
 
 /** Files no stress run can execute here, with the reason the summary prints. */
 export function notStressedReason(file: string, liveKeyOnly: Set<string>): string | null {
@@ -65,37 +46,15 @@ export function notStressedReason(file: string, liveKeyOnly: Set<string>): strin
   return null;
 }
 
-/**
- * The execution profile for one file. A file with a DATABASE_URL-gated arm
- * runs both arms against a fresh database when Postgres is available, exactly
- * like persistence-validation's unit-postgres-arms job; otherwise it runs its
- * suffix lane with DATABASE_URL unset.
- */
-export function profileFor(file: string, opts: { armed: boolean; postgres: boolean }): Profile {
+/** The execution profile for one file: its lane by suffix and location, plus its per-file specifics. */
+export function profileFor(file: string): Profile {
   const special = SPECIAL_FILES[file] ?? {};
   let base: Profile;
-  if (file.startsWith('test/e2e/')) base = { name: 'e2e', env: 'database', arm: 'postgres', timeoutMs: 60_000, vars: {} };
-  else if (opts.armed && opts.postgres) base = { name: 'postgres-arm', env: 'database', arm: 'pglite+postgres', timeoutMs: 120_000, vars: {} };
-  else if (file.endsWith('.serial.test.ts')) base = { name: 'serial', env: 'no-database', arm: 'pglite', timeoutMs: 120_000, vars: {} };
-  else if (file.endsWith('.slow.test.ts')) base = { name: 'slow', env: 'no-database', arm: 'pglite', timeoutMs: 120_000, vars: {} };
-  else base = { name: 'unit', env: 'no-database', arm: 'pglite', timeoutMs: 60_000, vars: {} };
-  return { ...base, ...special, vars: { ...base.vars, ...(special.vars ?? {}) }, name: base.name, env: base.env, arm: base.arm };
-}
-
-let lanes: Map<string, string> | undefined;
-
-/**
- * How a file's DATABASE_URL-gated PostgreSQL arm runs. A file in
- * test/postgres-unit-arms.txt or a DATABASE_URL workflow step runs it with
- * DATABASE_URL set (`armed`); a file whose only lane is a test/e2e wrapper
- * (registerPostgresTests, GBRAIN_TEST_BACKEND=postgres) runs it only through
- * that wrapper, so the wrapper is stressed instead.
- */
-export function armMode(root: string, file: string): { armed: boolean; wrapper?: string } {
-  if (file.startsWith('test/e2e/') || !existsSync(join(root, file)) || !postgresArm(join(root, file))) return { armed: false };
-  lanes ??= postgresLanes();
-  const lane = lanes.get(file);
-  return lane?.startsWith('test/e2e/') ? { armed: false, wrapper: lane } : { armed: true };
+  if (file.startsWith('test/e2e/')) base = { name: 'e2e', timeoutMs: 60_000, vars: {} };
+  else if (file.endsWith('.serial.test.ts')) base = { name: 'serial', timeoutMs: 120_000, vars: {} };
+  else if (file.endsWith('.slow.test.ts')) base = { name: 'slow', timeoutMs: 120_000, vars: {} };
+  else base = { name: 'unit', timeoutMs: 60_000, vars: {} };
+  return { ...base, ...special, vars: { ...base.vars, ...(special.vars ?? {}) }, name: base.name };
 }
 
 /** Database URLs and tokens never reach a printed line. */
@@ -107,7 +66,7 @@ export function redact(text: string): string {
 
 export interface ReproduceInput {
   file: string; iterations: number; firstIteration: number; seed: number;
-  postgres: boolean; randomize?: boolean;
+  randomize?: boolean;
 }
 
 /** The exact local command that replays a stress context. Never carries a credential. */
@@ -115,7 +74,6 @@ export function reproduceLine(r: ReproduceInput): string {
   const parts = ['bun run test:stress', r.file, '--iterations', String(r.iterations)];
   if (r.firstIteration !== 1) parts.push('--first-iteration', String(r.firstIteration));
   parts.push('--seed', String(r.seed));
-  if (r.postgres) parts.push('--postgres');
   if (r.randomize) parts.push('--randomize');
   return redact(parts.join(' '));
 }
@@ -276,7 +234,7 @@ export function planShards(files: Array<{ file: string; perIterationMs: number; 
   }
 }
 
-export interface Weights { unit: Map<string, number>; serialSeconds: Map<string, number>; e2e: Map<string, number>; arms: Map<string, number>; stress?: Map<string, number> }
+export interface Weights { unit: Map<string, number>; serialSeconds: Map<string, number>; e2e: Map<string, number>; stress?: Map<string, number> }
 
 /** Measured stress iterations (milliseconds), mined from stress shard logs by `gate.ts mine-iterations`; read before the lane maps. */
 export const STRESS_ITERATION_WEIGHTS = 'scripts/stress/iteration-weights.json';
@@ -288,7 +246,6 @@ export function loadWeights(root: string): Weights {
     unit: loadMap(join(root, 'scripts/test-weights.json')),
     serialSeconds: loadMap(join(root, 'scripts/serial-weights.json')),
     e2e: loadMap(join(root, 'scripts/e2e-weights.json')),
-    arms: loadMap(join(root, 'scripts/postgres-arm-weights.json')),
     stress: loadMap(join(root, STRESS_ITERATION_WEIGHTS)),
   };
 }
@@ -297,7 +254,7 @@ const p75 = (values: number[]) => { const s = [...values].sort((a, b) => a - b);
 
 /**
  * Per-file median of the stress iterations in `logs` (stress shard job logs: `✓|✗ <file> iteration N (seed S) 12.3s`), in
- * milliseconds. A stress iteration can cost more than the file's lane run (a fresh database per iteration).
+ * milliseconds. A stress iteration can cost more than the file's lane run.
  */
 export function mineStressIterations(logs: string[]): Map<string, number> {
   const samples = new Map<string, number[]>();
@@ -318,7 +275,6 @@ export function iterationEstimateMs(file: string, profile: ProfileName, w: Weigh
   const stressed = w.stress?.get(file);
   if (stressed !== undefined) return stressed;
   switch (profile) {
-    case 'postgres-arm': return w.arms.get(file) ?? p75([...w.arms.values()]);
     case 'e2e': return w.e2e.get(file) ?? p75([...w.e2e.values()]);
     case 'serial': return (w.serialSeconds.get(file) ?? p75([...w.serialSeconds.values()])) * 1000;
     case 'slow': return w.unit.get(file) ?? 120_000;

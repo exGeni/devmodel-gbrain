@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 /**
- * Order hunt: run the E2E corpus in a seeded random order on one shared
- * Postgres database to catch tests that leak state into the next file (a
- * config row left at teardown, a session setting, leftover pages). Per-iteration
- * fresh databases (the stress gate, the race hunt) cannot see this class.
+ * Order hunt: run the E2E corpus in a seeded random order in one shared
+ * test environment to catch tests that leak state into the next file (a
+ * config row left at teardown, a session setting, leftover fixtures).
+ * Per-iteration isolation (the stress gate) cannot see this class.
  *
  *   bun scripts/order-hunt.ts plan --seed N --shard K --of M
  *     prints this shard's files, one per line, in run order: the run-e2e.sh

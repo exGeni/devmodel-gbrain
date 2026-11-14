@@ -401,10 +401,28 @@ it('full-profile CLI pins source, attempt and job provenance and preserves both 
   const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-full-'));
   try {
     const repo = join(import.meta.dir, '../..');
-    const sha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).stdout.trim();
-    const corpus = sourceE2ECorpus(sha);
-    expect(corpus).toContain('test/phantom-redirect-engine-parity.test.ts');
-    expect(() => sourceE2ECorpus('wrong-commit')).toThrow('source SHA');
+    // The corpus is whatever the checkout's own run-e2e.sh discovers: build a
+    // one-commit fixture repository with the real runner and two E2E files.
+    const checkout = join(dir, 'checkout');
+    mkdirSync(join(checkout, 'scripts/lib'), { recursive: true });
+    mkdirSync(join(checkout, 'test/e2e'), { recursive: true });
+    for (const file of ['run-e2e.sh', 'lib/test-env.sh']) writeFileSync(join(checkout, 'scripts', file), readFileSync(join(repo, 'scripts', file)));
+    writeFileSync(join(checkout, 'scripts/e2e-live-key-only.txt'), '# no key-gated files\n');
+    for (const name of ['alpha', 'beta']) writeFileSync(join(checkout, `test/e2e/${name}.test.ts`), '');
+    const inCheckout = (...args: string[]) => spawnSync('git', ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', ...args], { cwd: checkout, encoding: 'utf8' });
+    inCheckout('init', '-q', '-b', 'main');
+    inCheckout('add', '-A');
+    inCheckout('commit', '-q', '-m', 'fixture corpus');
+    const sha = inCheckout('rev-parse', 'HEAD').stdout.trim();
+    // The module binds its checkout at import (GBRAIN_MINE_ROOT), so ask it in a child.
+    const discover = (commit: string) => spawnSync(process.execPath, ['-e', `import { sourceE2ECorpus } from ${JSON.stringify(join(repo, 'scripts/mine-shard-weights.ts'))}; console.log(JSON.stringify(sourceE2ECorpus(process.argv[1])));`, commit], { cwd: checkout, encoding: 'utf8', env: { ...process.env, GBRAIN_MINE_ROOT: checkout } });
+    const discovered = discover(sha);
+    expect(discovered.status, discovered.stderr).toBe(0);
+    const corpus = JSON.parse(discovered.stdout) as string[];
+    expect(corpus).toEqual(['test/e2e/alpha.test.ts', 'test/e2e/beta.test.ts']);
+    const wrong = discover('wrong-commit');
+    expect(wrong.status).not.toBe(0);
+    expect(wrong.stderr).toContain('source SHA');
     const bin = join(dir, 'bin');
     mkdirSync(bin);
     writeFileSync(join(bin, 'gh'), `#!/bin/sh
@@ -422,9 +440,9 @@ esac
     const line = (text: string) => `coverage-full-e2e\tstep\t2026-09-24T06:00:00.000Z ${text}\n`;
     const files = corpus.map(path => line(`=== ${path.split('/').at(-1)} ===`) + line(' 0 fail') + line('Ran 1 test across 1 file. [1.00ms]'));
     const complete = files.join('') + line(`Files: ${files.length} total, ${files.length} passed, 0 failed`);
-    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_GH_INFO: infoPath, FIXTURE_GH_LOG: logPath };
+    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_GH_INFO: infoPath, FIXTURE_GH_LOG: logPath, GBRAIN_MINE_ROOT: checkout };
     const base = [join(repo, 'scripts/mine-shard-weights.ts'), '--lane', 'e2e', '--e2e-profile', 'full', '--out', out];
-    const run = (args = ['--run', '123']) => spawnSync(process.execPath, [...base, ...args], { env, encoding: 'utf8' });
+    const run = (args = ['--run', '123']) => spawnSync(process.execPath, [...base, ...args], { env, encoding: 'utf8', cwd: checkout });
     writeFileSync(out, '{"keep":123}\n');
     writeFileSync(meta, '{"prior":true}\n');
     for (const [metadata, log] of [

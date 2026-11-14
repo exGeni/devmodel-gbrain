@@ -1,7 +1,6 @@
 /**
- * scripts/stress/gate.ts: the PR stress gate and race-hunt planner and
- * reporter (docs/TESTING.md#stress-gate, docs/TESTING.md#race-hunt).
- * GitHub calls go through a recorded fake client.
+ * scripts/stress/gate.ts: the PR stress gate planner and reporter
+ * (docs/TESTING.md#stress-gate). GitHub calls go through a recorded fake client.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
@@ -10,8 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { GitHubClient } from '../../scripts/lib/gh-issue.ts';
 import {
-  RACE_FLOOR_MAX_SHARDS, RACE_MAX_SHARDS, RACE_MIN_ITERATIONS, RACE_SHARD_BUDGET_MS, buildReport, loadExemptions, matchExemption, missingWork,
-  parseExemptionBlocks, planGate, planRaceHunt, shardTimings, type GhIssue, type Plan, type StressFailure,
+  buildReport, loadExemptions, matchExemption, missingWork, parseExemptionBlocks, planGate, shardTimings, type GhIssue, type Plan, type StressFailure,
 } from '../../scripts/stress/gate.ts';
 import type { Weights } from '../../scripts/stress/plan.ts';
 
@@ -23,7 +21,7 @@ function repo(files: Record<string, string>): { root: string; base: string } {
   const root = mkdtempSync(join(tmpdir(), 'gbrain-stress-gate-'));
   dirs.push(root);
   const git = (...args: string[]) => spawnSync('git', args, { cwd: root, encoding: 'utf8' }).stdout.trim();
-  git('init', '-q', '-b', 'master'); git('config', 'user.email', 's@example.invalid'); git('config', 'user.name', 's'); git('config', 'commit.gpgsign', 'false');
+  git('init', '-q', '-b', 'main'); git('config', 'user.email', 's@example.invalid'); git('config', 'user.name', 's'); git('config', 'commit.gpgsign', 'false');
   for (const [rel, body] of Object.entries(files)) { mkdirSync(join(root, rel, '..'), { recursive: true }); writeFileSync(join(root, rel), body); }
   git('add', '-A'); git('commit', '-qm', 'base');
   return { root, base: git('rev-parse', 'HEAD') };
@@ -33,7 +31,7 @@ const commit = (root: string, files: Record<string, string>) => {
   spawnSync('git', ['add', '-A'], { cwd: root }); spawnSync('git', ['commit', '-qm', 'pr'], { cwd: root });
   return spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
 };
-const weights = (arms: Record<string, number> = {}): Weights => ({ unit: new Map(), serialSeconds: new Map(), e2e: new Map(), arms: new Map(Object.entries(arms)) });
+const weights = (): Weights => ({ unit: new Map(), serialSeconds: new Map(), e2e: new Map() });
 const isPlan = (p: Plan | { error: string }): Plan => { if ('error' in p) throw new Error(p.error); return p; };
 
 describe('gate plan', () => {
@@ -57,18 +55,25 @@ describe('gate plan', () => {
     expect(plan.shards.flatMap(s => s.items).reduce((n, i) => n + i.count, 0)).toBe(20);
   });
 
+  test('a changed test/e2e file is planned in the e2e profile, which runs through scripts/run-e2e.sh', () => {
+    const { root, base } = repo({ 'test/a.test.ts': "test('a', () => {});\n" });
+    const head = commit(root, { 'test/e2e/x.test.ts': "test('x', () => {});\n" });
+    const plan = isPlan(planGate(root, { event: 'pull_request', baseSha: base, headSha: head }, weights()));
+    expect(plan.files.map(f => [f.file, f.profile])).toEqual([['test/e2e/x.test.ts', 'e2e']]);
+  });
+
   test('a missing merge base fails the plan with the fetch next step', () => {
     const { root } = repo({ 'test/a.test.ts': '' });
     const result = planGate(root, { event: 'merge_group', baseSha: 'f'.repeat(40), headSha: 'HEAD' }, weights());
     expect('error' in result && result.error).toContain('Next: git fetch');
     const report = buildReport({ plan: undefined, planResult: 'failure', shardsResult: 'skipped', manifests: [], exemptions: { exemptions: [], openIssues: [] }, today: '2026-10-05', artifact: '' });
     expect(report.exit).toBe(1);
-    expect(report.summary).toContain('fetch it (`git fetch --no-tags origin master`)');
+    expect(report.summary).toContain('fetch it (`git fetch --no-tags origin main`)');
   });
 
   test('dispatch inputs are validated before use and the run is labeled diagnostic', () => {
     expect(planGate(REPO, { event: 'workflow_dispatch', stressFiles: 'test/a.test.ts $(curl x)' }, weights())).toMatchObject({ error: expect.stringContaining('not repo-relative test files') });
-    expect(planGate(REPO, { event: 'workflow_dispatch', stressBase: 'master;id' }, weights())).toMatchObject({ error: expect.stringContaining('must be 40-hex SHAs or valid ref names') });
+    expect(planGate(REPO, { event: 'workflow_dispatch', stressBase: 'main;id' }, weights())).toMatchObject({ error: expect.stringContaining('must be 40-hex SHAs or valid ref names') });
     const plan = isPlan(planGate(REPO, { event: 'workflow_dispatch', stressFiles: 'test/scripts/stress-plan.test.ts' }, weights()));
     expect(plan).toMatchObject({ run: true, diagnostic: true });
     const workflow = readFileSync(join(REPO, '.github/workflows/stress.yml'), 'utf8');
@@ -76,81 +81,14 @@ describe('gate plan', () => {
   });
 });
 
-describe('PostgreSQL arm routing', () => {
-  // A wrapper-laned arm (registerPostgresTests) never runs with DATABASE_URL
-  // alone; the #5927 replay flagged it "never connected" 10 of 10 times.
-  test('a file whose arm runs through a test/e2e wrapper is stressed with that wrapper', () => {
-    const plan = isPlan(planGate(REPO, { event: 'workflow_dispatch', stressFiles: 'test/autopilot-auto-drain-dispatch.test.ts' }, weights()));
-    expect(plan.files.map(f => [f.file, f.profile])).toEqual([['test/autopilot-auto-drain-dispatch.test.ts', 'unit'], ['test/e2e/autopilot-auto-drain-dispatch.test.ts', 'e2e']]);
-  });
-
-  test('a listed unit-lane arm runs both arms against a fresh database', () => {
-    const plan = isPlan(planGate(REPO, { event: 'workflow_dispatch', stressFiles: 'test/managed-lint.test.ts' }, weights()));
-    expect(plan.files.map(f => [f.file, f.profile])).toEqual([['test/managed-lint.test.ts', 'postgres-arm']]);
-  });
-});
-
-describe('race hunt plan', () => {
-  const list = (n: number) => Array.from({ length: n }, (_, i) => `test/arm-${String(i).padStart(2, '0')}.test.ts`);
-  function armsRepo(n: number) {
-    const files: Record<string, string> = { 'test/postgres-unit-arms.txt': `${list(n).join('\n')}\n` };
-    for (const f of list(n)) files[f] = "for (const b of testBackends()) describe(b, () => { test('x', () => {}); });\n";
-    return repo(files).root;
-  }
-
-  test('every listed file runs 10 iterations when the set fits 12 shards of 55 minutes', () => {
-    const root = armsRepo(20);
-    const plan = planRaceHunt(root, { day: 3 }, weights(Object.fromEntries(list(20).map(f => [f, 60_000]))));
-    expect(plan.files.every(f => f.iterations === 10 && f.profile === 'postgres-arm')).toBe(true);
-    expect(plan.unrun).toEqual([]);
-    expect(plan.shards.length).toBeLessThanOrEqual(RACE_MAX_SHARDS);
-    expect(plan.shards.every(s => s.estimateMs <= RACE_SHARD_BUDGET_MS)).toBe(true);
-  });
-
-  test('past 12 shards depth drops to no fewer than 3 nightly and the spare capacity rotates by day', () => {
-    const root = armsRepo(30);
-    const w = weights(Object.fromEntries(list(30).map(f => [f, 4 * 60_000])));
-    const monday = planRaceHunt(root, { day: 1 }, w);
-    const tuesday = planRaceHunt(root, { day: 2 }, w);
-    expect(monday.unrun).toEqual([]);
-    expect(monday.files.every(f => f.iterations >= RACE_MIN_ITERATIONS && f.iterations <= 10)).toBe(true);
-    expect(monday.files.length).toBe(30);
-    const deep = (p: Plan) => p.files.filter(f => f.iterations > Math.min(...p.files.map(x => x.iterations))).map(f => f.file);
-    expect(deep(monday)).not.toEqual(deep(tuesday));
-    expect(monday.shards.every(s => s.estimateMs <= RACE_SHARD_BUDGET_MS)).toBe(true);
-  });
-
-  test('a 3-iteration floor past 12 shards runs every file in a second group of up to 24 shards', () => {
-    const root = armsRepo(20);
-    const plan = planRaceHunt(root, { day: 0 }, weights(Object.fromEntries(list(20).map(f => [f, 15 * 60_000]))));
-    expect(plan.unrun).toEqual([]);
-    expect(plan.files.map(f => f.file)).toEqual(list(20));
-    expect(plan.files.every(f => f.iterations === RACE_MIN_ITERATIONS)).toBe(true);
-    expect(plan.shards.length).toBeGreaterThan(RACE_MAX_SHARDS);
-    expect(plan.shards.length).toBeLessThanOrEqual(RACE_FLOOR_MAX_SHARDS);
-    expect(plan.shards.every(s => s.estimateMs <= RACE_SHARD_BUDGET_MS)).toBe(true);
-  });
-
-  test('a set that does not fit at 3 iterations fails "race hunt over budget" naming the unrun files', () => {
-    const root = armsRepo(10);
-    const plan = planRaceHunt(root, { day: 0 }, weights(Object.fromEntries(list(10).map(f => [f, 40 * 60_000]))));
-    expect(plan.unrun.length).toBeGreaterThan(0);
-    const report = buildReport({ plan, planResult: 'success', shardsResult: 'success', manifests: [], exemptions: { exemptions: [], openIssues: [] }, today: '2026-10-05', artifact: '' });
-    expect(report.exit).toBe(1);
-    expect(report.summary).toContain('### Race hunt over budget');
-    expect(report.errors.join('\n')).toContain('race hunt over budget');
-    for (const f of plan.unrun) expect(report.summary).toContain(f);
-  });
-});
-
 const failure = (over: Partial<StressFailure> = {}): StressFailure => ({
-  file: 'test/a.test.ts', iteration: 3, seed: 12, test: 'suite > counts', backend: 'pglite+postgres', signature: 'expect(received).toBe(expected) Expected: N Received: N',
-  message: 'expect(received).toBe(expected)\n\nExpected: 7\nReceived: 6', reproduce: 'bun run test:stress test/a.test.ts --iterations 10 --first-iteration 3 --seed 10 --postgres',
-  context: 'sha abc, Bun 1.4.2, backend pglite+postgres, profile postgres-arm (database), iteration 3, seed 12', ...over,
+  file: 'test/a.test.ts', iteration: 3, seed: 12, test: 'suite > counts', signature: 'expect(received).toBe(expected) Expected: N Received: N',
+  message: 'expect(received).toBe(expected)\n\nExpected: 7\nReceived: 6', reproduce: 'bun run test:stress test/a.test.ts --iterations 10 --first-iteration 3 --seed 10',
+  context: 'sha abc, Bun 1.4.2, profile unit, iteration 3, seed 12', ...over,
 });
 const gatePlan = (files: string[]): Plan => ({
-  version: 1, mode: 'gate', run: true, reason: 'x', diagnostic: false, head: 'h', base: 'b', notStressed: [], helpers: [], unrun: [], iterations: 10, budgetMs: 1, estimateMs: 1,
-  files: files.map(file => ({ file, profile: 'postgres-arm', iterations: 10, estimateMs: 1 })),
+  version: 1, mode: 'gate', run: true, reason: 'x', diagnostic: false, head: 'h', base: 'b', notStressed: [], helpers: [], iterations: 10, budgetMs: 1, estimateMs: 1,
+  files: files.map(file => ({ file, profile: 'unit', iterations: 10, estimateMs: 1 })),
   shards: [{ index: 1, estimateMs: 1, items: files.map(file => ({ file, first: 1, count: 10, estimateMs: 1 })) }],
 });
 const manifest = (files: string[], failures: StressFailure[]) => ({
@@ -164,7 +102,7 @@ describe('report', () => {
     const report = buildReport({ plan, planResult: 'success', shardsResult: 'success', manifests: [manifest(['test/a.test.ts'], [failure({ message: 'connect postgres://gbrain_test:hunter2@127.0.0.1/gbrain_test refused' })])], exemptions: { exemptions: [], openIssues: [] }, today: '2026-10-05', artifact: 'https://example.invalid/run/1' });
     expect(report.exit).toBe(1);
     expect(report.summary).toContain('A flaky touched file must be root-caused in this PR');
-    expect(report.summary).toContain('bun run test:stress test/a.test.ts --iterations 10 --first-iteration 3 --seed 10 --postgres');
+    expect(report.summary).toContain('bun run test:stress test/a.test.ts --iterations 10 --first-iteration 3 --seed 10');
     expect(report.summary).not.toContain('hunter2');
     expect(report.errors[0]).toMatch(/^file=test\/a\.test\.ts::stress gate: failed 1 of 10 iterations \(first: iteration 3\)/);
     expect(report.errors[0]).toContain('Docs: docs/TESTING.md#stress-gate');
@@ -179,14 +117,15 @@ describe('report', () => {
 
   test('a matching unexpired exemption passes that failure only; a new signature still fails', () => {
     const plan = gatePlan(['test/a.test.ts']);
-    const ex = { file: 'test/a.test.ts', test: 'suite > counts', backend: 'pglite+postgres', signature: failure().signature, owner: '@release-duty', expires: '2026-10-20', issue: 7, url: 'https://example.invalid/issues/7' };
+    const ex = { file: 'test/a.test.ts', test: 'suite > counts', signature: failure().signature, owner: '@release-duty', expires: '2026-10-20', issue: 7, url: 'https://example.invalid/issues/7' };
     const known = buildReport({ plan, planResult: 'success', shardsResult: 'success', manifests: [manifest(['test/a.test.ts'], [failure()])], exemptions: { exemptions: [ex], openIssues: [] }, today: '2026-10-05', artifact: '' });
     expect(known.exit).toBe(0);
     expect(known.summary).toContain('matches the open issue https://example.invalid/issues/7');
     const fresh = buildReport({ plan, planResult: 'success', shardsResult: 'success', manifests: [manifest(['test/a.test.ts'], [failure(), failure({ signature: 'TypeError: x is undefined', iteration: 5 })])], exemptions: { exemptions: [ex], openIssues: [] }, today: '2026-10-05', artifact: '' });
     expect(fresh.exit).toBe(1);
     expect(matchExemption(failure(), [{ ...ex, expires: '2026-10-04' }], '2026-10-05')).toBeUndefined();
-    expect(matchExemption(failure({ backend: 'pglite' }), [ex], '2026-10-05')).toBeUndefined();
+    expect(matchExemption(failure({ test: 'suite > other' }), [ex], '2026-10-05')).toBeUndefined();
+    expect(matchExemption(failure({ file: 'test/b.test.ts' }), [ex], '2026-10-05')).toBeUndefined();
   });
 
   test('an iteration without a receipt is incomplete and fails, never a pass', () => {
@@ -200,14 +139,14 @@ describe('report', () => {
 
   test('p95 queue and completion come from the shard jobs only', () => {
     const t = (name: string, c: number, s: number, e: number) => ({ name, created_at: new Date(c * 60_000).toISOString(), started_at: new Date(s * 60_000).toISOString(), completed_at: new Date(e * 60_000).toISOString() });
-    const timings = shardTimings([t('stress-changed-tests / Stress shard 1', 0, 1, 11), t('stress-changed-tests / Stress shard 2', 0, 3, 23), t('test (1)', 0, 0, 99), { ...t('race-hunt / Race hunt shard ${{ matrix.shard }}', 0, 0, 0), conclusion: 'skipped' }]);
+    const timings = shardTimings([t('stress-changed-tests / Stress shard 1', 0, 1, 11), t('stress-changed-tests / Stress shard 2', 0, 3, 23), t('test (1)', 0, 0, 99), { ...t('stress-changed-tests / Stress shard ${{ matrix.shard }}', 0, 0, 0), conclusion: 'skipped' }]);
     expect(timings).toEqual({ shards: 2, p95QueueMin: 3, p95CompletionMin: 23, runnerMin: 30 });
   });
 });
 
 describe('exemption trust', () => {
   const block = (row: Record<string, string>) => `<!-- gbrain-stress-exemption -->\n\`\`\`json\n${JSON.stringify(row)}\n\`\`\``;
-  const row = { file: 'test/a.test.ts', test: 'suite > counts', backend: 'pglite+postgres', signature: 'sig', owner: '@duty', expires: '2026-10-20' };
+  const row = { file: 'test/a.test.ts', test: 'suite > counts', signature: 'sig', owner: '@duty', expires: '2026-10-20' };
   function client(issues: Record<string, GhIssue[]>, extras: Record<string, unknown> = {}): GitHubClient {
     return { async request<T>(_m: string, path: string): Promise<T> {
       const label = /labels=([^&]+)/.exec(path)?.[1];
@@ -217,8 +156,9 @@ describe('exemption trust', () => {
     } };
   }
 
-  test('blocks parse from issue bodies; malformed or incomplete rows grant nothing', () => {
+  test('blocks parse from issue bodies; malformed or incomplete rows grant nothing; a legacy backend key is ignored', () => {
     expect(parseExemptionBlocks(`x\n${block(row)}\n${block({ ...row, expires: 'soon' })}\n<!-- gbrain-stress-exemption -->\n\`\`\`json\n{oops\n\`\`\``)).toEqual([row]);
+    expect(parseExemptionBlocks(block({ ...row, backend: 'legacy' }))).toEqual([row]);
   });
 
   test('bot- or maintainer-opened issues that predate the PR exempt; a forged flake issue from a non-maintainer does not', async () => {
@@ -255,11 +195,8 @@ describe('exemption trust', () => {
 });
 
 describe('docs anchors', () => {
-  test('every anchor the runner and the gate print resolves', () => {
+  test('the anchor the runner and the gate print resolves', () => {
     const testing = readFileSync(join(REPO, 'docs/TESTING.md'), 'utf8');
     expect(testing).toContain('### Stress gate');
-    expect(testing).toContain('### Race hunt');
-    expect(testing).toContain('#### Postgres-arm lanes');
-    expect(readFileSync(join(REPO, 'scripts/stress/README.md'), 'utf8')).toContain('## Race hunt');
   });
 });

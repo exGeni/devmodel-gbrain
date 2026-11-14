@@ -1,14 +1,13 @@
 /**
- * GBRA-135 L6: the keyed Tier 2 nightly fails when its tests did not all run.
+ * GBRA-135 L6: a lane fails when its tests did not all run.
  * A keyless or all-skip `bun test` exits 0, so scripts/require-executed-tests.ts
  * reads the run's receipts and refuses zero passes, any skip and any failure.
  */
 import { describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { load } from 'js-yaml';
 import { executedProblems } from '../../scripts/require-executed-tests.ts';
 
 const REPO = join(import.meta.dir, '../..');
@@ -19,7 +18,7 @@ function receiptsFor(body: string) {
   writeFileSync(join(root, 'test/t2.test.ts'), `import { describe, test, expect } from 'bun:test';\n${body}`);
   const receipts = join(root, 'receipts');
   const run = spawnSync('bash', [join(REPO, 'scripts/run-with-receipt.sh'), 'tier2', 'skills', '--', 'bun', 'test', '--timeout=60000', join(root, 'test/t2.test.ts')], {
-    cwd: REPO, encoding: 'utf8', env: { ...process.env, GBRAIN_NO_SNAPSHOT: '1', GBRAIN_TEST_RECEIPT_DIR: receipts },
+    cwd: REPO, encoding: 'utf8', env: { ...process.env, GBRAIN_TEST_RECEIPT_DIR: receipts },
   });
   return { root, receipts, run };
 }
@@ -28,19 +27,15 @@ const guard = (dir: string, lane = 'tier2') =>
   spawnSync('bun', [join(REPO, 'scripts/require-executed-tests.ts'), dir, lane], { cwd: REPO, encoding: 'utf8' });
 
 describe('require-executed-tests', () => {
-  test('the keyless Tier 2 file skips everything with exit 0, and the guard fails it', () => {
-    const receipts = mkdtempSync(join(tmpdir(), 'gbrain-require-executed-t2-'));
+  test('a file that skips everything exits 0, and the guard fails it', () => {
+    const { root, receipts, run } = receiptsFor(`describe('t2', () => { test.skip('keyed', () => {}); });`);
     try {
-      const env: Record<string, string | undefined> = { ...process.env, GBRAIN_NO_SNAPSHOT: '1', GBRAIN_TEST_RECEIPT_DIR: receipts };
-      delete env.GBRAIN_TEST_KEEP_PROVIDER_KEYS;
-      delete env.DATABASE_URL;
-      const run = spawnSync('bash', ['scripts/run-with-receipt.sh', 'tier2', 'skills', '--', 'bun', 'test', '--timeout=60000', 'test/e2e/skills.test.ts'], { cwd: REPO, encoding: 'utf8', env });
       expect(run.status, run.stdout + run.stderr).toBe(0);
       const g = guard(receipts);
       expect(g.status).toBe(1);
       expect(g.stderr).toContain('tier2 ran 0 tests');
-      expect(g.stderr).toContain('skip: test/e2e/skills.test.ts > E2E Tier 2: Health Skill > health skill reports brain status');
-    } finally { rmSync(receipts, { recursive: true, force: true }); }
+      expect(g.stderr).toMatch(/skip: .*t2\.test\.ts > t2 > keyed/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
   test('passes only when at least one test ran and every test passed', () => {
@@ -76,42 +71,21 @@ describe('require-executed-tests', () => {
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
-  test('e2e.yml runs Tier 2 keyed and gates it on the guard', () => {
-    type Step = { name?: string; run?: string; env?: Record<string, string>; if?: string };
-    const tier2 = (load(readFileSync(join(REPO, '.github/workflows/e2e.yml'), 'utf8')) as { jobs: Record<string, { steps: Step[] }> }).jobs.tier2!;
-    const names = tier2.steps.map(s => s.name);
-    const run = tier2.steps.find(s => s.name === 'Run Tier 2 skill tests')!;
-    expect(run.env!.GBRAIN_TEST_KEEP_PROVIDER_KEYS).toBe('1');
-    expect(run.run).toContain('scripts/run-with-receipt.sh tier2 ');
-    const check = tier2.steps.find(s => s.name === 'Require every Tier 2 test to run')!;
-    expect(check.run).toBe('bun scripts/require-executed-tests.ts "$RUNNER_TEMP/receipts" tier2');
-    expect(check.if).toBeUndefined();
-    expect(names.indexOf('Require every Tier 2 test to run')).toBe(names.indexOf('Run Tier 2 skill tests') + 1);
-    expect(tier2.steps.find(s => s.name === 'Provider-key coverage notice')!.env!.GBRAIN_TEST_KEEP_PROVIDER_KEYS).toBe('1');
-  });
-
-  test('a graduation shard with no database env skips everything and exits 0, and the guard fails it (#8003)', () => {
-    const receipts = mkdtempSync(join(tmpdir(), 'gbrain-require-executed-grad-'));
+  test('an E2E shard whose files all skip exits 0 through run-e2e.sh, and the guard fails it (#8003)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'gbrain-require-executed-grad-'));
     try {
-      const env: Record<string, string | undefined> = { ...process.env, GBRAIN_NO_SNAPSHOT: '1', GBRAIN_TEST_RECEIPT_DIR: receipts, GBRAIN_TEST_RECEIPT_LANE: 'tier1', SHARD: '1/1' };
+      for (const dir of ['scripts/lib', 'test/e2e']) mkdirSync(join(root, dir), { recursive: true });
+      for (const file of ['run-e2e.sh', 'sharding.ts', 'lib/test-env.sh']) copyFileSync(join(REPO, 'scripts', file), join(root, 'scripts', file));
+      writeFileSync(join(root, 'test/e2e/grad.test.ts'), "import { describe, test } from 'bun:test';\ndescribe('grad', () => { test.skip('keyed history round trip', () => {}); });\n");
+      const receipts = join(root, 'receipts');
+      const env: Record<string, string | undefined> = { ...process.env, GBRAIN_TEST_RECEIPT_DIR: receipts, GBRAIN_TEST_RECEIPT_LANE: 'tier1', SHARD: '1/1' };
       delete env.DATABASE_URL;
-      delete env.GBRAIN_PGBOUNCER_URL;
-      const run = spawnSync('bash', ['scripts/run-e2e.sh', 'test/e2e/graduation-cli-history.test.ts'], { cwd: REPO, encoding: 'utf8', env });
+      const run = spawnSync('bash', ['scripts/run-e2e.sh', 'test/e2e/grad.test.ts'], { cwd: root, encoding: 'utf8', env });
       expect(run.status, run.stdout + run.stderr).toBe(0);
       const g = guard(receipts, 'tier1');
       expect(g.status).toBe(1);
       expect(g.stderr).toContain('tier1 ran 0 tests');
-      expect(g.stderr).toContain('skip: test/e2e/graduation-cli-history.test.ts > graduation: 1k-page history round trip');
-    } finally { rmSync(receipts, { recursive: true, force: true }); }
-  });
-
-  test('e2e.yml gates each graduation shard on the guard (#8003)', () => {
-    type Step = { name?: string; run?: string; if?: string };
-    const grad = (load(readFileSync(join(REPO, '.github/workflows/e2e.yml'), 'utf8')) as { jobs: Record<string, { steps: Step[] }> }).jobs['tier1-graduation']!;
-    const names = grad.steps.map(s => s.name);
-    const check = grad.steps.find(s => s.name === 'Require every graduation test to run')!;
-    expect(check.run).toBe('bun scripts/require-executed-tests.ts "$RUNNER_TEMP/receipts" tier1');
-    expect(check.if).toBeUndefined();
-    expect(names.indexOf('Require every graduation test to run')).toBe(names.indexOf('Run engine graduation suites (direct Postgres and PgBouncer)') + 1);
+      expect(g.stderr).toContain('skip: test/e2e/grad.test.ts > grad > keyed history round trip');
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 });

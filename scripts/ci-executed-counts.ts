@@ -5,11 +5,7 @@
  * Reads the receipts every CI lane writes (scripts/lib/test-env.sh
  * `receipts_init`: one `<id>.receipt` + `<id>.files` + Bun JUnit report per bun
  * invocation; verify writes one testcase per check) and accounts for every
- * executed test by identity: (lane, file, test name, backend arm). Each
- * identity also carries the database backend its name pins (`testBackend`):
- * a test registered per backend (`testBackends()`) names it, and a move of
- * such a test may change arm, because the backend, not the lane's arm, is
- * what it exercises.
+ * executed test by identity: (lane, file, test name, arm).
  *
  * One side (head only) prints the per-lane executed/skipped/failed table and
  * every completeness problem. Two sides (base and head) also list each base
@@ -228,7 +224,7 @@ export function loadReceiptDir(dir: string): Receipt[] {
   return receipts;
 }
 
-export interface Identity { lane: string; file: string; test: string; arm: string; backend: TestBackend; status: Status; artifact: string; kind: string }
+export interface Identity { lane: string; file: string; test: string; arm: string; status: Status; artifact: string; kind: string }
 export interface Issue { kind: string; lane?: string; artifact?: string; file?: string; detail: string }
 export interface LaneStats { lane: string; files: number; executed: number; passed: number; failed: number; skipped: number; superseded: number; declaredEmpty: boolean }
 export interface Side {
@@ -244,23 +240,6 @@ export interface Side {
 
 export const identityKey = (lane: string, file: string, test: string, arm: string) => [lane, file, test, arm].join('\u001f');
 
-/**
- * The database backend a test name pins: `pglite` or `postgres` when its
- * top-level describe names exactly one of them as a word (testBackends()
- * suites prefix or suffix it, e.g. "postgres: semantic writes …" or "…
- * (pglite)"), else when the whole name does; otherwise '' (the name does not
- * say, or names both). A hyphenated compound such as postgres-unit-arms is
- * not a backend.
- */
-export type TestBackend = 'pglite' | 'postgres' | '';
-export function testBackend(test: string): TestBackend {
-  const pins = (text: string): TestBackend => {
-    const pglite = /(?<![\w-])pglite(?![\w-])/i.test(text);
-    const postgres = /(?<![\w-])postgres(?:ql)?(?![\w-])/i.test(text);
-    return pglite === postgres ? '' : pglite ? 'pglite' : 'postgres';
-  };
-  return pins(test.split(' > ')[0]!) || pins(test);
-}
 const executed = (status: Status | undefined) => status === 'pass' || status === 'fail';
 
 function describeAttempt(r: Receipt): string {
@@ -340,7 +319,7 @@ export function buildSide(label: string, all: Receipt[], expectedAttempts = new 
         seen.set(c.test, n);
         const test = n === 1 ? c.test : `${c.test} [#${n}]`;
         if (n > 1) duplicateCounts.set(identityKey(lane, file, c.test, winner.arm), n);
-        side.identities.set(identityKey(lane, file, test, winner.arm), { lane, file, test, arm: winner.arm, backend: testBackend(c.test), status: c.status, artifact: winner.artifact, kind: winner.kind });
+        side.identities.set(identityKey(lane, file, test, winner.arm), { lane, file, test, arm: winner.arm, status: c.status, artifact: winner.artifact, kind: winner.kind });
       }
     }
   }
@@ -475,7 +454,7 @@ export function compare(head: Side, base: Side | undefined, deltas: { rows: Delt
         else {
           const [lane, file, test] = [row.newLane || id.lane, row.newFile || id.file, row.test === '*' ? id.test : row.newTest || id.test];
           drop.verdict = (headAt.get(identityKey(lane, file, test, '')) ?? []).some(h => movedTo(id, h)) ? 'moved' : 'move-target-missing';
-          if (drop.verdict === 'move-target-missing') drop.detail = `declared move target ${[lane, file, test, id.arm].join(' | ')} did not execute in head${id.backend ? ` under any arm on the ${id.backend} backend` : ''}`;
+          if (drop.verdict === 'move-target-missing') drop.detail = `declared move target ${[lane, file, test, id.arm].join(' | ')} did not execute in head`;
         }
       } else if (head.lanes.get(id.lane)?.declaredEmpty) {
         drop.verdict = 'lane-declared-empty';
@@ -492,17 +471,8 @@ export function compare(head: Side, base: Side | undefined, deltas: { rows: Delt
   return result;
 }
 
-/**
- * Whether head identity `to` executes what base identity `from` did: the same
- * arm, or another arm when the test's name pins its backend. A PostgreSQL-arm
- * cell run with --postgres-only runs only the PostgreSQL side of testBackends()
- * suites, so their PGLite tests leave that lane (arm postgres) for the unit and serial
- * lanes (no arm) and still run on PGLite there. A PostgreSQL test may change
- * arm only to another database arm: a lane with no arm has no database.
- */
-const movedTo = (from: Identity, to: Identity) =>
-  executed(to.status) && (to.arm === from.arm
-    || (from.backend !== '' && to.backend === from.backend && (from.backend === 'pglite' || to.arm !== '')));
+/** Whether head identity `to` executes what base identity `from` did: it executes under the same arm. */
+const movedTo = (from: Identity, to: Identity) => executed(to.status) && to.arm === from.arm;
 
 /** The exact TSV rows that would declare each undeclared drop: a move when the test runs elsewhere in head, else a retirement. */
 export function suggestRows(drops: Drop[], base: Side, head: Side): string[] {
@@ -519,14 +489,6 @@ export function suggestRows(drops: Drop[], base: Side, head: Side): string[] {
     const baseExecuted = [...base.identities.values()].filter(id => id.lane === lane && id.file === file && id.arm === arm && executed(id.status)).length;
     const headFileRuns = [...head.identities.values()].some(id => id.lane === lane && id.file === file && id.arm === arm && executed(id.status));
     const elsewhere = (d: Drop) => (headByTest.get(d.identity.test) ?? []).find(h => (h.lane !== lane || h.file !== file) && movedTo(d.identity, h));
-    const backend = group[0].identity.backend;
-    const backendBase = [...base.identities.values()].filter(id => id.lane === lane && id.file === file && id.arm === arm && id.backend === backend && executed(id.status)).length;
-    const targets = new Set(group.map(d => { const h = elsewhere(d); return h ? `${h.lane}\u001f${h.file}` : ''; }));
-    if (backend && group.length > 1 && group.length === backendBase && group.every(d => d.identity.backend === backend) && targets.size === 1 && !targets.has('')) {
-      const [newLane, newFile] = [...targets][0]!.split('\u001f');
-      rows.push(deltaRow('move', { lane, file, test: '*', arm }, { lane: newLane === lane ? '' : newLane, file: newFile === file ? '' : newFile }));
-      continue;
-    }
     if (group.length === baseExecuted && !headFileRuns && group.length > 1) {
       const votes = new Map<string, number>();
       for (const d of group) {
@@ -598,15 +560,6 @@ export function render(result: Comparison, extra: string[] = []): string {
     }
   }
   out.push('');
-  const byBackend = lanes.map(lane => {
-    const ids = [...head.identities.values()].filter(id => id.lane === lane && executed(id.status));
-    return { lane, pglite: ids.filter(id => id.backend === 'pglite').length, postgres: ids.filter(id => id.backend === 'postgres').length, unnamed: ids.filter(id => !id.backend).length };
-  }).filter(b => b.pglite || b.postgres);
-  if (byBackend.length) {
-    out.push('Head executed by backend (the backend a test name pins; testBackends() suites name it):', '', '| Lane | PGLite | PostgreSQL | Name pins none |', '|---|---:|---:|---:|');
-    for (const b of byBackend) out.push(`| ${md(b.lane)} | ${b.pglite} | ${b.postgres} | ${b.unnamed} |`);
-    out.push('');
-  }
   out.push(...extra);
   if (result.issues.length) {
     out.push(`### Incomplete (${result.issues.length})`, '', 'Why: a lane without a complete receipt cannot prove which tests ran, so the comparison fails closed.', 'Fix: rerun every job of the run (not only failed jobs) so each lane uploads a receipt from one attempt; a killed shard needs its rescue or a rerun.', DOCS, '');
@@ -674,7 +627,7 @@ export function downloadRun(repo: string, runId: string, into: string): { receip
   const dir = join(into, runId);
   gh(['run', 'download', runId, '--repo', repo, '--pattern', 'receipts-*', '--dir', dir]);
   const receipts = existsSync(dir) ? loadReceiptDir(dir) : [];
-  if (!receipts.length) throw new UsageError(`run ${runId} has no receipts-* artifacts\nWhy: the run predates executed-test receipts, or its upload steps did not run.\nFix: re-run the workflow on a commit whose test.yml/e2e.yml upload receipts.`);
+  if (!receipts.length) throw new UsageError(`run ${runId} has no receipts-* artifacts\nWhy: the run predates executed-test receipts, or its upload steps did not run.\nFix: re-run the workflow on a commit whose test.yml uploads receipts.`);
   return { receipts, attempt: Number(run.attempt), label: `${run.name} #${runId} (${run.event}, ${String(run.sha).slice(0, 12)}, attempt ${run.attempt})` };
 }
 
@@ -736,7 +689,7 @@ function loadSide(runs: string[], dirs: string[], args: Args, into: string): { s
   for (const r of receipts) {
     const key = `${r.artifact}/${r.id}`;
     const source = r.runId || 'local';
-    if (seen.has(key) && seen.get(key) !== source) throw new UsageError(`artifact ${r.artifact} appears in two runs of one side; pass one test.yml run and one e2e.yml run per side`);
+    if (seen.has(key) && seen.get(key) !== source) throw new UsageError(`artifact ${r.artifact} appears in two runs of one side; pass one test.yml run per side`);
     seen.set(key, source);
   }
   return { side: buildSide(labels.join(' + '), receipts, expect), receipts };

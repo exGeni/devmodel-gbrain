@@ -57,61 +57,6 @@ detect_available_mem_mb() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────
-# PGLite schema snapshot: build (idempotent, ~40ms when fresh; mkdir-lock
-# concurrency-safe; hash folds handler-migration source) and export
-# GBRAIN_PGLITE_SNAPSHOT for child bun processes. 500+ test files each
-# cold-boot PGLite + replay every migration without it (~3.5x per booting
-# file — see docs/TESTING.md).
-#
-# No-op when GBRAIN_NO_SNAPSHOT=1 or when a parent runner already exported
-# the path (double-building is harmless but noisy). Non-fatal on build
-# failure — tests fall back to cold init. The one-line "active" echo makes
-# a silent fall-back-to-cold-init regression visible in CI logs.
-#   $1: label for log lines (defaults to test-env).
-# ──────────────────────────────────────────────────────────────────────────
-ensure_pglite_snapshot() {
-  local label="${1:-test-env}"
-  if [ "${GBRAIN_NO_SNAPSHOT:-0}" = "1" ]; then
-    unset GBRAIN_PGLITE_SNAPSHOT GBRAIN_TEST_DEFAULT_SNAPSHOT
-    return 0
-  fi
-  if [ -n "${GBRAIN_PGLITE_SNAPSHOT:-}" ]; then
-    echo "[$label] PGLite snapshot active (inherited): $GBRAIN_PGLITE_SNAPSHOT" >&2
-    return 0
-  fi
-  if bun run build:pglite-snapshot >/dev/null 2>&1; then
-    export GBRAIN_PGLITE_SNAPSHOT=test/fixtures/pglite-snapshot.tar
-    echo "[$label] PGLite snapshot active: $GBRAIN_PGLITE_SNAPSHOT" >&2
-  else
-    echo "[$label] snapshot build failed (non-fatal) — tests run with cold init" >&2
-  fi
-}
-
-# Bare BrainBench CLI children use the shipped embedding shape. Keep this
-# auxiliary path separate from their parent bun test process's legacy shape.
-ensure_default_pglite_snapshot() {
-  local label="${1:-test-env}"
-  if [ "${GBRAIN_NO_SNAPSHOT:-0}" = "1" ]; then
-    unset GBRAIN_PGLITE_SNAPSHOT GBRAIN_TEST_DEFAULT_SNAPSHOT
-    return 0
-  fi
-  if [ -z "${GBRAIN_TEST_DEFAULT_SNAPSHOT:-}" ]; then
-    if bun run build:pglite-snapshot --profile default >/dev/null 2>&1; then
-      export GBRAIN_TEST_DEFAULT_SNAPSHOT="$PWD/test/fixtures/pglite-snapshot-default.tar"
-    else
-      unset GBRAIN_TEST_DEFAULT_SNAPSHOT
-      echo "[$label] default snapshot build failed (non-fatal) — CLI children run with cold init" >&2
-      return 0
-    fi
-  fi
-  case "$GBRAIN_TEST_DEFAULT_SNAPSHOT" in
-    /*) ;;
-    *) export GBRAIN_TEST_DEFAULT_SNAPSHOT="$PWD/$GBRAIN_TEST_DEFAULT_SNAPSHOT" ;;
-  esac
-  echo "[$label] default PGLite snapshot active: $GBRAIN_TEST_DEFAULT_SNAPSHOT" >&2
-}
-
-# ──────────────────────────────────────────────────────────────────────────
 # Coverage wait multiplier: bun's lcov instrumentation slows the code under
 # test while test deadlines stay wall-clock, so a coverage lane (COVERAGE_DIR
 # set) exports GBRAIN_TEST_WAIT_MULTIPLIER=2 unless the caller chose a value.

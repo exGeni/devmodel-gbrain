@@ -381,7 +381,7 @@ describe('oom-once', () => {
     if (!existsSync(sentinel)) {
       writeFileSync(sentinel, 'ran-once');
       console.error('Original error: Out of memory');
-      throw new Error('Out of memory (simulated PGLite WASM connect failure)');
+      throw new Error('Out of memory (simulated WASM connect failure)');
     }
     expect(1).toBe(1);
   });

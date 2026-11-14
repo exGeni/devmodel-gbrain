@@ -10,8 +10,8 @@
  * Prints: corpus, lane completeness, DEGRADED banner (when set), total %,
  * per-dir table, top-10 worst-covered files (watchlist prioritized; the
  * watchlist is read from the working-tree scripts/coverage-baseline.json),
- * neverLoaded count + first 10, the src/cli.ts subprocess-undercount note,
- * and the behavioral-vs-structural test-intent line parsed from the TSV.
+ * neverLoaded count + first 10, and the behavioral-vs-structural test-intent
+ * line parsed from the TSV.
  *
  * This renderer consumes ONLY the JSON artifact (+ the structural TSV);
  * it never stdout-parses other tools.
@@ -154,11 +154,6 @@ function main(): void {
   out.push("");
   for (const f of never.files.slice(0, 10)) out.push(`- ${f}`);
   if (never.count > 10) out.push(`- … +${never.count - 10} more`);
-  out.push("");
-
-  out.push(
-    "Note: src/cli.ts is exercised mostly via CLI subprocesses; bun coverage does not propagate into child processes, so its numbers undercount ([subprocess-undercount]).",
-  );
   out.push("");
 
   if (structuralPath) {

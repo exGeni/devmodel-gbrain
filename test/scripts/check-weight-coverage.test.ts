@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 const repo = join(import.meta.dir, '../..');
 const GUARD = join(repo, 'scripts/check-weight-coverage.ts');
 
-/** A guard root with `files` (paths named as `*.test.ts`, written as fixtures) and the four weight maps. */
+/** A guard root with `files` (paths named as `*.test.ts`, written as fixtures) and the three weight maps. */
 function run(files: string[], maps: Record<string, Record<string, number>>, event?: string) {
   const root = mkdtempSync(join(tmpdir(), 'gbrain-weight-coverage-'));
   try {
@@ -16,7 +16,7 @@ function run(files: string[], maps: Record<string, Record<string, number>>, even
       writeFileSync(join(root, path), body);
     };
     for (const file of files) put(file.replace(/\.test\.ts$/, '.test.fixture.ts'), '// fixture\n');
-    for (const map of ['scripts/test-weights.json', 'scripts/serial-weights.json', 'scripts/e2e-weights.json', 'scripts/ubicloud/weights.json']) {
+    for (const map of ['scripts/test-weights.json', 'scripts/serial-weights.json', 'scripts/e2e-weights.json']) {
       put(map, JSON.stringify(maps[map] ?? {}));
     }
     const summary = join(root, 'summary.md');
@@ -51,12 +51,6 @@ describe('check-weight-coverage', () => {
     expect(r.stderr).toContain('test/deleted.test.ts');
     expect(r.stderr).toContain('Fix: delete that entry from scripts/test-weights.json');
     expect(r.stderr).toContain('Docs: docs/TESTING.md#keeping-ci-partitions-balanced');
-  });
-
-  test('a dead ubicloud entry fails', () => {
-    const r = run(unit, { 'scripts/test-weights.json': weighted, 'scripts/ubicloud/weights.json': { 'serial:test/gone.serial.test.ts': 1 } });
-    expect(r.status).toBe(1);
-    expect(r.stderr).toContain('serial:test/gone.serial.test.ts');
   });
 
   test('an unweighted share above the bound warns on pull requests with the miner command', () => {

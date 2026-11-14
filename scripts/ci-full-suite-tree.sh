@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Record the tree a full-profile run tested and the test files it executed
 # (docs/ci-event-parity.md#full-ci-on-pull-requests, #remote-gate-reuse).
-# Called by test.yml `full-suite` and e2e.yml `e2e-full-suite` after their
-# aggregate succeeded. scripts/ci-reuse.ts reads the artifact on a push to master;
+# Called by test.yml `full-suite` after its aggregate succeeded.
+# scripts/ci-reuse.ts reads the artifact on a push to main;
 # `gstack-pregate clear --run` reads it as run evidence for the remote gate.
 # Input (environment): ARTIFACT_DIR, RUN_ID, RUN_ATTEMPT, WORKFLOW, EVENT, and
 # optionally MANIFEST, the run's ci-manifest.json (scripts/ci-manifest.ts).

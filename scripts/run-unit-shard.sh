@@ -5,9 +5,7 @@
 # by scripts/run-e2e.sh in the E2E phase). When SHARD=N/M is set, keeps every
 # weighted partition N (1-indexed); otherwise runs the full unit set.
 #
-# Used by scripts/ci-local.sh to fan 4 unit-shard workers in parallel inside
-# the runner container, each pinned to its own postgres shard for the
-# downstream E2E phase.
+# Used by scripts/ci-local.sh to fan 4 unit-shard workers in parallel.
 #
 # One Bun process per file within a shard;
 # parallel across shards (4 of these run concurrently).
@@ -33,8 +31,8 @@ receipts_init unit
 
 # --max-concurrency=N is forwarded to `bun test`. v0.26.4: invoked by
 # run-unit-parallel.sh; safe to call without (defaults to bun's default cap).
-# Positional FILE arguments replace discovery (scripts/ci-ubicloud.ts
-# dispatches explicit batches through this wrapper).
+# Positional FILE arguments replace discovery (explicit batches go through
+# this wrapper).
 MAX_CONC=""
 DRY_RUN=0
 explicit_files=()
@@ -101,11 +99,11 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 0
 fi
 
-# #4479: per-shard timeout multiplier. 4-way shard contention in the CI
-# container makes subprocess/PGLite tests ~6x slower per file than native,
+# #4479: per-shard timeout multiplier. 4-way shard contention in the sharded
+# lane makes subprocess tests ~6x slower per file than a quiet run,
 # producing timeout-class failures that pass natively. The 60s per-test
 # ceiling scales by GBRAIN_TEST_TIMEOUT_MULTIPLIER (integer, default 1;
-# ci-local's container lane sets it). Non-integer values fall back to 1.
+# ci-local's sharded lane sets it). Non-integer values fall back to 1.
 MULT="${GBRAIN_TEST_TIMEOUT_MULTIPLIER:-1}"
 if ! printf '%s' "$MULT" | grep -qE '^[0-9]+$' || [ "$MULT" -lt 1 ]; then
   MULT=1

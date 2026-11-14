@@ -57,32 +57,6 @@ describe('run-unit-shard.sh exclusion symmetry', () => {
   });
 });
 
-describe('run-unit-shard.sh timeout multiplier reach', () => {
-  // GBRAIN_TEST_TIMEOUT_MULTIPLIER scales bun's `--timeout`, which only sets
-  // the DEFAULT per-test ceiling — an explicit `test(name, fn, N)` third
-  // argument overrides it and stays fixed under 4-way container contention.
-  // Files that spawn the CLI through test/helpers/cli-spawn.ts are the ones
-  // the multiplier exists for (a full `bun src/cli.ts` boot, often a PGLite
-  // cold start), and cli-spawn's own kill timer already reaps a hung child,
-  // so a hand-pinned ceiling below the runner default only hides the file
-  // from the multiplier (#4659). Pins at/above the default are left alone.
-  it('cli-spawn consumers pin no per-test timeout below the bunfig default', () => {
-    const bunfig = readFileSync(resolve(REPO_ROOT, 'bunfig.toml'), 'utf-8');
-    const defaultMs = Number(/^timeout\s*=\s*([\d_]+)/m.exec(bunfig)![1].replace(/_/g, ''));
-    const offenders: string[] = [];
-    for (const file of dryRunList()) {
-      const src = readFileSync(resolve(REPO_ROOT, file), 'utf-8');
-      if (!src.includes('helpers/cli-spawn')) continue;
-      // Trailing numeric literal (>= 4 digits) as a call's last argument.
-      for (const m of src.matchAll(/,\s*(\d[\d_]{3,})\s*\)\s*;/g)) {
-        const ms = Number(m[1].replace(/_/g, ''));
-        if (ms < defaultMs) offenders.push(`${file}: ${m[0].trim()} (< ${defaultMs})`);
-      }
-    }
-    expect(offenders).toEqual([]);
-  });
-});
-
 /** Exercise the real shell runner; fake only the expensive Bun test process. */
 function runGroupedFixture(count: number, mode = 'pass', shard = '') {
   const root = mkdtempSync(join(tmpdir(), 'gbrain-unit-groups-test-'));
@@ -105,7 +79,7 @@ n=1
 [ ! -f "$FAKE_CALLS/count" ] || n=$(( $(cat "$FAKE_CALLS/count") + 1 ))
 echo "$n" > "$FAKE_CALLS/count"
 printf '%s\\0' "$@" > "$FAKE_CALLS/$n.args"
-printf '%s\\n' "\${DATABASE_URL-unset}" "\${GBRAIN_DATABASE_URL-unset}" "\${GBRAIN_HOME-unset}" "\${SHARD-unset}" "\${GBRAIN_PGLITE_SNAPSHOT-unset}" > "$FAKE_CALLS/$n.env"
+printf '%s\\n' "\${DATABASE_URL-unset}" "\${GBRAIN_DATABASE_URL-unset}" "\${GBRAIN_HOME-unset}" "\${SHARD-unset}" > "$FAKE_CALLS/$n.env"
 files=()
 for arg in "$@"; do case "$arg" in test/*.test.ts) files+=("$arg");; esac; done
 if [ "$FAKE_MODE" = nested-summary ]; then
@@ -131,7 +105,7 @@ exit "$failed"
     const result = spawnSync('bash', [join(root, 'scripts/run-unit-shard.sh'), '--max-concurrency', '3'], {
       cwd: root, encoding: 'utf8', timeout: 10_000,
       env: { ...process.env, PATH: `${join(root, 'bin')}:${process.env.PATH}`, FAKE_CALLS: join(root, 'calls'), FAKE_MODE: mode,
-        SHARD: shard, GBRAIN_TEST_TIMEOUT_MULTIPLIER: '2', GBRAIN_PGLITE_SNAPSHOT: '/example/schema-snapshot.tar',
+        SHARD: shard, GBRAIN_TEST_TIMEOUT_MULTIPLIER: '2',
         DATABASE_URL: 'postgres://example.invalid/test', GBRAIN_DATABASE_URL: 'postgres://example.invalid/test', GBRAIN_HOME: '/example/private-home' },
     });
     const calls = readdirSync(join(root, 'calls')).filter(f => f.endsWith('.args')).sort((a, b) => parseInt(a) - parseInt(b)).map(file => ({
@@ -160,7 +134,7 @@ describe('run-unit-shard.sh bounded processes', () => {
     expect(result.calls.flatMap(c => c.args.slice(3))).toEqual(result.files.filter((_, i) => i % 2 === 0));
     for (const call of result.calls) {
       expect(call.args.slice(0, 3)).toEqual(['test', '--max-concurrency=3', '--timeout=120000']);
-      expect(call.env).toEqual(['unset', 'unset', 'unset', 'unset', '/example/schema-snapshot.tar']);
+      expect(call.env).toEqual(['unset', 'unset', 'unset', 'unset']);
     }
   });
 

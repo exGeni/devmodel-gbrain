@@ -297,7 +297,7 @@ export function pctOf(covered: number, lines: number): number {
   return Math.round((covered / lines) * 10000) / 100;
 }
 
-/** Top-level src dir bucket: src/core/x/y.ts -> 'src/core'; src/cli.ts -> 'src'. */
+/** Top-level src dir bucket: src/<dir>/x/y.ts -> 'src/<dir>'; a file directly under src/ -> 'src'. */
 export function topLevelSrcDir(file: string): string {
   const parts = file.split("/");
   return parts.length >= 3 ? `${parts[0]}/${parts[1]}` : parts[0]!;

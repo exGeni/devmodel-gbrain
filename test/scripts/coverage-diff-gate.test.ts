@@ -14,11 +14,11 @@ import { isGateScopedPath, parseExemptions, parseUnifiedDiff } from "../../scrip
 
 const REPO_ROOT = join(import.meta.dir, "..", "..");
 
-// Simulates the exemption list AS IT EXISTS ON origin/master (the gate
-// resolves the list from master, never the working tree).
-const MASTER_EXEMPTIONS =
+// Simulates the exemption list AS IT EXISTS ON origin/main (the gate
+// resolves the list from main, never the working tree).
+const MAIN_EXEMPTIONS =
   [
-    "# fixture exemption list (simulated origin/master content)",
+    "# fixture exemption list (simulated origin/main content)",
     "src/core/postgres-engine.ts",
     "src/core/pglite-engine.ts",
     "src/core/postgres-engine/",
@@ -97,7 +97,7 @@ function runGate(opts: {
       COVERAGE_GATE_CLASSIFY: opts.classify ?? "SRC",
       COVERAGE_GATE_COMMITS_FILE: opts.commitsFile ?? emptyCommitsFile,
       COVERAGE_GATE_ENFORCE: opts.enforce ?? "0",
-      COVERAGE_GATE_EXEMPTIONS_OVERRIDE: opts.exemptions ?? MASTER_EXEMPTIONS,
+      COVERAGE_GATE_EXEMPTIONS_OVERRIDE: opts.exemptions ?? MAIN_EXEMPTIONS,
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -226,14 +226,12 @@ describe("exemptions", () => {
   it("exempt files are reported with their tag but never gated", () => {
     const diff =
       diffHunk("src/core/migrate.ts", 5, 4) +
-      diffHunk("src/cli.ts", 5, 4) +
       diffHunk("src/core/postgres-engine/part.ts", 5, 4) +
       diffHunk("src/fixture-gate-a.ts", 10, 1); // covered — keeps the gate scoped
     const res = runGate({ summary: summaryFixture(), diff, enforce: "1" });
     expect(res.code).toBe(0); // exempt uncovered lines don't count
     expect(res.stdout).toContain("| src/core/migrate.ts | 4 | - | - | [e2e-exempt] |");
     expect(res.stdout).toContain("| src/core/postgres-engine/part.ts | 4 | - | - | [e2e-exempt] |");
-    expect(res.stdout).toContain("| src/cli.ts | 4 | - | - | [subprocess-undercount] |");
   });
 
   it("only-exempt changes → no gate-scoped changes, tags still reported", () => {
@@ -244,11 +242,11 @@ describe("exemptions", () => {
     expect(res.stdout).toContain("[e2e-exempt]");
   });
 
-  it("a working-tree-only exemption entry does NOT exempt (list resolves from origin/master)", () => {
-    // Governance: the exemption LIST is read from origin/master, so a PR
+  it("a working-tree-only exemption entry does NOT exempt (list resolves from origin/main)", () => {
+    // Governance: the exemption LIST is read from origin/main, so a PR
     // adding its own file to scripts/coverage-gate-exemptions.txt cannot
-    // self-exempt. The seam simulates master's content WITHOUT the entry
-    // (deterministic — no dependency on the real origin/master), while the
+    // self-exempt. The seam simulates main's content WITHOUT the entry
+    // (deterministic — no dependency on the real origin/main), while the
     // REAL working-tree file temporarily carries the entry; the gate must
     // ignore the working-tree addition (inert until merged).
     const worktreeExemptions = join(REPO_ROOT, "scripts", "coverage-gate-exemptions.txt");
@@ -256,7 +254,7 @@ describe("exemptions", () => {
     writeFileSync(worktreeExemptions, original + "src/fixture-gate-ghost.ts\n", "utf8");
     try {
       const diff = diffHunk("src/fixture-gate-ghost.ts", 1, 5);
-      const res = runGate({ summary: summaryFixture(), diff, enforce: "1", exemptions: MASTER_EXEMPTIONS });
+      const res = runGate({ summary: summaryFixture(), diff, enforce: "1", exemptions: MAIN_EXEMPTIONS });
       expect(res.code).toBe(1); // never-loaded violation — NOT exempted
       expect(res.stdout).toContain("never loaded by any test in the PR corpus");
       expect(res.stdout).not.toContain("| src/fixture-gate-ghost.ts | 5 | - | - | [e2e-exempt] |");
