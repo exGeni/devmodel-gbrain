@@ -151,8 +151,7 @@ count, because a missing file or an import crash also exits non-zero: exit 3, th
 vacuous-failure class), restores the files, and prints the paste-ready field line. Exit 1
 means the test passed with the fix reverted: tighten the assertions before asking for
 review. For a committed fix the pre-fix state comes from `DISCRIMINATE_BASE=<ref>`; with
-it unset the helper uses the merge base with `origin/master`, then `HEAD~1`, so set it to
-`origin/main` here.
+it unset the helper uses the merge base with `origin/main`, then `HEAD~1`.
 
 Vacuous-assertion shapes to avoid (they recur):
 
@@ -261,7 +260,7 @@ Two committed files tell gstack about this repository's gates.
   `*.serial.test.ts`, `scripts/serial-files.tsv` and `scripts/run-serial-tests.sh`, and
   `bun scripts/regen-all.ts --check` for `scripts/classify-tests.ts`,
   `scripts/structural-suites.tsv` and any test file. A failing guard prints its fix line. `sealed` lists eval output paths and transcripts that must
-  never reach this public repository; `gstack-pregate sealed` refuses a push that adds
+  never reach the repository; `gstack-pregate sealed` refuses a push that adds
   one. `run_profiles` names the run that counts as a full test run: workflow `test.yml`,
   job `full-suite`, artifact `full-suite-tree`, from a `workflow_dispatch` or `push`. How
   CI's full run and `/ship` share it:

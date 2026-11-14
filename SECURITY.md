@@ -2,9 +2,10 @@
 
 ## Reporting vulnerabilities
 
-If you find a security issue in this repository, report it privately: open the
-**Security** tab of the repository on GitHub and choose **Report a vulnerability**, which
-opens a private security advisory.
+If you find a security issue in this repository, report it privately. Where the repository
+has GitHub's private vulnerability reporting turned on (GitHub offers it for public
+repositories), open the **Security** tab and choose **Report a vulnerability**, which opens a
+private security advisory. Otherwise tell the repository owner directly.
 
 Do not open a public issue for a security vulnerability.
 
