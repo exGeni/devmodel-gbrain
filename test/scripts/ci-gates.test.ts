@@ -113,10 +113,10 @@ describe('CI execution evidence', () => {
 
 describe('test:full exit status', () => {
   test.each([
-    { database: '', e2eExit: 0, expected: 0, called: false },
-    { database: 'fixture-test-db', e2eExit: 0, expected: 0, called: true },
-    { database: 'fixture-test-db', e2eExit: 7, expected: 7, called: true },
-  ])('DATABASE_URL=$database E2E exit=$e2eExit', ({ database, e2eExit, expected, called }) => {
+    { database: '', e2eExit: 0, expected: 0 },
+    { database: '', e2eExit: 7, expected: 7 },
+    { database: 'fixture-test-db', e2eExit: 7, expected: 7 },
+  ])('DATABASE_URL=$database E2E exit=$e2eExit', ({ database, e2eExit, expected }) => {
     const home = mkdtempSync(join(tmpdir(), 'gbrain-test-full-'));
     try {
       mkdirSync(join(home, 'scripts'));
@@ -131,8 +131,7 @@ describe('test:full exit status', () => {
         env: { ...process.env, DATABASE_URL: database, PATH: `${join(home, 'bin')}:${process.env.PATH}` },
       });
       expect(result.status).toBe(expected);
-      expect(result.stdout.includes('E2E_CALLED')).toBe(called);
-      expect(result.stderr.split('\n').some(line => line.startsWith('[test:full] skipped E2E'))).toBe(!called);
+      expect(result.stdout.includes('E2E_CALLED')).toBe(true);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
