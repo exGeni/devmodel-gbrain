@@ -72,8 +72,8 @@ export interface RunEvidence {
 export const FAILING = new Set(['failure', 'timed_out', 'startup_failure']);
 export const TIMED_OUT_ANNOTATION = /has exceeded the maximum execution time/;
 export const RED_CONCLUSIONS = new Set(['failure', 'timed_out', 'startup_failure']);
-export const AGGREGATORS = new Set(['test-status', 'e2e-status']);
-export const MANIFEST_WORKFLOWS = new Set(['test.yml', 'e2e.yml']);
+export const AGGREGATORS = new Set(['test-status']);
+export const MANIFEST_WORKFLOWS = new Set(['test.yml']);
 export const TEST_FILE = /^test\/[\w./-]+\.test\.ts$/;
 export const OWNER_SIGNAL = /gh secret set|secret is empty|secrets? (?:is |are )?(?:empty|missing|not configured)/i;
 const GENERIC_ERROR = /^Process completed with exit code \d+\.?$/;

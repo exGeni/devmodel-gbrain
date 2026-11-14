@@ -318,7 +318,7 @@ const sameRepoCheck = (run: RunInfo) => {
   }
 };
 
-/** The nightly-red path: one scheduled run (a scheduled Test or E2E Tests run also feeds that workflow's open master-red issue). */
+/** The nightly-red path: one scheduled run (a scheduled Test run also feeds that workflow's open master-red issue). */
 export async function watchRun(opts: WatchOptions): Promise<WatchResult> {
   const { client, repo } = opts;
   const run = opts.run ?? await client.request<RunInfo>('GET', `repos/{repo}/actions/runs/${opts.runId}`);
@@ -355,58 +355,47 @@ export async function watchRun(opts: WatchOptions): Promise<WatchResult> {
   return { plan, assessment, run, evidence, masterRed: fed, flakesClosed };
 }
 
-export type Route = { track: 'schedule' | 'push' | 'replay' } | { refuse: string };
+export type Route = { track: 'schedule' | 'push' } | { refuse: string };
 
 /** Which state track a run feeds; every refusal names what nightly-watch accepts and the next command. */
-export function routeRun(run: RunInfo, repo: string, replayIssue?: number): Route {
-  const fix = 'Fix: pass a scheduled run id, a push-to-main run id of Test or E2E Tests (gh run list --workflow test.yml --event push --branch main --limit 5), or an E2E Tests dispatch run on main with replay_issue. Docs: docs/RELEASING.md#master-red-issues';
+export function routeRun(run: RunInfo, repo: string): Route {
+  const fix = 'Fix: pass a scheduled run id or a push-to-main run id of Test (gh run list --workflow test.yml --event push --branch main --limit 5). Docs: docs/RELEASING.md#master-red-issues';
   if (run.repository?.full_name && run.repository.full_name !== repo) return { refuse: `run ${run.id} belongs to ${run.repository.full_name}, not ${repo}. ${fix}` };
-  if (run.event === 'schedule') return replayIssue ? { refuse: `run ${run.id} is a scheduled run; replay_issue applies only to E2E Tests dispatch runs. ${fix}` } : { track: 'schedule' };
+  if (run.event === 'schedule') return { track: 'schedule' };
   if (run.event === 'push') {
     if (run.head_branch !== 'main') return { refuse: `run ${run.id} is a push to '${inert(run.head_branch, 80)}'; only push-to-main runs open master-red issues. ${fix}` };
     if (!PUSH_ALLOWLIST[run.name]) return { refuse: `run ${run.id} is a push run of '${inert(run.name, 80)}', which master-red does not watch (allowlist: ${Object.keys(PUSH_ALLOWLIST).join(', ')}). ${fix}` };
-    return replayIssue ? { refuse: `run ${run.id} is a push run; replay_issue applies only to E2E Tests dispatch runs. ${fix}` } : { track: 'push' };
+    return { track: 'push' };
   }
-  if (run.event === 'workflow_dispatch' && replayIssue) {
-    if (run.name !== 'E2E Tests' || run.head_branch !== 'main') return { refuse: `run ${run.id} is a dispatch of '${inert(run.name, 80)}' on '${inert(run.head_branch, 80)}'; an issue-bound replay must be an E2E Tests dispatch on main (gh workflow run e2e.yml --ref main -f full_corpus=true). ${fix}` };
-    return { track: 'replay' };
-  }
-  return { refuse: `run ${run.id} is a ${inert(run.event, 40)} run; nightly-watch evaluates scheduled runs, push-to-main runs of Test and E2E Tests, and issue-bound E2E replays only (pull-request and other runs are refused). ${fix}` };
+  return { refuse: `run ${run.id} is a ${inert(run.event, 40)} run; nightly-watch evaluates scheduled runs and push-to-main runs of Test only (pull-request and other runs are refused). ${fix}` };
 }
 
 export type RoutedResult =
   | { track: 'schedule'; run: RunInfo; nightly: WatchResult; masterRed?: MasterRedPlan; flakesClosed: number[] }
-  | { track: 'push' | 'replay'; run: RunInfo; masterRed?: MasterRedPlan; flakesClosed: number[] };
+  | { track: 'push'; run: RunInfo; masterRed?: MasterRedPlan; flakesClosed: number[] };
 
-/** Entry point: route one run id to the nightly-red, master-red or replay path. */
-export async function watch(opts: WatchOptions & { replayIssue?: number }): Promise<RoutedResult> {
+/** Entry point: route one run id to the nightly-red or master-red path. */
+export async function watch(opts: WatchOptions): Promise<RoutedResult> {
   const { client, repo } = opts;
   const run = await client.request<RunInfo>('GET', `repos/{repo}/actions/runs/${opts.runId}`);
   sameRepoCheck(run);
-  const route = routeRun(run, repo, opts.replayIssue);
+  const route = routeRun(run, repo);
   if ('refuse' in route) throw new Error(route.refuse);
   if (route.track === 'schedule') {
     const nightly = await watchRun({ ...opts, run });
     return { track: 'schedule', run, nightly, masterRed: nightly.masterRed, flakesClosed: nightly.flakesClosed };
   }
-  if (route.track === 'push') {
-    const masterRed = await watchMasterRed(client, repo, run, { dryRun: opts.dryRun, today: opts.today, manifest: opts.manifest });
-    const flakesClosed = await closeFlakes(client, repo, run, () => masterRed.evidence ? Promise.resolve(masterRed.evidence) : collectEvidence(client, run, opts), opts.dryRun);
-    return { track: 'push', run, masterRed, flakesClosed };
-  }
-  if (run.status && run.status !== 'completed') throw new Error(`replay run ${run.id} is ${run.status}; wait for it (gh run watch ${run.id}), then dispatch nightly-watch again.`);
-  const ev = await collectEvidence(client, run, opts);
-  const masterRed = await externalPass(client, repo, run, ev, { dryRun: opts.dryRun, today: opts.today, issueNumber: opts.replayIssue });
-  if (!masterRed) throw new Error(`issue #${opts.replayIssue} is not the open master-red issue of ${run.name} (or it is not red); nothing to replay against. Fix: pass the number of the open "Master red: ${run.name}" issue.`);
-  return { track: 'replay', run, masterRed, flakesClosed: [] };
+  const masterRed = await watchMasterRed(client, repo, run, { dryRun: opts.dryRun, today: opts.today, manifest: opts.manifest });
+  const flakesClosed = await closeFlakes(client, repo, run, () => masterRed.evidence ? Promise.resolve(masterRed.evidence) : collectEvidence(client, run, opts), opts.dryRun);
+  return { track: 'push', run, masterRed, flakesClosed };
 }
 
-/** The serialization key every entry path shares: target workflow id and state track (schedule, push; a replay writes the push track). */
-export async function resolveTarget(client: GitHubClient, repo: string, runId: number, replayIssue?: number): Promise<{ workflow_id: number; track: string; refuse?: string }> {
+/** The serialization key every entry path shares: target workflow id and state track (schedule or push). */
+export async function resolveTarget(client: GitHubClient, repo: string, runId: number): Promise<{ workflow_id: number; track: string; refuse?: string }> {
   const run = await client.request<RunInfo>('GET', `repos/{repo}/actions/runs/${runId}`);
-  const route = routeRun(run, repo, replayIssue);
+  const route = routeRun(run, repo);
   if ('refuse' in route) return { workflow_id: run.workflow_id, track: 'refused', refuse: route.refuse };
-  return { workflow_id: run.workflow_id, track: route.track === 'replay' ? 'push' : route.track };
+  return { workflow_id: run.workflow_id, track: route.track };
 }
 
 function printNightly(r: WatchResult, dryRun: boolean) {
@@ -433,17 +422,15 @@ function printMasterRed(plan: MasterRedPlan | undefined, run: RunInfo, dryRun: b
 if (import.meta.main) {
   const flag = (name: string) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; };
   const runId = Number(flag('--run-id'));
-  const replayRaw = flag('--replay-issue');
-  const replayIssue = replayRaw ? Number(replayRaw) : undefined;
   const repo = flag('--repo') ?? process.env.GITHUB_REPOSITORY ?? '';
   const dryRun = process.argv.includes('--dry-run');
-  if (!Number.isInteger(runId) || runId <= 0 || !/^[\w.-]+\/[\w.-]+$/.test(repo) || (replayIssue !== undefined && (!Number.isInteger(replayIssue) || replayIssue <= 0))) {
-    console.log('Usage: bun scripts/nightly-issue.ts --run-id <id> [--replay-issue <n>] [--repo owner/name (default $GITHUB_REPOSITORY)] [--dry-run] [--resolve]');
+  if (!Number.isInteger(runId) || runId <= 0 || !/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+    console.log('Usage: bun scripts/nightly-issue.ts --run-id <id> [--repo owner/name (default $GITHUB_REPOSITORY)] [--dry-run] [--resolve]');
     process.exit(2);
   }
   try {
     if (process.argv.includes('--resolve')) {
-      const target = await resolveTarget(restClient(repo), repo, runId, replayIssue);
+      const target = await resolveTarget(restClient(repo), repo, runId);
       console.log(`workflow_id=${target.workflow_id}\ntrack=${target.track}`);
       if (target.refuse) console.log(`::notice::nightly-watch will refuse run ${runId}: ${target.refuse}`);
       process.exit(0);
@@ -455,7 +442,7 @@ if (import.meta.main) {
     for (const p of problems) console.log(`::warning::${p}`);
     const { rows } = parseKnownRed(tsv);
     const today = new Date().toISOString().slice(0, 10);
-    const result = await watch({ client: restClient(repo), repo, runId, rows, today, dryRun, replayIssue });
+    const result = await watch({ client: restClient(repo), repo, runId, rows, today, dryRun });
     if (result.track === 'schedule') printNightly(result.nightly, dryRun);
     printMasterRed(result.masterRed, result.run, dryRun);
     if (result.flakesClosed.length) console.log(`[nightly-watch] flake issue(s) ${dryRun ? 'that would close' : 'closed'}: ${result.flakesClosed.map(n => `#${n}`).join(', ')}`);

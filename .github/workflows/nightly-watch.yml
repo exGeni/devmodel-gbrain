@@ -10,7 +10,7 @@ name: Nightly watch
 #   previously failing job executed. Cells listed in
 #   .github/nightly-known-red.tsv keep the issue open with the `known-red`
 #   label instead of counting as green.
-# - Push-to-main runs of Test and E2E Tests (the allowlist below and in
+# - Push-to-main runs of Test (the allowlist below and in
 #   scripts/lib/master-red.ts) keep one `master-red` issue per workflow with
 #   the suspect range (last green push SHA -> first red SHA + merged PRs).
 #   Every watch reconciles every unevaluated completed push run in
@@ -24,12 +24,12 @@ name: Nightly watch
 # watch run (no trigger-level event filter exists); CI health counts them.
 #
 # Serialization: `resolve` turns every entry path (automatic or dispatch)
-# into its target workflow id and state track (schedule or push; a replay
-# writes the push track). `watch` queues on one group per repository +
-# workflow + track (never cancelled), so a dispatch and an automatic watch of
-# the same target cannot race; the script also re-reads the issue before it
-# writes and retries when it moved. A newer queued watch may replace an older
-# pending one; reconciliation covers the dropped run.
+# into its target workflow id and state track (schedule or push). `watch`
+# queues on one group per repository + workflow + track (never cancelled), so
+# a dispatch and an automatic watch of the same target cannot race; the script
+# also re-reads the issue before it writes and retries when it moved. A newer
+# queued watch may replace an older pending one; reconciliation covers the
+# dropped run.
 #
 # Security: checks out the default branch (never the triggering run's code),
 # passes every event field through env (no expression interpolation inside
@@ -40,7 +40,6 @@ name: Nightly watch
 # (test/scripts/nightly-issue.test.ts enforces it). Dispatch is for
 # post-merge checks:
 #   gh workflow run nightly-watch.yml -f run_id=<scheduled or push-to-main run id>
-#   gh workflow run nightly-watch.yml -f run_id=<E2E dispatch run id> -f replay_issue=<master-red issue>
 
 on:
   workflow_run:
@@ -57,11 +56,6 @@ on:
         description: Scheduled or push-to-main run id to evaluate
         required: true
         type: string
-      replay_issue:
-        description: Open master-red issue an E2E Tests dispatch run on main replays (optional)
-        required: false
-        type: string
-        default: ''
       dry_run:
         description: Print the issue it would write instead of writing it
         type: boolean
@@ -76,7 +70,7 @@ jobs:
       (github.event.workflow_run.head_repository.full_name == github.repository &&
        (github.event.workflow_run.event == 'schedule' ||
         (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' &&
-         contains(fromJSON('["Test","E2E Tests"]'), github.event.workflow_run.name))))
+         contains(fromJSON('["Test"]'), github.event.workflow_run.name))))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -110,19 +104,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
-          REPLAY_ISSUE: ${{ inputs.replay_issue }}
         run: |
           set -euo pipefail
           if ! [[ "$RUN_ID" =~ ^[0-9]+$ ]]; then
             echo "::error::run_id '$RUN_ID' is not a numeric run id. Why: nightly-watch reads one workflow run. Fix: gh workflow run nightly-watch.yml -f run_id=<id from gh run list>. Docs: docs/RELEASING.md#master-red-issues"
             exit 1
           fi
-          if [ -n "$REPLAY_ISSUE" ] && ! [[ "$REPLAY_ISSUE" =~ ^[0-9]+$ ]]; then
-            echo "::error::replay_issue '$REPLAY_ISSUE' is not an issue number. Fix: pass the number of the open master-red issue. Docs: docs/RELEASING.md#master-red-issues"
-            exit 1
-          fi
           args=(--run-id "$RUN_ID" --repo "$GITHUB_REPOSITORY" --resolve)
-          [ -z "$REPLAY_ISSUE" ] || args+=(--replay-issue "$REPLAY_ISSUE")
           bun scripts/nightly-issue.ts "${args[@]}" | tee "$RUNNER_TEMP/target.txt"
           grep -E '^(workflow_id=[0-9]+|track=(schedule|push|refused))$' "$RUNNER_TEMP/target.txt" >> "$GITHUB_OUTPUT"
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
@@ -169,11 +157,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ needs.resolve.outputs.run_id }}
-          REPLAY_ISSUE: ${{ inputs.replay_issue }}
           DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
         run: |
           set -euo pipefail
           args=(--run-id "$RUN_ID" --repo "$GITHUB_REPOSITORY")
-          [ -z "$REPLAY_ISSUE" ] || args+=(--replay-issue "$REPLAY_ISSUE")
           [ -z "$DRY_RUN" ] || args+=("$DRY_RUN")
           bun scripts/nightly-issue.ts "${args[@]}"

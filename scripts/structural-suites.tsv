@@ -22,7 +22,7 @@ test/scripts/full-ci-workflow.test.ts	full CI on pull requests	6	readFileSync
 test/scripts/full-ci-workflow.test.ts	master-push reuse of a passed full-suite run	2	readFileSync
 test/scripts/mine-shard-weights.test.ts	complete CI timing extraction	19	readFileSync
 test/scripts/nightly-issue.test.ts	.github/nightly-known-red.tsv	2	readFileSync
-test/scripts/nightly-issue.test.ts	master-red: push-to-master runs	28	readFileSync
+test/scripts/nightly-issue.test.ts	master-red: push-to-master runs	27	readFileSync
 test/scripts/nightly-issue.test.ts	nightly-watch coverage ratchet	1	readFileSync
 test/scripts/nightly-issue.test.ts	nightly-watch incidents	9	readFileSync
 test/scripts/nightly-issue.test.ts	nightly-watch routing and guard	9	readFileSync

@@ -244,20 +244,19 @@ describe('nightly-watch coverage ratchet', () => {
   });
 });
 
-// ── master-red (push-to-master runs of Test and E2E Tests) ────────────────
+// ── master-red (push-to-master runs of Test) ─────────────────────────────
 // Recorded API JSON from master runs on 2026-10-05: Test runs 8315 (green,
 // cab092f5cd) → 8320 red (persistence-history-fixture) → 8331 cancelled →
 // 8336 red (managed-lint) → 8343 red (pack-relation-direction-engine) → 8352
-// green; E2E Tests run 8486 red (fact-embedding-backfill-parity, a killed
-// shard makes its manifest incomplete) → 8493 green.
+// green. ci-manifest-37351182593.json is the manifest of 17 failing E2E tests
+// (fact-embedding-backfill-parity, a killed shard makes it incomplete) of the
+// same commit as run 8336; the stress-gate exemption tests bind it to that run.
 
 const MR = join(FIX, 'master-red');
 const mr = <T>(name: string): T => JSON.parse(readFileSync(join(MR, name), 'utf8')) as T;
 const testRuns = mr<{ workflow_runs: RunInfo[] }>('runs-test-push.json').workflow_runs;
-const e2eRuns = mr<{ workflow_runs: RunInfo[] }>('runs-e2e-push.json').workflow_runs;
 const byNumber = (runs: RunInfo[], n: number) => runs.find(r => r.run_number === n)!;
 const T = { g8315: byNumber(testRuns, 8315), r8320: byNumber(testRuns, 8320), c8331: byNumber(testRuns, 8331), r8336: byNumber(testRuns, 8336), r8343: byNumber(testRuns, 8343), g8352: byNumber(testRuns, 8352) };
-const E = { g8470: byNumber(e2eRuns, 8470), r8486: byNumber(e2eRuns, 8486), g8493: byNumber(e2eRuns, 8493) };
 
 /** A stored-method zip (or deflated), enough for readZipEntry. */
 function zipOf(name: string, content: string, deflate = true): Uint8Array {
@@ -387,8 +386,8 @@ const testWorld = (...runs: RunInfo[]) => {
   return w;
 };
 const mrState = (issue: Issue) => readJsonBlock<MasterRedState>(issue.body, MR_MARKER)!;
-const go = (w: World, run: RunInfo, extra: { dryRun?: boolean; replayIssue?: number } = {}) =>
-  watch({ client: w.client(), repo: REPO, runId: run.id, rows: realRows, today: TODAY, dryRun: extra.dryRun ?? false, replayIssue: extra.replayIssue });
+const go = (w: World, run: RunInfo, extra: { dryRun?: boolean } = {}) =>
+  watch({ client: w.client(), repo: REPO, runId: run.id, rows: realRows, today: TODAY, dryRun: extra.dryRun ?? false });
 const masterIssue = (w: World, workflow = 'Test') => w.labeled('master-red').filter(i => i.title === `Master red: ${workflow}`).sort((a, b) => b.number - a.number)[0];
 
 describe('master-red: push-to-master runs', () => {
@@ -453,7 +452,7 @@ describe('master-red: push-to-master runs', () => {
     await go(w, T.g8315);
     expect(w.issues).toHaveLength(0);
     const g = { run_id: T.g8315.id, run_number: 8315, run_attempt: 1, sha: T.g8315.head_sha };
-    const prior = { schema: 'master-red/v1', workflow: 'Test', workflow_file: 'test.yml', evaluated: g, status: 'green', first_red: null, latest_red: null, last_green: g, suspect: null, open_jobs: [], open_files: [], failed_jobs: [], tests: [], evidence: null, blocked: [] };
+    const prior = { schema: 'master-red/v1', workflow: 'Test', workflow_file: 'test.yml', evaluated: g, status: 'green', first_red: null, latest_red: null, last_green: g, suspect: null, open_jobs: [], failed_jobs: [], tests: [], evidence: null, blocked: [] };
     w.issues.push({ number: 90, title: 'Master red: Test', state: 'closed', labels: [{ name: 'master-red' }], body: jsonBlock(MR_MARKER, prior), created: 0, comments: [] });
     w.addRun(T.r8320, `jobs-${T.r8320.id}.json`).addRun(T.g8352, `jobs-${T.g8352.id}.json`);
     const r = await go(w, T.g8352);
@@ -540,7 +539,7 @@ describe('master-red: push-to-master runs', () => {
     expect(w.labeled('master-red').map(i => i.number)).toEqual([incident.number]);
     expect(incident.state).toBe('closed');
     const state = mrState(incident);
-    expect(state).toMatchObject({ status: 'green', open_jobs: [], open_files: [], blocked: [], evaluated: { run_id: RR.g10289.id, run_attempt: 1 } });
+    expect(state).toMatchObject({ status: 'green', open_jobs: [], blocked: [], evaluated: { run_id: RR.g10289.id, run_attempt: 1 } });
     expect(incident.body).not.toContain('State rebuilt');
     expect(incident.body).toContain(`None: #${incident.number} was closed by hand while red`);
     expect(incident.body).not.toContain('every previously failing job ran and passed');
@@ -659,7 +658,7 @@ describe('master-red: push-to-master runs', () => {
     w.runs.set(onlyCancelled.id, onlyCancelled);
     w.jobs.set(`${onlyCancelled.id}/1`, { total_count: 3, jobs: [
       { id: 7001, name: failing, conclusion: 'cancelled', steps: [] },
-      { id: 7002, name: 'coverage-full-e2e (1)', conclusion: 'cancelled', steps: [] },
+      { id: 7002, name: 'e2e', conclusion: 'cancelled', steps: [] },
       { id: 7003, name: 'test-status', conclusion: 'failure', steps: [] },
     ] });
     w.annotations.set(7001, cancelNote(7001, 'Canceling since a higher priority waiting request for Test-refs/heads/master exists'));
@@ -669,7 +668,7 @@ describe('master-red: push-to-master runs', () => {
     const r1 = await go(w, onlyCancelled);
     const after = mrState(masterIssue(w)!);
     expect(r1.masterRed!.evidence!.verdict).toBe('ignored');
-    expect(r1.masterRed!.evidence!.cancelled).toEqual([failing, 'coverage-full-e2e (1)']);
+    expect(r1.masterRed!.evidence!.cancelled).toEqual([failing, 'e2e']);
     expect(after.open_jobs).toEqual(before.open_jobs);
     expect(after.latest_red).toEqual(before.latest_red);
     expect(after.evaluated!.run_id).toBe(onlyCancelled.id);
@@ -895,6 +894,30 @@ describe('master-red: push-to-master runs', () => {
     expect(w.labeled('nightly-red').map(i => i.title)).toEqual(['Nightly red: Test']);
   });
 
+  test('a scheduled full run of Test feeds the open master-red issue: it clears only the failing jobs it ran, then closes the issue once every one passed', async () => {
+    const w = testWorld(T.g8315, T.r8320);
+    await go(w, T.r8320);
+    const n = masterIssue(w)!.number;
+    const failing = 'persistence-validation / Unit-lane PostgreSQL arms 2/2 / Bun 1.4.0';
+
+    const partial: RunInfo = { ...T.g8352, id: 999003, event: 'schedule', run_number: 8499 };
+    w.addRun(partial, `jobs-${T.g8352.id}.json`);
+    const jobs = w.jobs.get(`${partial.id}/1`)!;
+    w.jobs.set(`${partial.id}/1`, { ...jobs, jobs: jobs.jobs.filter(j => j.name !== failing) });
+    const kept = await go(w, partial);
+    expect(kept.masterRed!.action).toBe('update');
+    expect(w.issue(n).state).toBe('open');
+    expect(w.issue(n).comments.at(-1)).toContain('scheduled full run');
+    expect(w.issue(n).comments.at(-1)).toContain('still open');
+
+    const full: RunInfo = { ...T.g8352, id: 999004, event: 'schedule', run_number: 8500 };
+    w.addRun(full, `jobs-${T.g8352.id}.json`);
+    const closed = await go(w, full);
+    expect(closed.masterRed!.action).toBe('close');
+    expect(w.issue(n).state).toBe('closed');
+    expect(w.issue(n).comments.join('\n')).toContain('Green: scheduled full run');
+  });
+
   test('a dispatch and an automatic watch of the same target resolve to one serialization key; a write that moved the issue makes the watch re-plan', async () => {
     const w = testWorld(T.g8315, T.r8320);
     w.addRun(T.r8336, `jobs-${T.r8336.id}.json`);
@@ -902,7 +925,6 @@ describe('master-red: push-to-master runs', () => {
     const dispatched = await resolveTarget(w.client(), REPO, T.r8336.id);
     expect(auto).toEqual({ workflow_id: T.r8336.workflow_id, track: 'push' });
     expect(dispatched).toEqual(auto);
-    expect(await resolveTarget(w.client(), REPO, T.r8336.id, undefined)).toEqual(auto);
 
     w.runs.delete(T.r8336.id);
     await go(w, T.r8320);
@@ -930,51 +952,6 @@ describe('master-red: push-to-master runs', () => {
     expect(open).toHaveLength(1);
     expect(both.labeled('master-red')).toHaveLength(1);
     for (const twin of both.issues.filter(i => i.title === 'Master red: Test' && i.state === 'closed')) expect(twin.body).toContain(`Duplicate of #${open[0]!.number}`);
-  });
-
-  test('E2E Tests closes only when every previously failing test file was among the files a run executed and passed', async () => {
-    const w = new World();
-    w.addRun(E.g8470).addRun(E.r8486, `jobs-${E.r8486.id}.json`, mr('ci-manifest-37351182593.json'));
-    await go(w, E.r8486);
-    const issue = masterIssue(w, 'E2E Tests')!;
-    const opened = mrState(issue);
-    expect(opened.open_files).toContain('test/e2e/fact-embedding-backfill-parity.test.ts');
-    expect(opened.tests.filter(t => t.file === 'test/e2e/fact-embedding-backfill-parity.test.ts')).toHaveLength(17);
-    expect(opened.evidence!.complete).toBe(false);
-
-    const skippedSelection = { ...mr<CiManifest>('ci-manifest-37354832141.json') };
-    skippedSelection.files = skippedSelection.files.filter(f => !f.file.includes('fact-embedding-backfill'));
-    w.addRun(E.g8493, `jobs-${E.g8493.id}.json`, skippedSelection);
-    const kept = await go(w, E.g8493);
-    expect(kept.masterRed!.action).toBe('update');
-    expect(masterIssue(w, 'E2E Tests')!.body).toContain('**Not run since:**');
-    expect(masterIssue(w, 'E2E Tests')!.body).toContain('replay_issue=');
-
-    const scheduled: RunInfo = { ...E.g8493, id: 999003, event: 'schedule', run_number: 8499 };
-    w.addRun(scheduled, `jobs-${E.g8493.id}.json`, { ...mr<CiManifest>('ci-manifest-37354832141.json'), run_id: scheduled.id, event: 'schedule' });
-    const nightly = await go(w, scheduled);
-    expect(nightly.masterRed!.action).toBe('close');
-    expect(masterIssue(w, 'E2E Tests')!.state).toBe('closed');
-    expect(masterIssue(w, 'E2E Tests')!.comments.join('\n')).toContain('scheduled full run');
-  });
-
-  test('an issue-bound E2E replay dispatch on master clears the files it passed; the green push run with the full selection closes directly', async () => {
-    const w = new World();
-    w.addRun(E.g8470).addRun(E.r8486, `jobs-${E.r8486.id}.json`, mr('ci-manifest-37351182593.json'));
-    await go(w, E.r8486);
-    const n = masterIssue(w, 'E2E Tests')!.number;
-    const replay: RunInfo = { ...E.g8493, id: 999004, event: 'workflow_dispatch', run_number: 8500 };
-    w.addRun(replay, `jobs-${E.g8493.id}.json`, { ...mr<CiManifest>('ci-manifest-37354832141.json'), run_id: replay.id, event: 'workflow_dispatch' });
-    const r = await go(w, replay, { replayIssue: n });
-    expect(r.track).toBe('replay');
-    expect(r.masterRed!.action).toBe('close');
-    expect(w.issue(n).comments.at(-1)).toContain('issue-bound replay');
-
-    const direct = new World();
-    direct.addRun(E.g8470).addRun(E.r8486, `jobs-${E.r8486.id}.json`, mr('ci-manifest-37351182593.json'));
-    await go(direct, E.r8486);
-    direct.addRun(E.g8493, `jobs-${E.g8493.id}.json`, mr('ci-manifest-37354832141.json'));
-    expect((await go(direct, E.g8493)).masterRed!.action).toBe('close');
   });
 
   test('a merged repair PR linked to the issue means no flake follow-up', async () => {
@@ -1009,32 +986,32 @@ describe('master-red: push-to-master runs', () => {
 
 describe('nightly-watch routing and guard', () => {
   const pr = { ...load<RunInfo>('run-heavy.json'), event: 'pull_request', head_branch: 'capy/x' };
-  const refuse = async (run: RunInfo, msg: string, replayIssue?: number) => {
+  const refuse = async (run: RunInfo, msg: string) => {
     const w = new World();
     w.runs.set(run.id, run);
-    await expect(watch({ client: w.client(), repo: REPO, runId: run.id, rows: realRows, today: TODAY, dryRun: false, replayIssue })).rejects.toThrow(msg);
+    await expect(watch({ client: w.client(), repo: REPO, runId: run.id, rows: realRows, today: TODAY, dryRun: false })).rejects.toThrow(msg);
     expect(w.calls.filter(c => c.method !== 'GET')).toEqual([]);
   };
-  test('schedule accepted; push-to-main of Test and E2E Tests accepted, including by dispatch with a push-to-main run id', () => {
+  test('schedule accepted; push-to-main of Test accepted, including by dispatch with a push-to-main run id', () => {
     expect(routeRun(load<RunInfo>('run-heavy.json'), REPO)).toEqual({ track: 'schedule' });
     expect(routeRun(T.r8320, REPO)).toEqual({ track: 'push' });
-    expect(routeRun(E.r8486, REPO)).toEqual({ track: 'push' });
   });
   test('PR run refused', () => refuse(pr, 'pull-request and other runs are refused'));
   test('fork run refused', () => refuse({ ...T.r8320, head_repository: { full_name: 'someone/fork' } }, 'fork'));
   test('push to another branch refused', () => refuse({ ...T.r8320, head_branch: 'capy/topic' }, "push to 'capy/topic'"));
   test('push run of a non-allowlisted workflow refused', () => refuse({ ...T.r8320, name: 'Heavy Tests', path: '.github/workflows/heavy-tests.yml' }, 'which master-red does not watch'));
-  test('a replay must be an E2E Tests dispatch on main', () => refuse({ ...T.r8320, event: 'workflow_dispatch' }, 'issue-bound replay must be an E2E Tests dispatch', 7));
+  test('a dispatch run is refused: there is no issue-bound replay track', () => refuse({ ...T.r8320, event: 'workflow_dispatch' }, 'nightly-watch evaluates scheduled runs and push-to-main runs of Test only'));
 
   const yaml = (f: string) => loadYaml(readFileSync(join(ROOT, '.github/workflows', f), 'utf8')) as Record<string, any>;
   test('nightly-watch.yml: main-only workflow_run, guard for schedule + allowlisted push-to-main from this repo, one queue per repo + workflow + track', () => {
     const w = yaml('nightly-watch.yml');
     expect(w.on.workflow_run.branches).toEqual(['main']);
     expect(w.on.workflow_dispatch.inputs.run_id.description).toBe('Scheduled or push-to-main run id to evaluate');
-    expect(w.on.workflow_dispatch.inputs.replay_issue).toBeDefined();
+    expect(w.on.workflow_dispatch.inputs.replay_issue).toBeUndefined();
     const guard: string = w.jobs.resolve.if;
-    for (const part of ["github.event_name == 'workflow_dispatch'", 'head_repository.full_name == github.repository', "workflow_run.event == 'schedule'", "workflow_run.event == 'push'", "head_branch == 'main'", '["Test","E2E Tests"]']) expect(guard).toContain(part);
-    expect(Object.keys(PUSH_ALLOWLIST).sort()).toEqual(['E2E Tests', 'Test']);
+    for (const part of ["github.event_name == 'workflow_dispatch'", 'head_repository.full_name == github.repository', "workflow_run.event == 'schedule'", "workflow_run.event == 'push'", "head_branch == 'main'", '["Test"]']) expect(guard).toContain(part);
+    expect(guard).not.toContain('E2E Tests');
+    expect(Object.keys(PUSH_ALLOWLIST).sort()).toEqual(['Test']);
     expect(w.concurrency).toBeUndefined();
     expect(w.jobs.watch.needs).toBe('resolve');
     expect(w.jobs.watch.concurrency).toEqual({ group: 'nightly-watch-${{ github.repository }}-${{ needs.resolve.outputs.workflow_id }}-${{ needs.resolve.outputs.track }}', 'cancel-in-progress': false });
@@ -1099,17 +1076,19 @@ describe('operator messages carry docs anchors that resolve', () => {
 });
 
 describe('stress-gate exemption records (lane D contract: scripts/stress/README.md)', () => {
+  // Test push run 8336 whose manifest carries 17 failing test/e2e files (the e2e lane runs inside test.yml).
+  const e2eManifest = (run: RunInfo): CiManifest => ({ ...mr<CiManifest>('ci-manifest-37351182593.json'), run_id: run.id });
   const e2eRed = async () => {
     const w = new World();
-    w.addRun(E.g8470).addRun(E.r8486, `jobs-${E.r8486.id}.json`, mr('ci-manifest-37351182593.json'));
-    await go(w, E.r8486);
+    w.addRun(T.g8315).addRun(T.r8336, `jobs-${T.r8336.id}.json`, e2eManifest(T.r8336));
+    await go(w, T.r8336);
     return w;
   };
   const manifestFailures = mr<CiManifest>('ci-manifest-37351182593.json').failures;
 
   test('the master-red body carries one record per failing test identity that the stress gate parser accepts', async () => {
     const w = await e2eRed();
-    const rows = parseExemptionBlocks(masterIssue(w, 'E2E Tests')!.body!);
+    const rows = parseExemptionBlocks(masterIssue(w)!.body!);
     expect(rows).toHaveLength(new Set(manifestFailures.map(f => `${f.test}|${f.signature}`)).size);
     for (const row of rows) {
       expect(row).toMatchObject({ file: 'test/e2e/fact-embedding-backfill-parity.test.ts', backend: 'e2e', owner: 'agent on release duty', expires: '2026-10-19' });
@@ -1134,9 +1113,9 @@ describe('stress-gate exemption records (lane D contract: scripts/stress/README.
 
   test('flake issues carry their own record; a nightly-red body fed by a scheduled run carries records too', async () => {
     const w = await e2eRed();
-    const n = masterIssue(w, 'E2E Tests')!.number;
-    w.addRun(E.g8493, `jobs-${E.g8493.id}.json`, mr('ci-manifest-37354832141.json'));
-    await go(w, E.g8493);
+    const n = masterIssue(w)!.number;
+    w.addRun(T.g8352, `jobs-${T.g8352.id}.json`);
+    await go(w, T.g8352);
     expect(w.issue(n).state).toBe('closed');
     const flakes = w.labeled('flake');
     expect(flakes.length).toBeGreaterThan(0);
@@ -1149,8 +1128,8 @@ describe('stress-gate exemption records (lane D contract: scripts/stress/README.
     expect(parseExemptionBlocks(w.issue(n).body!)).toEqual([]);
 
     const nightly = new World();
-    const scheduled: RunInfo = { ...E.r8486, id: 999201, event: 'schedule', run_number: 8490 };
-    nightly.addRun(scheduled, `jobs-${E.r8486.id}.json`, { ...mr<CiManifest>('ci-manifest-37351182593.json'), run_id: scheduled.id, event: 'schedule' });
+    const scheduled: RunInfo = { ...T.r8336, id: 999201, event: 'schedule', run_number: 8490 };
+    nightly.addRun(scheduled, `jobs-${T.r8336.id}.json`, { ...e2eManifest(scheduled), event: 'schedule' });
     await go(nightly, scheduled);
     const rows = parseExemptionBlocks(nightly.labeled('nightly-red')[0]!.body!);
     expect(rows.length).toBeGreaterThan(0);

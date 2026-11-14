@@ -1,6 +1,6 @@
 /**
  * Master-red incidents (green master wave, Lane 4 + E4): one `master-red`
- * issue per workflow (Test, E2E Tests) for push-to-main runs only;
+ * issue per workflow (Test) for push-to-main runs only;
  * scheduled runs stay in nightly-red (scripts/nightly-issue.ts).
  *
  * Reconciliation: every watch reads the completed push-to-main runs of its
@@ -14,14 +14,12 @@
  *
  * Open on red (suspect range: last green push SHA -> first red SHA plus the
  * PRs merged in it), update while red, close on a green run where every
- * previously failing job ran and passed with complete evidence (E2E Tests
- * also needs every previously failing test file among the files that run
- * executed and passed; the scheduled full run or an issue-bound replay also
- * satisfies it). A failing job that has not run since keeps the issue open
- * with the manual-close next step. Closing without a merged repair PR linked
- * opens one `flake` issue per previously failing test; a flake closes after
- * its repair PR merged and a later complete run passed that test's file and
- * arm (platform-only flakes: the job that failed passed).
+ * previously failing job ran and passed with complete evidence (the scheduled
+ * full run also satisfies it). A failing job that has not run since keeps the
+ * issue open with the manual-close next step. Closing without a merged repair
+ * PR linked opens one `flake` issue per previously failing test; a flake closes
+ * after its repair PR merged and a later complete run passed that test's file
+ * and arm (platform-only flakes: the job that failed passed).
  *
  * Writes are compare-and-retry: before the first write the issue is re-read,
  * and the plan is recomputed when its updated_at or high-water mark moved.
@@ -41,7 +39,7 @@ export const MR_SCHEMA = 'master-red/v1';
 export const FLAKE_SCHEMA = 'flake/v1';
 export const MR_DOCS = 'docs/RELEASING.md#master-red-issues';
 export const FLAKE_DOCS = 'docs/ci-red-runbook.md#flake-issues';
-export const PUSH_ALLOWLIST: Record<string, string> = { Test: 'test.yml', 'E2E Tests': 'e2e.yml' };
+export const PUSH_ALLOWLIST: Record<string, string> = { Test: 'test.yml' };
 export const MAX_FOLD = 30;
 export const MAX_FLAKES_PER_CLOSE = 10;
 export const MAX_PR_LOOKUPS = 40;
@@ -61,7 +59,6 @@ export interface MasterRedState {
   last_green: RunRef | null;
   suspect: Suspect | null;
   open_jobs: FailedJob[];
-  open_files: string[];
   failed_jobs: FailedJob[];
   tests: FailedTest[];
   evidence: { run_id: number; complete: boolean; problems: string[] } | null;
@@ -118,19 +115,18 @@ const order = (a: Pick<RunRef, 'run_number' | 'run_attempt'>, b: Pick<RunRef, 'r
 const runUrl = (repo: string, id: number) => `https://github.com/${repo}/actions/runs/${id}`;
 const testKey = (t: Pick<FailedTest, 'file' | 'test' | 'arm'>) => `${t.file}\u001f${t.test}\u001f${t.arm}`;
 export const masterRedTitle = (workflow: string) => `Master red: ${inert(workflow, 100)}`;
-const isE2E = (state: Pick<MasterRedState, 'workflow_file'>) => state.workflow_file === 'e2e.yml';
 
 export function blankState(run: RunInfo): MasterRedState {
   return {
     schema: MR_SCHEMA, workflow: inert(run.name, 100), workflow_file: workflowFile(run), evaluated: null, status: 'green',
-    first_red: null, latest_red: null, last_green: null, suspect: null, open_jobs: [], open_files: [], failed_jobs: [], tests: [], evidence: null, blocked: [],
+    first_red: null, latest_red: null, last_green: null, suspect: null, open_jobs: [], failed_jobs: [], tests: [], evidence: null, blocked: [],
   };
 }
 
 export function validState(value: unknown, workflowFileName: string): MasterRedState | undefined {
   const s = value as Partial<MasterRedState> | undefined;
   if (!s || s.schema !== MR_SCHEMA || s.workflow_file !== workflowFileName) return undefined;
-  if (!Array.isArray(s.open_jobs) || !Array.isArray(s.open_files) || !Array.isArray(s.tests) || (s.status !== 'red' && s.status !== 'green')) return undefined;
+  if (!Array.isArray(s.open_jobs) || !Array.isArray(s.tests) || (s.status !== 'red' && s.status !== 'green')) return undefined;
   if (s.evaluated !== null && (typeof s.evaluated?.run_number !== 'number' || typeof s.evaluated?.run_attempt !== 'number')) return undefined;
   return { blocked: [], failed_jobs: [], ...s } as MasterRedState;
 }
@@ -139,7 +135,6 @@ export function validState(value: unknown, workflowFileName: string): MasterRedS
 function clear(state: MasterRedState, ev: RunEvidence): void {
   if (!ev.complete) return;
   state.open_jobs = state.open_jobs.filter(j => !ev.succeeded.includes(j.job));
-  if (isE2E(state)) state.open_files = state.open_files.filter(f => !ev.passed.includes(f));
 }
 
 /** Fold one evaluated run into the incident state (pure). */
@@ -156,7 +151,6 @@ export function applyRun(prev: MasterRedState, run: RunInfo, ev: RunEvidence): M
       state.first_red = ref;
       state.suspect = { from_sha: state.last_green?.sha ?? null, to_sha: run.head_sha, prs: [], complete: false, note: 'not looked up yet' };
       state.open_jobs = [];
-      state.open_files = [];
       state.failed_jobs = [];
       state.tests = [];
     }
@@ -166,7 +160,6 @@ export function applyRun(prev: MasterRedState, run: RunInfo, ev: RunEvidence): M
       state.open_jobs = [...state.open_jobs.filter(j => j.job !== job.job), job];
       state.failed_jobs = [...state.failed_jobs.filter(j => j.job !== job.job), job];
     }
-    if (isE2E(state)) state.open_files = [...new Set([...state.open_files, ...ev.files])].sort();
     const seen = new Set(state.tests.map(testKey));
     for (const t of ev.tests) if (!seen.has(testKey(t))) { state.tests.push(t); seen.add(testKey(t)); }
     state.blocked = [];
@@ -174,8 +167,8 @@ export function applyRun(prev: MasterRedState, run: RunInfo, ev: RunEvidence): M
   }
   if (state.status === 'red') {
     clear(state, ev);
-    if (state.open_jobs.length || state.open_files.length) {
-      state.blocked = [...state.open_jobs.map(j => j.job), ...state.open_files];
+    if (state.open_jobs.length) {
+      state.blocked = state.open_jobs.map(j => j.job);
       return state;
     }
     state.status = 'green';
@@ -185,16 +178,16 @@ export function applyRun(prev: MasterRedState, run: RunInfo, ev: RunEvidence): M
   return state;
 }
 
-/** A scheduled full run or an issue-bound replay that ran at or after the latest red SHA (pure). */
+/** A scheduled full run that ran at or after the latest red SHA (pure). */
 export function applyExternalPass(prev: MasterRedState, ev: RunEvidence): MasterRedState {
   const state: MasterRedState = structuredClone(prev);
   if (state.status !== 'red' || ev.verdict !== 'green') return state;
   clear(state, ev);
-  if (!state.open_jobs.length && !state.open_files.length) {
+  if (!state.open_jobs.length) {
     state.status = 'green';
     state.blocked = [];
   } else {
-    state.blocked = [...state.open_jobs.map(j => j.job), ...state.open_files];
+    state.blocked = state.open_jobs.map(j => j.job);
   }
   return state;
 }
@@ -226,8 +219,7 @@ function filesList(state: MasterRedState): string[] {
   for (const [file, tests] of [...byFile].sort(([a], [b]) => a.localeCompare(b))) {
     const repro = reproduceCommand(file);
     const names = tests.filter(t => t.test).map(t => `\`${inert(t.test, 160)}\`${t.arm ? ` [${inert(t.arm, 40)}]` : ''}`);
-    const open = isE2E(state) ? (state.open_files.includes(file) ? ' (not yet passed since)' : ' (passed since)') : '';
-    lines.push(`- \`${file}\`${open}: ${names.length ? names.join(', ') : 'failing (test names in the job log)'}; reproduce: ${repro ? `\`${repro}\`` : '(path failed validation; read the job log)'}`);
+    lines.push(`- \`${file}\`: ${names.length ? names.join(', ') : 'failing (test names in the job log)'}; reproduce: ${repro ? `\`${repro}\`` : '(path failed validation; read the job log)'}`);
   }
   return lines;
 }
@@ -247,8 +239,7 @@ function nextStep(state: MasterRedState, repo: string, issue: number | undefined
   if (state.blocked.length) {
     lines.push(`**Not run since:** ${state.blocked.map(b => `\`${inert(b, 160)}\``).join(', ')} failed and has not run and passed on a later run with complete evidence, so ${ref} stays open. `
       + `If a job was renamed or removed, close ${ref} by hand with a comment naming its replacement. `
-      + (isE2E(state) ? `For an E2E file the selection skipped, dispatch a replay: \`gh workflow run e2e.yml --ref main -f full_corpus=true\`, then \`gh workflow run nightly-watch.yml -f run_id=<that run id> -f replay_issue=${issue ?? '<this issue>'}\`; the nightly scheduled run also counts.`
-        : 'The next push run or the nightly scheduled run that runs it closes this issue.'));
+      + 'The next push run or the nightly scheduled run that runs it closes this issue.');
   }
   if (state.evidence && !state.evidence.complete) {
     lines.push(`**Incomplete evidence** for run ${runUrl(repo, state.evidence.run_id)}: ${state.evidence.problems.map(p => inert(p, 200)).join('; ')}. Nothing was cleared from that run. Re-check after the next push run, or re-evaluate a run with \`gh workflow run nightly-watch.yml -f run_id=<run id>\`. Docs: docs/ci-red-runbook.md#ci-failure-manifest`);
@@ -361,7 +352,7 @@ export function pendingRuns(state: MasterRedState | undefined, runs: RunInfo[], 
 }
 
 function failingKey(state: MasterRedState): string {
-  return [...state.open_jobs.map(j => `${j.job}>${j.step}`), ...state.open_files, ...state.tests.map(testKey)].sort().join('\n');
+  return [...state.open_jobs.map(j => `${j.job}>${j.step}`), ...state.tests.map(testKey)].sort().join('\n');
 }
 
 export async function planMasterRed(client: GitHubClient, repo: string, run: RunInfo, opts: ReconcileOptions, cache = new Map<number, RunEvidence>()): Promise<{ plan: MasterRedPlan; issue?: Issue }> {
@@ -370,7 +361,7 @@ export async function planMasterRed(client: GitHubClient, repo: string, run: Run
   const blank = blankState(run);
   const found = issue ? validState(readJsonBlock(issue.body, MR_MARKER), blank.workflow_file) : undefined;
   const stored: MasterRedState | undefined = found && { ...found, rebuilt: undefined };
-  if (stored?.status === 'red' && issue!.state === 'closed') Object.assign(stored, { status: 'green', open_jobs: [], open_files: [], blocked: [], closed_by_hand: issue!.number });
+  if (stored?.status === 'red' && issue!.state === 'closed') Object.assign(stored, { status: 'green', open_jobs: [], blocked: [], closed_by_hand: issue!.number });
   const reason = !issue ? 'no master-red issue for this workflow yet' : 'the JSON block of the newest master-red issue was missing or malformed';
   const runs = await pushRuns(client, run);
   const { state: base, pending } = pendingRuns(stored, runs, blank, reason, !issue);
@@ -420,7 +411,7 @@ function changeComment(prev: MasterRedState | undefined, state: MasterRedState, 
 
 function closeComment(state: MasterRedState, repo: string, dropped: boolean): string {
   const g = state.last_green!;
-  return `Green: ${runUrl(repo, g.run_id)} (run ${g.run_number}, attempt ${g.run_attempt}) passed and every previously failing job${isE2E(state) ? ' and test file' : ''} ran and passed with complete evidence. Closing.`
+  return `Green: ${runUrl(repo, g.run_id)} (run ${g.run_number}, attempt ${g.run_attempt}) passed and every previously failing job ran and passed with complete evidence. Closing.`
     + (dropped ? ' This incident started and ended between two watches (the red run\'s own watch was dropped or superseded), so it is recorded here for its suspect range and flake follow-up.' : '');
 }
 
@@ -514,7 +505,7 @@ export async function watchMasterRed(client: GitHubClient, repo: string, run: Ru
 }
 
 async function writePlan(client: GitHubClient, repo: string, plan: MasterRedPlan): Promise<void> {
-  await ensureLabel(client, MR_LABEL, 'b60205', 'A push-to-main run of Test or E2E Tests is red (nightly-watch)');
+  await ensureLabel(client, MR_LABEL, 'b60205', 'A push-to-main run of Test is red (nightly-watch)');
   for (const step of plan.steps) {
     if (step.action === 'create' || step.action === 'record-closed') {
       step.issue = (await createIssue(client, plan.title, renderMasterRed(step.state, repo), [MR_LABEL])).number;
@@ -561,14 +552,14 @@ export async function closeFlakes(client: GitHubClient, repo: string, run: RunIn
   return closed;
 }
 
-/** Feed a scheduled full run or an issue-bound replay into the open master-red issue of the same workflow. */
-export async function externalPass(client: GitHubClient, repo: string, run: RunInfo, ev: RunEvidence, opts: { dryRun: boolean; today: string; issueNumber?: number }): Promise<MasterRedPlan | undefined> {
+/** Feed a scheduled full run into the open master-red issue of the same workflow. */
+export async function externalPass(client: GitHubClient, repo: string, run: RunInfo, ev: RunEvidence, opts: { dryRun: boolean; today: string }): Promise<MasterRedPlan | undefined> {
   const title = masterRedTitle(run.name);
-  const issue = opts.issueNumber ? await getIssue(client, opts.issueNumber) : await newestIssue(client, title);
+  const issue = await newestIssue(client, title);
   if (!issue || issue.state !== 'open' || issue.title !== title) return undefined;
   const prev = validState(readJsonBlock(issue.body, MR_MARKER), workflowFile(run));
   if (!prev || prev.status !== 'red' || !prev.latest_red) return undefined;
-  const kind = run.event === 'schedule' ? 'scheduled full run' : 'issue-bound replay';
+  const kind = 'scheduled full run';
   const plan = (state: MasterRedState, step: MasterRedStep | undefined, reason: string): MasterRedPlan => ({
     action: step?.action ?? 'none', title, issue: issue.number, state, steps: step ? [step] : [], evaluated: [run.id], flakes: step?.flakes ?? [], reason,
     body: step ? renderMasterRed(state, repo, issue.number) : undefined, comment: step?.comment, evidence: ev,
@@ -582,7 +573,7 @@ export async function externalPass(client: GitHubClient, repo: string, run: RunI
   const state = applyExternalPass(prev, ev);
   const result = state.status === 'green'
     ? plan(state, { action: 'close', issue: issue.number, state, flakes: prev.tests.slice(0, MAX_FLAKES_PER_CLOSE).map(t => flakeFor(prev, t, issue.number, opts.today)),
-      comment: `Green: ${kind} ${runUrl(repo, run.id)} (\`${run.head_sha.slice(0, 12)}\`) ran and passed every previously failing job and test file with complete evidence. Closing.` }, `${kind} cleared every failure`)
+      comment: `Green: ${kind} ${runUrl(repo, run.id)} (\`${run.head_sha.slice(0, 12)}\`) ran and passed every previously failing job with complete evidence. Closing.` }, `${kind} cleared every failure`)
     : plan(state, { action: 'update', issue: issue.number, state, flakes: [],
       comment: ev.complete ? `${kind} ${runUrl(repo, run.id)} cleared what it ran; still open: ${state.blocked.map(b => `\`${inert(b, 120)}\``).join(', ')}.`
         : `${kind} ${runUrl(repo, run.id)} has incomplete evidence (${ev.problems.map(p => inert(p, 160)).join('; ')}), so nothing was cleared.` }, `${kind} did not clear every failure`);
