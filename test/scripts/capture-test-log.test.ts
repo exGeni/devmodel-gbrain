@@ -75,7 +75,7 @@ console.log('=== fixture.e2e.test.ts ===');
 console.log(' 0 fail');
 console.log('Ran 1 test across 1 file. [125ms]');
 console.log('Files: 1 total, 1 passed, 0 failed');
-`, [], 'Selected E2E (diff-relevant) (2)');
+`, [], 'e2e');
     expect([...mineWeights(e2e.artifact, 'e2e')]).toEqual([['test/e2e/fixture.e2e.test.ts', 125]]);
   });
 

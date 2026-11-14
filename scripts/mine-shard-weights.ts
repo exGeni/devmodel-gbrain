@@ -2,8 +2,10 @@
 /** Mine timings from successful CI execution in its real execution mode.
  * Unit: consecutive headers + final Bun summary, milliseconds.
  * Serial: per-file runner PASS records, seconds (not buffered log timestamps).
- * E2E: per-file Bun summaries, milliseconds. Partial selections merge old weights;
- * explicit full-profile runs replace them after source-corpus validation.
+ * E2E: per-file Bun summaries, milliseconds, from the one `e2e` job of test.yml, which runs
+ * every E2E file. A GitHub run is checked against the source corpus and replaces the map;
+ * a log read from a file or stdin merges into it, like a unit or serial artifact.
+ * A lane that ran no files is refused, as an empty unit or serial lane is.
  * Several --run values, in any order, give each file its median over those runs: one run's
  * timings carry that run's runner speeds (whole runs differ by 0.75-1.3x and
  * two-shard jobs within one run by 0.7-1.7x), so a lone fast run under-predicts
@@ -23,7 +25,6 @@ import { loadWeights } from "./sharding.ts";
 
 const ROOT = process.env.GBRAIN_MINE_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export type Lane = "unit" | "serial" | "e2e";
-type E2EProfile = "selected" | "full";
 const OUTPUTS = { unit: "test-weights", serial: "serial-weights", e2e: "e2e-weights" };
 interface TimingEvent { job: string; timestampMs: number; file: string; summaryCount?: number; failures?: number }
 interface LogLine { job: string; step: string; timestampMs: number; text: string }
@@ -38,11 +39,10 @@ function logLines(raw: string): LogLine[] {
 function unitJobShards(job: string): string[] | undefined {
   return /^test \((\d+(?:, \d+)*)\)$/.exec(job)?.[1]!.split(", ");
 }
-function isJob(job: string, lane: Lane, e2eProfile: E2EProfile = "selected"): boolean {
+function isJob(job: string, lane: Lane): boolean {
   if (lane === "unit") return unitJobShards(job) !== undefined;
   if (lane === "serial") return /^serial-tests(?: \(\d+\))?$/.test(job);
-  if (e2eProfile === "full") return /^coverage-full-e2e(?: \(\d+\))?$/.test(job);
-  return /^Selected E2E \(diff-relevant\)(?: \(\d+\)| \d+)?$/.test(job);
+  return job === "e2e";
 }
 
 /** File starts and the LAST summary per unit job; nested CLI summaries are ignored. */
@@ -81,17 +81,18 @@ export function computeWeights(events: TimingEvent[]): Map<string, number> {
 }
 
 /** Refuse partial/failed sources before any output is replaced. */
-export function mineWeights(raw: string, lane: Lane, opts: { expectedJobs?: readonly string[]; e2eProfile?: E2EProfile; expectedFiles?: readonly string[]; requireCapture?: boolean } = {}): Map<string, number> {
-  const full = opts.e2eProfile === "full";
+export function mineWeights(raw: string, lane: Lane, opts: { expectedJobs?: readonly string[]; expectedFiles?: readonly string[]; requireCapture?: boolean } = {}): Map<string, number> {
+  // `expectedFiles` is the source corpus of a GitHub run: with it the E2E lane is measured in full.
+  const full = opts.expectedFiles !== undefined;
   const fullPaths = new Map<string, string>();
   if (full) {
-    if (lane !== "e2e" || !opts.expectedFiles?.length) throw new Error("full E2E requires an authoritative source corpus");
-    for (const file of opts.expectedFiles) {
+    if (lane !== "e2e" || !opts.expectedFiles!.length) throw new Error("E2E requires an authoritative, non-empty source corpus");
+    for (const file of opts.expectedFiles!) {
       if (fullPaths.has(basename(file))) throw new Error(`full E2E: ambiguous or duplicate basename ${basename(file)}`);
       fullPaths.set(basename(file), file);
     }
   }
-  const lines = logLines(raw).filter(line => isJob(line.job, lane, opts.e2eProfile));
+  const lines = logLines(raw).filter(line => isJob(line.job, lane));
   if (lines.some(l => /^##\[error\]/.test(l.text))) throw new Error(`${lane}: failed job log`);
   const byJob = new Map<string, LogLine[]>();
   for (const line of lines) {
@@ -176,10 +177,11 @@ export function mineWeights(raw: string, lane: Lane, opts: { expectedJobs?: read
         if (/^ERROR: HOME isolation breach/.test(text)) throw new Error(`${job}: isolation failure`);
       }
     }
-    // Only the runner's explicit no-work sentinel permits a job without a
-    // summary. Setup-only/truncated jobs must not disappear from the evidence.
-    if (!full && lane === 'e2e' && !found.size && expected === undefined && !current &&
-        records.some(line => line.text === 'selected E2E: explicit empty selection; no tests launched')) continue;
+    // run-e2e.sh declares an empty lane and exits clean. That measures nothing:
+    // refuse it by name, as an empty unit or serial lane is refused, rather than
+    // let it pass as a lane whose files were timed or call it a truncated log.
+    if (lane === 'e2e' && !found.size && expected === undefined && !current &&
+        records.some(line => /^No files for shard .+; exiting clean\.$/.test(line.text))) throw new Error(`${job}: the E2E lane ran no files; nothing to mine`);
     if (current || expected === undefined || expected !== found.size) throw new Error(`${job}: incomplete ${lane} execution`);
     for (const [file, duration] of found) {
       if (full && weights.has(file)) throw new Error(`full E2E: duplicate execution across jobs: ${file}`);
@@ -247,43 +249,41 @@ export function sourceE2ECorpus(commit: string): string[] {
     });
     if (r.status !== 0) throw new Error(`source E2E discovery failed: ${r.stderr}`);
     const files = r.stdout.trim().split("\n").filter(Boolean);
-    if (!files.length || new Set(files).size !== files.length || files.some(file => !tracked.includes(file))) throw new Error("source E2E discovery contains missing or duplicate paths");
+    if (!files.length) throw new Error("source E2E discovery found no files: the lane is empty at this commit, so there is nothing to mine");
+    if (new Set(files).size !== files.length || files.some(file => !tracked.includes(file))) throw new Error("source E2E discovery contains missing or duplicate paths");
     return files;
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 async function main(): Promise<void> {
   let lane: Lane = "unit", input: string | undefined, out: string | undefined;
   const runs: string[] = [];
-  let e2eProfile: E2EProfile = "selected";
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === "--help" || arg === "-h") {
-      console.log("usage: bun run weights:mine [--lane unit|serial|e2e] [--e2e-profile selected|full] [--run ID [--run ID ...] | --from-file PATH | <stdin>] [--out PATH]\nseveral --run values (any order) give each file its median over those runs; files git no longer tracks are dropped\nfull E2E requires --lane e2e, exactly one --run and a matching source checkout");
+      console.log("usage: bun run weights:mine [--lane unit|serial|e2e] [--run ID [--run ID ...] | --from-file PATH | <stdin>] [--out PATH]\nseveral --run values (any order) give each file its median over those runs; files git no longer tracks are dropped\nthe e2e lane (job `e2e` of test.yml) takes exactly one --run, checked against the source checkout, which replaces the map; a log from --from-file or stdin merges into it");
       return;
     }
-    if (!["--lane", "--e2e-profile", "--run", "--run-id", "--from-file", "--out"].includes(arg) || !argv[i + 1] || argv[i + 1]!.startsWith("--")) throw new Error(`unknown/incomplete option: ${arg}`);
+    if (!["--lane", "--run", "--run-id", "--from-file", "--out"].includes(arg) || !argv[i + 1] || argv[i + 1]!.startsWith("--")) throw new Error(`unknown/incomplete option: ${arg}`);
     const value = argv[++i]!;
     if (arg === "--lane") {
       if (!["unit", "serial", "e2e"].includes(value)) throw new Error(`invalid lane: ${value}`);
       lane = value as Lane;
-    } else if (arg === "--e2e-profile") {
-      if (value !== "selected" && value !== "full") throw new Error(`invalid E2E profile: ${value}`);
-      e2eProfile = value;
     } else if (arg === "--run" || arg === "--run-id") runs.push(value);
     else if (arg === "--from-file") input = value;
     else out = resolve(value);
   }
   if (runs.length && input) throw new Error("choose --run or --from-file, not both");
   if (new Set(runs).size !== runs.length) throw new Error("each --run may be given once");
-  const full = e2eProfile === "full";
-  if (full && (lane !== "e2e" || runs.length !== 1)) throw new Error("full E2E requires --lane e2e and exactly one --run for verified source provenance");
+  // A GitHub run of the e2e lane is checked against the source corpus and replaces the map.
+  const full = lane === "e2e" && runs.length > 0;
+  if (full && runs.length !== 1) throw new Error("e2e takes exactly one --run, for verified source provenance");
   out ??= resolve(ROOT, `scripts/${OUTPUTS[lane]}.json`);
   type Mined = { run: string | null; commit: string | null; measured: Map<string, number>; attempt?: number; jobs: Array<{ name: string; databaseId: number }>; expectedFiles?: string[]; raw: string };
   const mineRun = (run: string): Mined => {
     const info = JSON.parse(gh(["run", "view", run, "--json", full ? "attempt,conclusion,headSha,jobs" : "conclusion,headSha,jobs"]));
     if (info.conclusion !== "success") throw new Error(`run ${run} is not successful`);
-    const jobs = info.jobs.filter((j: { name: string }) => isJob(j.name, lane, e2eProfile));
+    const jobs = info.jobs.filter((j: { name: string }) => isJob(j.name, lane));
     if (!jobs.length || jobs.some((j: { conclusion: string }) => j.conclusion !== "success")) throw new Error(`run ${run} has no complete ${lane} lane`);
     // A packed unit job captured each of its shards as job `test (N)`.
     const expectedJobs: string[] = lane === "unit" ? jobs.flatMap((j: { name: string }) => unitJobShards(j.name)!.map(shard => `test (${shard})`))
@@ -298,24 +298,23 @@ async function main(): Promise<void> {
       attempt = info.attempt;
       expectedFiles = sourceE2ECorpus(info.headSha);
     }
-    const raw = full ? identified.map(job => gh(["run", "view", run, "--attempt", String(attempt), "--job", String(job.databaseId), "--log"])).join("\n")
-      : lane === "unit" ? expectedJobs.map(job => capturedUnitLog(run, job)).join("\n")
-      : lane === "serial" ? identified.map(job => gh(["run", "view", run, "--job", String(job.databaseId), "--log"])).join("\n")
-      : gh(["run", "view", run, "--log"]);
-    const measured = mineWeights(raw, lane, { expectedJobs, e2eProfile, expectedFiles, requireCapture: lane === "unit" });
+    // Each serial or e2e job is read by id, the e2e one pinned to the attempt the run's metadata names.
+    const jobLog = (job: { databaseId: number }) => gh(["run", "view", run, ...(full ? ["--attempt", String(attempt)] : []), "--job", String(job.databaseId), "--log"]);
+    const raw = lane === "unit" ? expectedJobs.map(job => capturedUnitLog(run, job)).join("\n") : identified.map(jobLog).join("\n");
+    const measured = mineWeights(raw, lane, { expectedJobs, expectedFiles, requireCapture: lane === "unit" });
     return { run, commit: info.headSha, measured, attempt, jobs: full ? identified : [], expectedFiles, raw };
   };
   let mined: Mined[];
   if (runs.length) mined = runs.map(mineRun);
   else {
     const raw = input ? readFileSync(input, "utf8") : await new Response(Bun.stdin.stream()).text();
-    mined = [{ run: null, commit: null, jobs: [], raw, measured: mineWeights(raw, lane, { e2eProfile }) }];
+    mined = [{ run: null, commit: null, jobs: [], raw, measured: mineWeights(raw, lane) }];
   }
   const { run, commit, attempt, jobs: fullJobs, expectedFiles, raw } = mined[0]!;
   // Downloaded artifacts/stdin may cover only one shard. Only an authoritative
-  // complete GitHub unit/serial/full-E2E run replaces the full map; selected E2E always
-  // merges because its executed corpus depends on the diff.
-  const mergeExisting = !full && (!run || lane === "e2e");
+  // complete GitHub run replaces the full map: a unit or serial run, or the e2e run
+  // checked against its source corpus.
+  const mergeExisting = !run;
   // An older run, or the existing map a partial source merges into, can name a file deleted or renamed since;
   // the checkout's tracked files decide what stays, whatever the --run order.
   const tracked = new Set(git(["ls-files"]).split("\n"));
@@ -324,7 +323,7 @@ async function main(): Promise<void> {
   for (const [file, duration] of measured) weights.set(file, duration);
   const metadata = { lane, unit: lane === "serial" ? "seconds" : "milliseconds", run: run ?? null, commit, source: run ? "github" : input ? "file" : "stdin",
     ...(mined.length > 1 ? { runs, commits: mined.map(m => m.commit) } : {}), measuredFiles: measured.size, totalFiles: weights.size, mergeExisting,
-    ...(full ? { e2eProfile, attempt, jobs: fullJobs, logSha256: createHash("sha256").update(raw).digest("hex"), corpusSha256: createHash("sha256").update([...expectedFiles!].sort().join("\n") + "\n").digest("hex") } : {}),
+    ...(full ? { attempt, jobs: fullJobs, logSha256: createHash("sha256").update(raw).digest("hex"), corpusSha256: createHash("sha256").update([...expectedFiles!].sort().join("\n") + "\n").digest("hex") } : {}),
   };
   const temp = `${out}.${process.pid}.tmp`;
   try {

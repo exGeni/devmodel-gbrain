@@ -1,8 +1,0 @@
-# E2E files owned by the backend-matrix job.
-#
-# scripts/e2e-matrix.ts leaves every `test/e2e/` row listed here out of the
-# selected E2E matrix: the backend-matrix job runs each of them in every
-# backend, so a single run in Selected E2E would be a duplicate.
-#
-# Format: one repo-relative path per line. `!path<TAB>reason` records a parity
-# file deliberately left out of the matrix (the `!` rows stay out of it).

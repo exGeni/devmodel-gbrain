@@ -6,22 +6,20 @@
 // imports most of src/, so a file-to-test map selected every file on 40 of 40
 // merged pull requests while half of them had to edit it.
 //
-// Changed files come from git (the working-tree diff vs origin/main plus
-// untracked files) or, with --changed-files <path|->, from a newline-separated
-// list (CI passes the pull request's file list from the GitHub API).
+// Changed files come from git: the working-tree diff vs origin/main plus
+// untracked files.
 //
 //   EMPTY    (no changed files)        -> every test/e2e/*.test.ts
 //   DOC_ONLY (every path is a doc)     -> nothing (the only empty stdout)
 //   SRC      (anything else)           -> every test/e2e/*.test.ts
 //
-// scripts/e2e-matrix.ts drops the files a named job owns (E2E_EXCLUSIONS)
-// before partitioning. On git failure the selector exits 2.
+// On git failure the selector exits 2.
 //
 // Usage:
-//   bun run scripts/select-e2e.ts [--changed-files <path|->] [--classify-only]
+//   bun run scripts/select-e2e.ts [--classify-only]
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 export const NARROWING_RETIRED = "E2E narrowing is retired; running the full E2E corpus (see docs/TESTING.md#e2e-selection)";
@@ -66,8 +64,7 @@ function splitLines(text: string): string[] {
   return text.split("\n").map((line) => line.trim()).filter(Boolean);
 }
 
-function readChangedFiles(repoRoot: string, listPath: string | undefined): string[] {
-  if (listPath !== undefined) return [...new Set(splitLines(readFileSync(listPath === "-" ? 0 : listPath, "utf8")))].sort();
+function readChangedFiles(repoRoot: string): string[] {
   const set = new Set<string>();
   for (const args of [["diff", "--name-only", "origin/main...HEAD"], ["diff", "--name-only", "HEAD"], ["ls-files", "--others", "--exclude-standard"]]) {
     for (const line of splitLines(runGit(args, repoRoot))) set.add(line);
@@ -81,12 +78,7 @@ if (import.meta.main) {
     process.stderr.write("select-e2e: not a git repository\n");
     process.exit(2);
   }
-  const at = process.argv.indexOf("--changed-files");
-  if (at !== -1 && !process.argv[at + 1]) {
-    process.stderr.write("select-e2e: --changed-files needs a path or -\n");
-    process.exit(2);
-  }
-  const changedFiles = readChangedFiles(repoRoot, at === -1 ? undefined : process.argv[at + 1]);
+  const changedFiles = readChangedFiles(repoRoot);
   const classification = classify(changedFiles);
   if (process.argv.includes("--classify-only")) {
     process.stdout.write(classification + "\n");

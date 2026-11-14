@@ -1,14 +1,14 @@
 // test/select-e2e.test.ts
 //
 // The E2E selector after narrowing retired (GBRA-47 C6): doc-only changes
-// select nothing, every other change selects the whole corpus, and the CI
-// path reads the changed-file list instead of git history.
+// select nothing and every other change selects the whole corpus. The changed
+// files come from git: the working tree against origin/main.
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { classify, NARROWING_RETIRED, selectTests } from "../scripts/select-e2e.ts";
 
@@ -40,7 +40,7 @@ describe("selectTests", () => {
     ["an empty change", []],
     ["a source change", ["src/core/search/intent.ts"]],
     ["a direct test edit", ["test/e2e/sync.test.ts"]],
-    ["a workflow edit", [".github/workflows/e2e.yml"]],
+    ["a workflow edit", [".github/workflows/test.yml"]],
     ["mixed docs and source", ["docs/foo.md", "src/cli.ts"]],
   ])("%s selects the whole corpus, sorted", (_label, changed) => {
     expect(selectTests(changed, ALL_E2E)).toEqual([...ALL_E2E].sort());
@@ -48,48 +48,54 @@ describe("selectTests", () => {
 });
 
 describe("selector CLI", () => {
-  function run(args: string[], files: Record<string, string> = {}, input?: string) {
+  /** A repository whose base commit tracks the two E2E files; `files` are then written on top of it, uncommitted. */
+  function run(args: string[], files: Record<string, string> = {}) {
     const dir = mkdtempSync(join(tmpdir(), "gbrain-select-e2e-"));
     try {
       const git = (...a: string[]) => expect(spawnSync("git", a, { cwd: dir, encoding: "utf8" }).status).toBe(0);
       git("init", "-q");
-      git("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "commit", "-q", "--allow-empty", "-m", "base");
-      git("update-ref", "refs/remotes/origin/main", "HEAD");
       mkdirSync(join(dir, "test/e2e"), { recursive: true });
       for (const file of ["test/e2e/a.test.ts", "test/e2e/b.test.ts"]) writeFileSync(join(dir, file), "// fixture\n");
-      for (const [path, body] of Object.entries(files)) writeFileSync(join(dir, path), body);
-      return spawnSync(process.execPath, ["--no-env-file", SELECTOR, ...args], { cwd: dir, encoding: "utf8", input });
+      git("add", "-A");
+      git("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "commit", "-q", "-m", "base");
+      git("update-ref", "refs/remotes/origin/main", "HEAD");
+      for (const [path, body] of Object.entries(files)) {
+        mkdirSync(dirname(join(dir, path)), { recursive: true });
+        writeFileSync(join(dir, path), body);
+      }
+      return spawnSync(process.execPath, ["--no-env-file", SELECTOR, ...args], { cwd: dir, encoding: "utf8" });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   }
 
   test("a code change in the working tree lists every E2E file and says narrowing is retired", () => {
-    const r = run([]);
+    const r = run([], { "src/cli.ts": "// change\n" });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe("test/e2e/a.test.ts\ntest/e2e/b.test.ts\n");
     expect(r.stderr).toContain(NARROWING_RETIRED);
   });
 
-  test("--changed-files reads the CI list: doc-only selects nothing", () => {
-    const r = run(["--changed-files", "changed.txt"], { "changed.txt": "docs/a.md\nREADME.md\n" });
+  test("a doc-only change in the working tree selects nothing", () => {
+    const r = run([], { "docs/a.md": "# doc\n", "README.md": "# readme\n" });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe("");
     expect(r.stderr).not.toContain(NARROWING_RETIRED);
   });
 
-  test("--changed-files - reads stdin; an empty list (fail-closed fallback) selects everything", () => {
-    const r = run(["--changed-files", "-"], {}, "");
+  test("a tree with no change selects everything (the fail-closed fallback)", () => {
+    const r = run([]);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe("test/e2e/a.test.ts\ntest/e2e/b.test.ts\n");
   });
 
-  test("--classify-only prints the classification of the given list", () => {
-    const r = run(["--changed-files", "-", "--classify-only"], {}, "src/cli.ts\n");
-    expect(r.stdout).toBe("SRC\n");
-  });
-
-  test("--changed-files without a value exits 2", () => {
-    expect(run(["--changed-files"]).status).toBe(2);
+  test.each([
+    ["a code change", { "src/cli.ts": "// change\n" }, "SRC"],
+    ["a doc-only change", { "docs/a.md": "# doc\n" }, "DOC_ONLY"],
+    ["no change", {}, "EMPTY"],
+  ])("--classify-only prints the classification of %s", (_label, files, expected) => {
+    const r = run(["--classify-only"], files);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toBe(`${expected}\n`);
   });
 });

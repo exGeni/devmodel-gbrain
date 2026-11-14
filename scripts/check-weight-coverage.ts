@@ -57,7 +57,7 @@ const LANES = [
   {
     lane: 'e2e', map: 'scripts/e2e-weights.json', threshold: 0.10,
     files: tests.filter(f => /^test\/e2e\/[^/]+\.test\.ts$/.test(f)),
-    miner: `bun run weights:mine --lane e2e --e2e-profile full --run ${latestRun('test.yml', 'schedule')}`,
+    miner: `bun run weights:mine --lane e2e --run ${latestRun('test.yml', 'schedule')}`,
   },
 ];
 

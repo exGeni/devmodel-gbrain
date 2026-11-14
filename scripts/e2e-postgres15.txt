@@ -1,8 +1,0 @@
-# E2E files the compatibility lane runs against an older server release (#7112).
-#
-# A server release older than the one every other lane runs can parse less SQL,
-# so a statement only the newer release accepts ships green everywhere else.
-# This lane runs a targeted set of the write, sync, jobs and migration files
-# against the older release.
-#
-# Format: one repo-relative path per line; # starts a comment.

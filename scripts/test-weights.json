@@ -47,8 +47,6 @@
   "test/scripts/contributor-audit.test.ts": 1935,
   "test/scripts/coverage-baseline-gate.test.ts": 188,
   "test/scripts/coverage-diff-gate.test.ts": 132,
-  "test/scripts/e2e-matrix.test.ts": 418,
-  "test/scripts/e2e-provider-key-notice.test.ts": 9,
   "test/scripts/e2e-runner.test.ts": 9267,
   "test/scripts/exit-code-restore.test.ts": 489,
   "test/scripts/fix-wave-closeout.test.ts": 3,

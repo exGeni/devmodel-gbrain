@@ -89,43 +89,56 @@ describe("parseLog", () => {
   });
 });
 
-describe('full E2E timing extraction', () => {
+describe('E2E timing extraction (test.yml job e2e)', () => {
   const expectedFiles = ['test/e2e/alpha.test.ts', 'test/phantom-redirect-engine-parity.test.ts'];
+  const JOB = 'e2e';
   const line = (job: string, text: string) => `${job}\tstep\t2026-09-24T06:00:00.000Z ${text}\n`;
   const file = (job: string, name: string) => line(job, `=== ${name} ===`) + line(job, ' 0 fail') + line(job, 'Ran 1 test across 1 file. [2.50s]');
   const complete = (job: string, names: string[]) => names.map(name => file(job, name)).join('') + line(job, `Files: ${names.length} total, ${names.length} passed, 0 failed`);
-  const raw = complete('coverage-full-e2e', ['alpha.test.ts', 'phantom-redirect-engine-parity.test.ts']);
-  const opts = { e2eProfile: 'full' as const, expectedFiles, expectedJobs: ['coverage-full-e2e'] };
-  it('resolves the outside-directory parity file without including selected-job timings', () => {
-    const noise = complete('Selected E2E (diff-relevant) 1', ['unrelated.test.ts']);
+  const raw = complete(JOB, ['alpha.test.ts', 'phantom-redirect-engine-parity.test.ts']);
+  const opts = { expectedFiles, expectedJobs: [JOB] };
+  it('resolves the outside-directory parity file and reads only the e2e job, not the retired E2E jobs', () => {
+    const noise = complete('Selected E2E (diff-relevant) 1', ['unrelated.test.ts']) + complete('coverage-full-e2e (1)', ['other.test.ts']) + complete('e2e (2)', ['third.test.ts']);
     expect(Object.fromEntries(mineWeights(raw + noise, 'e2e', opts))).toEqual(Object.fromEntries(expectedFiles.map(file => [file, 2500])));
-    expect(Object.fromEntries(mineWeights(raw + noise, 'e2e'))).toEqual({ 'test/e2e/unrelated.test.ts': 2500 });
+    expect(Object.fromEntries(mineWeights(raw + noise, 'e2e'))).toEqual({ 'test/e2e/alpha.test.ts': 2500, 'test/e2e/phantom-redirect-engine-parity.test.ts': 2500 });
+    expect(() => mineWeights(noise, 'e2e')).toThrow('no complete timing data');
   });
   it('uses the final parent summary rather than a nested child summary', () => {
-    for (const [job, options] of [['coverage-full-e2e', opts], ['Selected E2E (diff-relevant) 1', {}]] as const) {
-      const nested = line(job, '=== alpha.test.ts ===') + line(job, ' 0 fail') + line(job, 'Ran 1 test across 1 file. [1.00ms]')
-        + line(job, ' 0 fail') + line(job, 'Ran 1 test across 1 file. [80.00ms]')
-        + file(job, 'phantom-redirect-engine-parity.test.ts') + line(job, 'Files: 2 total, 2 passed, 0 failed');
+    const nested = line(JOB, '=== alpha.test.ts ===') + line(JOB, ' 0 fail') + line(JOB, 'Ran 1 test across 1 file. [1.00ms]')
+      + line(JOB, ' 0 fail') + line(JOB, 'Ran 1 test across 1 file. [80.00ms]')
+      + file(JOB, 'phantom-redirect-engine-parity.test.ts') + line(JOB, 'Files: 2 total, 2 passed, 0 failed');
+    for (const options of [opts, {}]) {
       expect(mineWeights(nested, 'e2e', options).get(expectedFiles[0])).toBe(80);
-      expect(() => mineWeights(nested.replace(' 0 fail\n' + line(job, 'Ran 1 test across 1 file. [80.00ms]'), ' 1 fail\n' + line(job, 'Ran 1 test across 1 file. [80.00ms]')), 'e2e', options)).toThrow();
+      expect(() => mineWeights(nested.replace(' 0 fail\n' + line(JOB, 'Ran 1 test across 1 file. [80.00ms]'), ' 1 fail\n' + line(JOB, 'Ran 1 test across 1 file. [80.00ms]')), 'e2e', options)).toThrow();
     }
   });
-  it('requires complete, disjoint matrix jobs and rejects missing, ambiguous and extra files', () => {
-    const jobs = ['coverage-full-e2e (1)', 'coverage-full-e2e (2)'];
-    const matrix = complete(jobs[0], ['alpha.test.ts']) + complete(jobs[1], ['phantom-redirect-engine-parity.test.ts']);
-    expect(mineWeights(matrix, 'e2e', { ...opts, expectedJobs: jobs }).size).toBe(2);
+  it('requires the complete job and rejects missing, duplicate, failed, unknown and extra files', () => {
+    expect(mineWeights(raw, 'e2e', opts).size).toBe(2);
     for (const bad of [
-      complete(jobs[0], ['alpha.test.ts']),
-      complete(jobs[0], ['alpha.test.ts']) + complete(jobs[1], ['alpha.test.ts']),
-      matrix.replace(' 0 fail', ' 1 fail'),
-      matrix.replace('1 passed, 0 failed', '0 passed, 1 failed'),
-      matrix.replace('1 passed, 0 failed', '0 passed, 0 failed'),
-      matrix.replace('phantom-redirect-engine-parity.test.ts', 'unknown.test.ts'),
-      matrix.replace('Ran 1 test across 1 file. [2.50s]', ''),
-    ]) expect(() => mineWeights(bad, 'e2e', { ...opts, expectedJobs: jobs })).toThrow();
+      complete(JOB, ['alpha.test.ts']),
+      complete(JOB, ['alpha.test.ts', 'alpha.test.ts', 'phantom-redirect-engine-parity.test.ts']),
+      raw.replace(' 0 fail', ' 1 fail'),
+      raw.replace('2 total, 2 passed, 0 failed', '2 total, 1 passed, 1 failed'),
+      raw.replace('2 total, 2 passed, 0 failed', '2 total, 0 passed, 0 failed'),
+      raw.replace('phantom-redirect-engine-parity.test.ts', 'unknown.test.ts'),
+      raw.replace('Ran 1 test across 1 file. [2.50s]', ''),
+      raw.replace(/Files: .*\n/, ''),
+    ]) expect(() => mineWeights(bad, 'e2e', opts)).toThrow();
     expect(() => mineWeights(raw, 'e2e', { ...opts, expectedFiles: [...expectedFiles, 'test/alpha.test.ts'] })).toThrow('ambiguous');
     expect(() => mineWeights(raw, 'e2e', { ...opts, expectedFiles: [...expectedFiles, 'test/e2e/missing.test.ts'] })).toThrow('missing source files');
-    expect(() => mineWeights(raw, 'e2e', { e2eProfile: 'full' })).toThrow('source corpus');
+    expect(() => mineWeights(raw, 'e2e', { expectedFiles: [] })).toThrow('source corpus');
+    expect(() => mineWeights(raw, 'unit', { expectedFiles })).toThrow('source corpus');
+  });
+  it('refuses a setup-only job, and a lane that ran no files by name, as an empty unit or serial lane is refused', () => {
+    expect(() => mineWeights(line(JOB, 'snapshot setup started'), 'e2e')).toThrow('incomplete e2e execution');
+    for (const sentinel of ['No files for shard (unsharded); exiting clean.', 'No files for shard 2/4; exiting clean.']) {
+      const empty = line(JOB, 'snapshot setup started') + line(JOB, sentinel);
+      expect(() => mineWeights(empty, 'e2e')).toThrow('the E2E lane ran no files; nothing to mine');
+      expect(() => mineWeights(empty, 'e2e', opts)).toThrow('the E2E lane ran no files; nothing to mine');
+    }
+    expect(() => mineWeights('', 'e2e')).toThrow('no complete timing data');
+    // The empty-lane line does not excuse a log that also ran files and then lost its summary.
+    expect(() => mineWeights(file(JOB, 'alpha.test.ts') + line(JOB, 'No files for shard (unsharded); exiting clean.'), 'e2e')).toThrow('incomplete e2e execution');
   });
 });
 
@@ -263,13 +276,12 @@ describe('complete CI timing extraction', () => {
     for (const bad of ['1..2', '9'.repeat(310)]) expect(() => mineWeights(raw.replace('PASS 19s', `PASS ${bad}s`), 'serial')).toThrow('invalid duration');
   });
   it('reads E2E summaries as milliseconds and requires the complete lane summary', () => {
-    const job = 'Selected E2E (diff-relevant) 1';
+    const job = 'e2e';
     const raw = line(job, 1, '=== alpha.test.ts ===') + line(job, 2, ' 0 fail') + line(job, 3, 'Ran 4 tests across 1 file. [1.51s]') + line(job, 4, 'Files: 1 total, 1 passed, 0 failed');
     expect(mineWeights(raw, 'e2e').get('test/e2e/alpha.test.ts')).toBe(1510);
     expect(() => mineWeights(raw.replace('0 failed', '1 failed'), 'e2e')).toThrow();
     expect(() => mineWeights(raw.replace(' 0 fail', ' 1 fail'), 'e2e')).toThrow();
-    expect(() => mineWeights(raw + line('Selected E2E (diff-relevant) 2', 1, 'snapshot setup started'), 'e2e')).toThrow('incomplete e2e execution');
-    expect(mineWeights(raw + line('Selected E2E (diff-relevant) 2', 1, 'selected E2E: explicit empty selection; no tests launched'), 'e2e').size).toBe(1);
+    expect(() => mineWeights(raw.replace(/.*Files: .*\n/, ''), 'e2e')).toThrow('incomplete e2e execution');
     for (const bad of ['1..2', '9'.repeat(310)]) expect(() => mineWeights(raw.replace('[1.51s]', `[${bad}s]`), 'e2e')).toThrow('invalid duration');
   });
   it('never serializes non-finite or negative weights into a poisoned map', () => {
@@ -397,7 +409,7 @@ it('GitHub serial refresh reads each job log by id instead of the whole-run log'
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-it('full-profile CLI pins source, attempt and job provenance and preserves both outputs on refused evidence', () => {
+it('E2E CLI pins source, attempt and job provenance and preserves both outputs on refused evidence', () => {
   const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-full-'));
   try {
     const repo = join(import.meta.dir, '../..');
@@ -436,12 +448,12 @@ esac
     const logPath = join(dir, 'full.log');
     const out = join(dir, 'weights.json');
     const meta = join(dir, 'weights.metadata.json');
-    const info = { attempt: 2, conclusion: 'success', headSha: sha, jobs: [{ name: 'coverage-full-e2e', databaseId: 456, conclusion: 'success' }] };
-    const line = (text: string) => `coverage-full-e2e\tstep\t2026-09-24T06:00:00.000Z ${text}\n`;
+    const info = { attempt: 2, conclusion: 'success', headSha: sha, jobs: [{ name: 'e2e', databaseId: 456, conclusion: 'success' }] };
+    const line = (text: string) => `e2e\tstep\t2026-09-24T06:00:00.000Z ${text}\n`;
     const files = corpus.map(path => line(`=== ${path.split('/').at(-1)} ===`) + line(' 0 fail') + line('Ran 1 test across 1 file. [1.00ms]'));
     const complete = files.join('') + line(`Files: ${files.length} total, ${files.length} passed, 0 failed`);
     const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_GH_INFO: infoPath, FIXTURE_GH_LOG: logPath, GBRAIN_MINE_ROOT: checkout };
-    const base = [join(repo, 'scripts/mine-shard-weights.ts'), '--lane', 'e2e', '--e2e-profile', 'full', '--out', out];
+    const base = [join(repo, 'scripts/mine-shard-weights.ts'), '--lane', 'e2e', '--out', out];
     const run = (args = ['--run', '123']) => spawnSync(process.execPath, [...base, ...args], { env, encoding: 'utf8', cwd: checkout });
     writeFileSync(out, '{"keep":123}\n');
     writeFileSync(meta, '{"prior":true}\n');
@@ -453,6 +465,8 @@ esac
       [{ ...info, jobs: [{ ...info.jobs[0], databaseId: undefined }] }, complete],
       [info, files.slice(1).join('') + line(`Files: ${files.length - 1} total, ${files.length - 1} passed, 0 failed`)],
       [info, complete.replace(' 0 fail', ' 1 fail')],
+      [{ ...info, jobs: [{ ...info.jobs[0], name: 'coverage-full-e2e (1)' }] }, complete],
+      [info, line('No files for shard (unsharded); exiting clean.')],
     ] as const) {
       writeFileSync(infoPath, JSON.stringify(metadata));
       writeFileSync(logPath, log);
@@ -460,19 +474,70 @@ esac
       expect(readFileSync(out, 'utf8')).toBe('{"keep":123}\n');
       expect(readFileSync(meta, 'utf8')).toBe('{"prior":true}\n');
     }
-    expect(run(['--from-file', logPath]).status).not.toBe(0);
+    const twoRuns = run(['--run', '123', '--run', '124']);
+    expect(twoRuns.status).not.toBe(0);
+    expect(twoRuns.stderr).toContain('exactly one --run');
     writeFileSync(infoPath, JSON.stringify(info));
     writeFileSync(logPath, complete);
     const result = run();
     expect(result.status, result.stderr).toBe(0);
     expect(Object.keys(JSON.parse(readFileSync(out, 'utf8'))).sort()).toEqual([...corpus].sort());
     expect(JSON.parse(readFileSync(meta, 'utf8'))).toMatchObject({
-      lane: 'e2e', e2eProfile: 'full', run: '123', commit: sha, attempt: 2, source: 'github',
-      jobs: [{ name: 'coverage-full-e2e', databaseId: 456 }], measuredFiles: corpus.length, totalFiles: corpus.length, mergeExisting: false,
+      lane: 'e2e', run: '123', commit: sha, attempt: 2, source: 'github',
+      jobs: [{ name: 'e2e', databaseId: 456 }], measuredFiles: corpus.length, totalFiles: corpus.length, mergeExisting: false,
       logSha256: expect.stringMatching(/^[0-9a-f]{64}$/), corpusSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
+    expect(JSON.parse(readFileSync(meta, 'utf8'))).not.toHaveProperty('e2eProfile');
+    // The same log read from a file carries no run, so it merges into the map and claims no source provenance.
+    writeFileSync(out, JSON.stringify({ 'test/e2e/alpha.test.ts': 7, 'test/e2e/unobserved.test.ts': 42 }) + '\n');
+    const fromFile = run(['--from-file', logPath]);
+    expect(fromFile.status, fromFile.stderr).toBe(0);
+    expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ 'test/e2e/alpha.test.ts': 1, 'test/e2e/beta.test.ts': 1 });
+    const merged = JSON.parse(readFileSync(meta, 'utf8'));
+    expect(merged).toMatchObject({ lane: 'e2e', run: null, source: 'file', measuredFiles: 2, totalFiles: 2, mergeExisting: true });
+    expect(merged).not.toHaveProperty('attempt');
+    expect(merged).not.toHaveProperty('logSha256');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 30000);
+
+it('an E2E lane that ran no files is refused, from a log or a run, and leaves both outputs untouched', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-empty-e2e-'));
+  try {
+    const repo = join(import.meta.dir, '../..');
+    const out = join(dir, 'weights.json');
+    const meta = join(dir, 'weights.metadata.json');
+    const input = join(dir, 'empty.log');
+    // A checkout with the real runner whose test/e2e holds no file: run-e2e.sh prints the declared-empty line and exits clean.
+    const checkout = join(dir, 'checkout');
+    mkdirSync(join(checkout, 'scripts/lib'), { recursive: true });
+    mkdirSync(join(checkout, 'test/e2e'), { recursive: true });
+    for (const file of ['run-e2e.sh', 'lib/test-env.sh']) writeFileSync(join(checkout, 'scripts', file), readFileSync(join(repo, 'scripts', file)));
+    writeFileSync(join(checkout, 'scripts/e2e-live-key-only.txt'), '# no key-gated files\n');
+    writeFileSync(join(checkout, 'test/e2e/.gitkeep'), '');
+    const inCheckout = (...args: string[]) => spawnSync('git', ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', ...args], { cwd: checkout, encoding: 'utf8' });
+    inCheckout('init', '-q', '-b', 'main');
+    inCheckout('add', '-A');
+    inCheckout('commit', '-q', '-m', 'empty lane');
+    const sha = inCheckout('rev-parse', 'HEAD').stdout.trim();
+    const bin = join(dir, 'bin');
+    mkdirSync(bin);
+    writeFileSync(join(bin, 'gh'), '#!/bin/sh\ncase "$*" in\n  "run view 123 --json attempt,conclusion,headSha,jobs") cat "$FIXTURE_GH_INFO" ;;\n  "run view 123 --attempt 1 --job 456 --log") cat "$FIXTURE_GH_LOG" ;;\n  *) exit 2 ;;\nesac\n', { mode: 0o755 });
+    const infoPath = join(dir, 'run.json');
+    writeFileSync(infoPath, JSON.stringify({ attempt: 1, conclusion: 'success', headSha: sha, jobs: [{ name: 'e2e', databaseId: 456, conclusion: 'success' }] }));
+    writeFileSync(input, 'e2e\tRun the E2E lane\t2026-11-14T06:00:00.000Z No files for shard (unsharded); exiting clean.\n');
+    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, GBRAIN_MINE_ROOT: checkout, FIXTURE_GH_INFO: infoPath, FIXTURE_GH_LOG: input };
+    writeFileSync(out, '{"keep":123}\n');
+    writeFileSync(meta, '{"prior":true}\n');
+    const mine = (args: string[]) => spawnSync(process.execPath, [join(repo, 'scripts/mine-shard-weights.ts'), '--lane', 'e2e', '--out', out, ...args], { env, encoding: 'utf8', cwd: checkout });
+    const fromFile = mine(['--from-file', input]);
+    expect(fromFile.status).toBe(1);
+    expect(fromFile.stderr).toContain('the E2E lane ran no files; nothing to mine');
+    const fromRun = mine(['--run', '123']);
+    expect(fromRun.status).toBe(1);
+    expect(fromRun.stderr).toContain('found no files');
+    expect([readFileSync(out, 'utf8'), readFileSync(meta, 'utf8')]).toEqual(['{"keep":123}\n', '{"prior":true}\n']);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 it('GitHub refresh mines every shard of a packed unit job (test.yml runs two per runner)', () => {
   const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-packed-'));
@@ -537,7 +602,9 @@ it('a refresh from several GitHub runs takes each file\'s median, so one fast or
     writeFileSync(out, '{"test/old.test.ts":42}\n');
     writeFileSync(meta, '{"prior":true}\n');
     expect(mine('--run', '101', '--run', '104', '--run', '103').status).not.toBe(0);
-    expect(mine('--lane', 'e2e', '--e2e-profile', 'full', '--run', '101', '--run', '102').status).not.toBe(0);
+    const twoE2E = mine('--lane', 'e2e', '--run', '101', '--run', '102');
+    expect(twoE2E.status).not.toBe(0);
+    expect(twoE2E.stderr).toContain('exactly one --run');
     expect(readFileSync(out, 'utf8')).toBe('{"test/old.test.ts":42}\n');
     expect(readFileSync(meta, 'utf8')).toBe('{"prior":true}\n');
     const result = mine('--run', '101', '--run', '102', '--run', '103');
@@ -551,32 +618,6 @@ it('a refresh from several GitHub runs takes each file\'s median, so one fast or
     const oldestFirst = mine('--run', '103', '--run', '102', '--run', '101');
     expect(oldestFirst.status, oldestFirst.stderr).toBe(0);
     expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ 'test/new.test.ts': 500, 'test/one.test.ts': 2000, 'test/two.test.ts': 6000 });
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-
-it('selected E2E from several runs keeps the median of a file only an older run selected', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'gbrain-mine-e2e-runs-'));
-  try {
-    const bin = join(dir, 'bin');
-    const fixtures = join(dir, 'fixtures');
-    mkdirSync(bin);
-    mkdirSync(fixtures);
-    writeFileSync(join(bin, 'gh'), '#!/bin/sh\ncase "$*" in\n  "run view "*" --json conclusion,headSha,jobs") cat "$FIXTURE_GH/$3.json" ;;\n  "run view "*" --log") cat "$FIXTURE_GH/$3.log" ;;\n  *) exit 2 ;;\nesac\n', { mode: 0o755 });
-    const job = 'Selected E2E (diff-relevant) 1';
-    const line = (text: string) => job + '\tstep\t2026-10-30T12:00:00.000Z ' + text + '\n';
-    const run = (id: string, files: [string, number][]) => {
-      writeFileSync(join(fixtures, id + '.json'), JSON.stringify({ conclusion: 'success', headSha: 'commit-' + id, jobs: [{ name: job, conclusion: 'success' }] }));
-      writeFileSync(join(fixtures, id + '.log'), files.map(([name, ms]) => line('=== ' + name + ' ===') + line(' 0 fail') + line('Ran 1 test across 1 file. [' + ms + '.00ms]')).join('')
-        + line('Files: ' + files.length + ' total, ' + files.length + ' passed, 0 failed'));
-    };
-    run('201', [['alpha.test.ts', 1000]]);
-    run('202', [['alpha.test.ts', 3000], ['beta.test.ts', 800]]);
-    const out = join(dir, 'e2e-weights.json');
-    writeFileSync(out, '{"test/e2e/beta.test.ts":42}\n');
-    const result = spawnSync(process.execPath, [join(import.meta.dir, '../../scripts/mine-shard-weights.ts'), '--lane', 'e2e', '--run', '201', '--run', '202', '--out', out],
-      { env: { ...trackedCheckout(dir, ['test/e2e/alpha.test.ts', 'test/e2e/beta.test.ts']), PATH: bin + ':' + process.env.PATH, FIXTURE_GH: fixtures }, encoding: 'utf8' });
-    expect(result.status, result.stderr).toBe(0);
-    expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ 'test/e2e/alpha.test.ts': 2000, 'test/e2e/beta.test.ts': 800 });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

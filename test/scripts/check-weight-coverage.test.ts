@@ -69,7 +69,7 @@ describe('check-weight-coverage', () => {
     expect(r.stderr).toContain('unit: 2 of 20 files (10.0%)');
   });
 
-  test('serial and E2E use a 10% bound and the full-profile E2E miner', () => {
+  test('serial and E2E use a 10% bound and the E2E miner', () => {
     const serial = Array.from({ length: 10 }, (_, i) => `test/s${i}.serial.test.ts`);
     const e2e = Array.from({ length: 10 }, (_, i) => `test/e2e/e${i}.test.ts`);
     const maps = {
@@ -81,7 +81,8 @@ describe('check-weight-coverage', () => {
     expect(r.status).toBe(1);
     expect(r.stderr).not.toContain('serial:');
     expect(r.stderr).toContain('e2e: 2 of 10 files (20.0%)');
-    expect(r.stderr).toContain('--lane e2e --e2e-profile full --run');
+    expect(r.stderr).toContain('--lane e2e --run');
+    expect(r.stderr).not.toContain('--e2e-profile');
   });
 
   test('the committed weight maps name only existing files', () => {
