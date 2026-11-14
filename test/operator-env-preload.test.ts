@@ -108,8 +108,6 @@ describe('operator-env-preload (#4023)', () => {
   test('keeps the test machinery the runners and CI workflows export', () => {
     const probed = [
       'GBRAIN_MODEL_DISCOVERY',
-      'GBRAIN_AUDIT_DIR',
-      'GBRAIN_SYNC_FAILURES_DIR',
       'GBRAIN_TEST_SENTINEL',
       'GBRAIN_CI_EXAMPLE_PORT',
       'GBRAIN_E2E_ALLOW_DB',
@@ -118,8 +116,6 @@ describe('operator-env-preload (#4023)', () => {
       // '1' (not 'off') so a strip is distinguishable from provider-keys-
       // preload's own default of 'off' when the var is absent.
       GBRAIN_MODEL_DISCOVERY: '1',
-      GBRAIN_AUDIT_DIR: '/probe/audit',
-      GBRAIN_SYNC_FAILURES_DIR: '/probe/sync-failures',
       GBRAIN_TEST_SENTINEL: 'kept',
       GBRAIN_CI_EXAMPLE_PORT: '5434',
       GBRAIN_E2E_ALLOW_DB: 'gbrain_probe_db',

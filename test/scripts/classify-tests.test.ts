@@ -82,31 +82,6 @@ describe('classify-tests detectors', () => {
     expect(classifyFile('test/fake.test.ts', cli).rows).toHaveLength(0);
   });
 
-  test('doctor-source helper marks the suite structural', () => {
-    const src = [
-      "import { doctorSource } from './helpers/doctor-source.ts';",
-      "describe('doctor pin', () => {",
-      "  test('has check', () => { expect(doctorSource()).toContain('checkX'); });",
-      '});',
-    ].join('\n');
-    const rows = classifyFile('test/fake.test.ts', src).rows;
-    expect(rows).toHaveLength(1);
-    expect(rows[0].detector).toBe('doctor-source-helper');
-  });
-
-  test('per-surface source helpers (A10) mark the suite structural', () => {
-    const src = [
-      "import { surfaceFileSource, surfaceSource } from './helpers/source-surface.ts';",
-      "describe('sync pin', () => {",
-      "  test('contains', () => { expect(surfaceSource('sync')).toContain('x'); });",
-      "  test('orders', () => { const s = surfaceFileSource('sync', 'src/commands/sync.ts'); expect(s.indexOf('a')).toBeLessThan(s.indexOf('b')); });",
-      '});',
-    ].join('\n');
-    const rows = classifyFile('test/fake.test.ts', src).rows;
-    expect(rows).toHaveLength(1);
-    expect(rows[0].detector).toBe('source-surface-helper');
-  });
-
   test('detector outside any describe attributes to file-level pseudo-suite', () => {
     const src = [
       "const SRC = readFileSync('src/core/operations.ts', 'utf-8');",

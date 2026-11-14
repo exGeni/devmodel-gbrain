@@ -17,8 +17,6 @@ export const KEEP_EXACT: ReadonlySet<string> = new Set([
   'GBRAIN_HOME', // per-run HOME isolation — gbrain-home-preload and run-e2e.sh both respect a pre-set value
   'GBRAIN_DATABASE_URL', // e2e DB target; database-url-guard-preload (registered first) already vetoed un-opted runs
   'GBRAIN_MODEL_DISCOVERY', // operator override provider-keys-preload deliberately respects
-  'GBRAIN_AUDIT_DIR', // audit-dir-preload honors a wrapper pre-set (inspect audit output after a run)
-  'GBRAIN_SYNC_FAILURES_DIR', // same wrapper pre-set contract in sync-failures-preload
   'GBRAIN_DEBUG_PRELOAD', // the preload stack's own logging hatch
 ]);
 

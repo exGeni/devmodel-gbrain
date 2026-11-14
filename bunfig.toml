@@ -9,15 +9,6 @@
 # scripts/regen-all.ts); pass it yourself when running `bun test` directly.
 timeout = 60_000
 
-# #2823: redirect GBRAIN_AUDIT_DIR to a per-run scratch dir BEFORE any test
-# runs, so audit-emitting code paths (content-sanity, shell-audit, etc.)
-# can't leak fixture events into the operator's real ~/.gbrain/audit/. See
-# test/helpers/audit-dir-preload.ts for the full rationale.
-#
-# Same treatment for the sync failure ledger: broken-fixture import/sync tests
-# were appending rows into the operator's real ~/.gbrain/sync-failures.jsonl,
-# which `gbrain doctor` reads and warns on. See
-# test/helpers/sync-failures-preload.ts.
 # #3485: database-url-guard-preload runs FIRST — it refuses to start the run
 # while DATABASE_URL/GBRAIN_DATABASE_URL is ambient without the explicit
 # GBRAIN_TEST_ALLOW_DATABASE_URL=1 opt-in that the e2e wrappers set at their
@@ -27,9 +18,8 @@ timeout = 60_000
 # OPENCLAW_ workspace context and GBRAIN_ config overrides (a stray
 # GBRAIN_SOURCE, GBRAIN_CYCLE_FRESHNESS_WARN_HOURS, ...) that run-e2e.sh
 # already scrubs for the E2E lane but the unit lane inherited. Runs right
-# after the database-url guard so every later preload — especially
-# legacy-embedding-preload's `env: {...process.env}` snapshot — sees the
-# scrubbed environment. Test-machinery vars the runners/CI export
+# after the database-url guard so every later preload sees the scrubbed
+# environment. Test-machinery vars the runners/CI export
 # (GBRAIN_TEST_*, GBRAIN_CI_*, GBRAIN_E2E_*, GBRAIN_HOME,
 # GBRAIN_DATABASE_URL) survive via keep-lists. See
 # test/helpers/operator-env-preload.ts.
@@ -54,4 +44,4 @@ timeout = 60_000
 # 183 failures + 15-minute retry hangs on an OPENAI-only shell). The e2e
 # wrapper sets GBRAIN_TEST_KEEP_PROVIDER_KEYS=1 to opt back in. See
 # test/helpers/provider-keys-preload.ts.
-preload = ["./test/helpers/database-url-guard-preload.ts", "./test/helpers/operator-env-preload.ts", "./test/helpers/provider-keys-preload.ts", "./test/helpers/real-home-guard-preload.ts", "./test/helpers/audit-dir-preload.ts", "./test/helpers/sync-failures-preload.ts", "./test/helpers/gbrain-home-preload.ts", "./test/helpers/git-hermetic-preload.ts"]
+preload = ["./test/helpers/database-url-guard-preload.ts", "./test/helpers/operator-env-preload.ts", "./test/helpers/provider-keys-preload.ts", "./test/helpers/real-home-guard-preload.ts", "./test/helpers/gbrain-home-preload.ts", "./test/helpers/git-hermetic-preload.ts"]
