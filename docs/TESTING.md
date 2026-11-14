@@ -59,7 +59,7 @@ A pull request runs only the cheap tier. The lanes above run on the full profile
 | Command | What it runs | When to use |
 |---|---|---|
 | `bun run test` | The parallel unit loop (`scripts/run-unit-parallel.sh`): weighted shards, each a sequence of one Bun process per file (`scripts/run-unit-shard.sh`), then the serial pass. It leaves out `*.slow.test.ts` and `test/e2e/` and does no typecheck. The shard count is the CPU count, at most 4 unless `--shards N` or `SHARDS=N` says otherwise (cap 8). Total concurrency is capped to available memory at `GBRAIN_TEST_MEM_PER_FILE_MB` (default 1536) per slot, shedding intra-shard width before shards. A shard that fails with the WebAssembly out-of-memory signature or is killed externally gets one serial rescue pass ([rescues](protocol/AGENT_OPERATOR_v1.md#rescues-and-warnings)). Knobs: `--shards N`, `--max-concurrency N`, `--dry-run`, `GBRAIN_TEST_NO_MEM_ADAPT=1`, `GBRAIN_TEST_NO_OOM_FALLBACK=1`, `GBRAIN_TEST_MAX_CONCURRENCY` (default 4), `GBRAIN_TEST_SHARD_TIMEOUT`, `GBRAIN_TEST_SHARD_KILL_AFTER`. | The inner edit loop. |
-| `bun run verify` | The guard battery, fanned out by `scripts/run-verify-parallel.sh` through a bounded pool (`GBRAIN_VERIFY_MAX_PARALLEL`, default the CPU count). The heavy checks start first, then the self-timed `SOLO_CHECKS` run alone ([why](operations/verify-and-nightly-e2e.md#verify-solo-checks)). Each check is capped at `GBRAIN_VERIFY_TIMEOUT` seconds (default 120). The `CHECKS` array in that script is the one list of what runs; `--dry-list` prints it. CI's `verify` job runs it with the typecheck left out (`GBRAIN_VERIFY_SKIP_TYPECHECK=1`) because the `typecheck` job runs it. | Before pushing and before `/ship`. |
+| `bun run verify` | The guard battery, fanned out by `scripts/run-verify-parallel.sh` through a bounded pool (`GBRAIN_VERIFY_MAX_PARALLEL`, default the CPU count). The heavy checks start first, then the self-timed `SOLO_CHECKS` run alone ([why](operations/verify-and-nightly-e2e.md#verify-solo-checks)). Each check is capped at `GBRAIN_VERIFY_TIMEOUT` seconds (default 120). Its `CHECKS` and `SOLO_CHECKS` arrays list what runs; `--dry-list` prints both. CI's `verify` job runs it with the typecheck left out (`GBRAIN_VERIFY_SKIP_TYPECHECK=1`) because the `typecheck` job runs it. | Before pushing and before `/ship`. |
 | `bun run test:full` | `verify`, then `scripts/run-unit-parallel.sh`, then `bun run test:slow`, then `bash scripts/run-e2e.sh`. A failing step stops the chain and its status is the command's status. | Before opening a pull request. |
 | `bun run ci:local` | The CI lanes on this machine: gitleaks scans (`scripts/test-gitleaks-config.sh`, `scripts/scan-worktree-secrets.sh` and `gitleaks git` over `origin/main..HEAD`), a smoke test of `run-e2e.sh`'s arguments, `scripts/check-bun-test-timeout.sh`, `bun run verify`, the serial and slow lanes, then four unit shards, each followed by its E2E shard (`SHARD=N/4`), run in parallel with `xargs -P4`. The sharded lane sets `GBRAIN_TEST_TIMEOUT_MULTIPLIER` to 6 unless the caller set it. `--no-shard` runs unit and E2E without shards. Complete shard logs are in `.context/ci-local-shards/`. `ci:local:diff` (`--diff`) runs only gitleaks and `scripts/ci-doc-checks.sh` on a doc-only diff and the whole gate otherwise ([E2E selection](#e2e-selection)). It stops at once without `gitleaks`. | The full local gate before shipping. |
 | `bun run test:slow` | `scripts/run-slow-tests.sh`: every `*.slow.test.ts` file in one Bun process, per-test timeout 120 s. File arguments replace discovery. With no slow file it prints that and exits 0. | After touching slow-path code. |
@@ -76,8 +76,9 @@ A pull request runs only the cheap tier. The lanes above run on the full profile
 | `bun run wave-security-scan` | A mechanical sweep of a commit range for shapes worth a human look (`scripts/wave-security-scan.sh`); exit 1 means look, not unsafe. | Reviewing outside contributions. |
 | `scripts/ship-remote-tests.sh` | Pushes the branch, dispatches `test.yml` (`--workflow` and `--ref` change that) on GitHub's runners and waits with `gh run watch --exit-status`, so its exit status is the run's. Needs an authenticated `gh`. | Offloading the suite from a saturated machine. |
 
-`verify` has one execution list, the `CHECKS` array in `scripts/run-verify-parallel.sh`: a second,
-hand-synced list of guards would drift from it and leave checks that never run. The guard registry
+`verify` runs what two arrays in `scripts/run-verify-parallel.sh` list: `CHECKS` for the pool and
+`SOLO_CHECKS` for the self-timed checks (`check:guard-self-test`); `--dry-list` prints both. A
+second, hand-synced list of guards would drift from them and leave checks that never run. The guard registry
 is `scripts/guards-manifest.tsv` ([Guard registry and
 self-test](#guard-registry-and-self-test)).
 
@@ -118,11 +119,12 @@ The suffixes say where a test runs. A second, independent axis is intent:
 
 ### Failure-first logging
 
-`scripts/run-unit-parallel.sh` (`bun run test`) writes, all cleared at the start of a run:
+`scripts/run-unit-parallel.sh` (`bun run test`) writes these; the `shard-*` files, the failure log and
+the summary are cleared at the start of a run:
 
 | File | Content |
 |---|---|
-| `.context/test-shards/shard-N.log` | Shard N's whole output, with `shard-N.exit`, `.start` and `.end` beside it. The serial pass and the rescue pass write `serial.log` and `oom-rescue.log` there too. |
+| `.context/test-shards/shard-N.log` | Shard N's whole output, with `shard-N.exit`, `.start` and `.end` beside it. The serial pass and the rescue pass write `serial.log` and `oom-rescue.log` there too, overwritten only when that pass runs. |
 | `.context/test-failures.log` | Failure blocks, described below. |
 | `.context/test-summary.txt` | One line per shard: `shard N/M: pass=X fail=Y skip=Z rc=W`. A serial pass adds `serial: pass=N rc=0` or `serial: rc=R fail=N`. A shard that did not run normally has its own line: `EXIT-HANG ... warn-pass`, `WEDGED after Ns`, `KILLED externally ...` or `oom-rescue: ...`. |
 | `.context/test-receipts/` | [Executed-test receipts](#executed-test-receipts), unless `GBRAIN_TEST_RECEIPT_DIR` names another directory. |
@@ -145,7 +147,7 @@ blocks exist:
 When any failure remains, the wrapper prints a banner on stderr: a rule line, `❌ N TEST FAILURES —
 full details:`, the absolute path of the failure log, the last 30 lines of that log and a closing
 `[unit-parallel] elapsed=…s | pass=… fail=… skip=…` line. The banner is on stderr so a `| head` on
-stdout does not hide it. While shards run, a `[heartbeat]` line per shard appears every 10 seconds.
+stdout does not hide it. While shards run, one `[heartbeat]` line every 10 seconds carries a `[sN: ...]` entry per shard.
 The exit status is 0 or 1 (2 for a usage error).
 
 A shard that outlives `GBRAIN_TEST_SHARD_TIMEOUT` (default 3000 s; `GBRAIN_TEST_SHARD_KILL_AFTER`
@@ -157,9 +159,13 @@ is the grace after TERM, default 30 s) is classified as one of two things:
   banner and writes the `warn-pass` summary line. Its pass count is low, because Bun never printed
   its final summary. Bun's per-test `--timeout` turns a hung test into a printed `(fail)`, so this
   classification cannot hide a hung test.
-- **WEDGED, hard failure.** Anything else. The run is red.
+- **WEDGED.** Anything else, and a failure. A wedged shard whose log shows the WebAssembly
+  out-of-memory signature is queued for the serial rescue pass (`WEDGED after Ns (... OOM signature
+  — queued for serial rescue)`); a clean rescue with nothing else failing turns the run green.
+  Any other WEDGED shard makes the run red.
 
-An EXIT-HANG line in the summary is not a test failure, so do not bisect it. A WEDGED line is one.
+An EXIT-HANG line in the summary is not a test failure, so do not bisect it. A WEDGED line without
+a clean rescue is one.
 
 CI's unit shards do not use this wrapper. `scripts/test-shard.sh` runs Bun through `xargs`, which
 turns any failing test into exit status 123, so read 123 as "tests failed", not as a crash.
@@ -216,7 +222,8 @@ What the runner does around each file:
 - File arguments replace the glob. Files named in `scripts/e2e-live-key-only.txt` are left out of
   the default list and run by name. `SHARD=N/M` takes a weighted share from
   `scripts/e2e-weights.json`. `--dry-run-list` prints the resolved list.
-- Exit status: 0 every file passed, 1 a file failed, 2 a usage error or an isolation breach.
+- Exit status: 0 every file passed; 1 a file failed, `python3` is missing or `COVERAGE_DIR` already
+  exists; 2 a usage error or an isolation breach.
 
 `scripts/ci-local-e2e-smoke.sh` (run by `ci:local`) checks the argument and shard handling: the four
 shards together must cover the whole default list.
@@ -246,13 +253,14 @@ Test (`.github/workflows/test.yml`) runs on a push to `main`, a pull request, th
 `dynamic-ci`, `changes`, `gitleaks`, `dependency-audit`, `verify`, `typecheck` and
 `stress-changed-tests`. The `cheap-tier (full suite not run)` job aggregates them
 (`scripts/ci-cheap-tier.sh`) and says in its name that the full suite did not run. Every other event
-runs those jobs and the full profile: the unit shards (`test`), `serial-tests`, `e2e`,
+skips `dynamic-ci` (it runs on pull requests only), runs the other jobs and adds the full profile: the unit shards (`test`), `serial-tests`, `e2e`,
 `coverage-report` and the aggregates `test-status` and `full-suite`. A push to `main` whose tree equals the tree of a
 passed full run skips its full lanes (`scripts/ci-reuse.ts`;
 [master-push reuse](ci-event-parity.md#master-push-reuse)).
 
-Merge needs the `full-suite` check on the exact head. A maintainer adds the `full-ci` label, and
-`full-ci.yml` dispatches Test on the head branch, again on every later push while the label stays
+The full suite runs on a pull request's head when a maintainer adds the `full-ci` label:
+`full-ci.yml` dispatches Test on the head branch, again on every later push while the label stays.
+No branch protection makes `full-suite` a required check here
 ([full CI for pull requests](ci-event-parity.md#full-ci-on-pull-requests)).
 
 The `full-suite` job records the tested tree as the `full-suite-tree` artifact
@@ -260,8 +268,10 @@ The `full-suite` job records the tested tree as the `full-suite-tree` artifact
 profile `test`.
 
 Every narrower pull-request behavior is a named exception whose comment, beside the condition,
-says `Event parity` and names the run that covers it. `test/scripts/ci-pr-scope.test.ts` fails on
-an event-conditional job or block in `test.yml`, `stress.yml` or `semgrep.yml` without that comment.
+names the run that covers it. `test/scripts/ci-pr-scope.test.ts` fails on an event-conditional job
+or block in `test.yml`, `stress.yml` or `semgrep.yml` whose comment neither starts `Event parity` nor
+links `docs/TESTING.md#event-parity` or `docs/ci-event-parity.md#dependency-audit-rule`; naming the
+covering run is the reviewer's check.
 The other workflows, each with its own trigger and scope: `osv-scanner.yml` (pull requests only
 when `bun.lock` or `package.json` changes, and weekly), `semgrep.yml` (a pull-request diff scan and
 a weekly full-tree scan), `actionlint.yml` (when a workflow file changes), `nightly-watch.yml`,
@@ -307,8 +317,8 @@ attempt, a report is truncated or comes from an earlier run attempt, a shard is 
 executed zero tests, or a base artifact is missing from head. A later rescue or rerun supersedes an
 earlier attempt for the files it re-ran. A dropped identity passes only when
 `docs/test-audit/2026-10-04/expected-deltas.tsv` declares it as `retire` (with a
-[Retiring a test](#retiring-a-test) evidence pointer), `move` (new lane, file or test name), `skip`
-or `job`; otherwise the tool prints the exact row to add. New tests need no row.
+[Retiring a test](#retiring-a-test) evidence pointer), `move` (new lane, file or test name) or `skip`; a `job` row covers only a base artifact missing from head.
+Otherwise the tool prints the exact row to add. New tests need no row.
 `--fail-on-additions` compares two baseline runs for stability, `--report-only` always exits 0 and
 `--missing-keys K1,K2` counts skipped tests in files that read those keys. Exit status: 0 pass,
 1 a drop or an incomplete lane, 2 usage or download error.
@@ -356,7 +366,8 @@ setup, queueing and retries, and never count skip-only output as coverage.
 
 `stress-changed-tests` (in `test-status`) runs each touched test file 10 times, in shards, on a pull
 request or merge-queue entry: every added or modified test file, plus the direct importers of a
-changed `test/helpers/` file. On any other event it succeeds with "not a PR event". A failure passes
+changed `test/helpers/` file (above 25 importers, the helper's own tests and 10 importers sampled
+from the head SHA). On any other event it succeeds with "not a PR event". A failure passes
 only when its file, test name and signature match an unexpired record in an open `master-red`,
 `flake` or `nightly-red` issue. The local twin is `bun run test:stress`. A dispatch with
 `stress_files` or `stress_base` (and `stress_head`) runs only the gate, as a diagnostic:
@@ -365,7 +376,7 @@ and exit codes: [scripts/stress/README.md](../scripts/stress/README.md).
 
 ### Keeping CI partitions balanced
 
-Required CI runs four weighted unit shards (two per job), four serial workers with bounded per-file
+The full profile runs four weighted unit shards (two per job), four serial workers with bounded per-file
 pools and one unsharded `e2e` job. Shards are packed longest-first by `scripts/sharding.ts` from the
 committed weight maps: `scripts/test-weights.json` (unit, milliseconds), `scripts/serial-weights.json`
 (serial, seconds) and `scripts/e2e-weights.json` (E2E, milliseconds), each with a
@@ -408,7 +419,8 @@ workflow runs confirm them.
 ### E2E selection
 
 `bun run ci:select-e2e` (`scripts/select-e2e.ts`) classifies the changed files, taken from git as the
-working-tree diff against `origin/main` plus untracked files:
+union of `git diff origin/main...HEAD` (against the merge base), `git diff HEAD` and the untracked
+files:
 
 | Classification | Meaning | Selects |
 |---|---|---|
@@ -804,9 +816,10 @@ and are exempt: `docs/designs/`, `docs/test-audit/`, `docs/incidents/`, `docs/pl
 `CHANGELOG.md` is not scanned. Each hit prints `FAIL: <file:line> retired phrase "<match>"`, then
 `Why:`, `Fix:` with the current instruction, and `See:`. The fix is to rewrite the sentence to the
 current workflow, never to exempt the file. To retire another phrase, add a row to `RETIRED`.
-Fixtures: `test/fixtures/guards/check-retired-phrases.sh/` (one `bad-<location>` tree per scanned
-location); every pattern and the exemptions are driven in
-`test/scripts/check-retired-phrases.test.ts`.
+Fixtures: `test/fixtures/guards/check-retired-phrases.sh/` holds a `good` tree and `bad-*` trees,
+some per scanned location (`bad-agents`, `bad-docs`, ...) and some per pattern (`bad-schema`,
+`bad-src-path`, ...); the guard self-test runs them. `test/scripts/check-retired-phrases.test.ts`
+drives the workflow phrases and the exemptions.
 
 #### Bash 3.2 parse guard
 
@@ -908,7 +921,8 @@ Documents are checked by one unit test and four `verify` checks:
   resolve in `CLAUDE.md`, `AGENTS.md`, `docs/architecture/KEY_FILES.md` and every
   `docs/architecture/key-files/*.md` page, and that every page is reachable from the index.
 - `bun run check:docs-repo-paths` (`test/docs-repo-paths.test.ts`) fails on a `scripts/` or `test/`
-  file path in `README.md`, `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/` or `.github/` that
+  file path in `README.md`, `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, `INSTALL_FOR_AGENTS.md`,
+  `docs/` (except `docs/test-audit/`, `docs/designs/` and `docs/fix-wave-notes/`) or `.github/` that
   does not exist. Placeholder names are skipped, `<!-- repo-paths: historical -->` exempts the rest of
   its section, and a reasoned `ALLOWLIST` row covers a path that lives outside this repository; a
   stale row fails.
