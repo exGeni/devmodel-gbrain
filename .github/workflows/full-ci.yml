@@ -8,7 +8,8 @@ name: Full CI dispatch
 # contributors cannot start it, and a fork's head branch is never dispatched. A
 # thread can do the same by hand before its slot:
 #   gh workflow run test.yml --ref <branch>
-# merge-train requires the full-suite check on the exact head.
+# The full-suite check it produces is not a required check here
+# (docs/ci-event-parity.md#full-ci-on-pull-requests).
 on:
   pull_request:
     branches: [main]

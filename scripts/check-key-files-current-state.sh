@@ -31,7 +31,7 @@
 # Env overrides (for the guard's own test):
 #   GBRAIN_DOC_GUARD_ROOT        repo root to scan (default: script's ../)
 #   GBRAIN_CLAUDE_MD_MAX_BYTES   CLAUDE.md hard cap (default: 35000)
-#   GBRAIN_TESTING_MD_MAX_BYTES  docs/TESTING.md hard cap (default: 120000)
+#   GBRAIN_TESTING_MD_MAX_BYTES  docs/TESTING.md hard cap (default: 70000)
 #
 # Exit codes:
 #   0   clean, or none of the docs it reads exists (then it prints
@@ -43,7 +43,7 @@ set -uo pipefail
 
 ROOT="${GBRAIN_DOC_GUARD_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 MAX_BYTES="${GBRAIN_CLAUDE_MD_MAX_BYTES:-35000}"
-TESTING_MAX_BYTES="${GBRAIN_TESTING_MD_MAX_BYTES:-120000}"
+TESTING_MAX_BYTES="${GBRAIN_TESTING_MD_MAX_BYTES:-70000}"
 
 # Reference docs that MUST stay current-state (history-free).
 REFERENCE_DOCS=(

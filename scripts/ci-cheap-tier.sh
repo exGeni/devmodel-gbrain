@@ -22,10 +22,10 @@ done
 
 {
   echo "## Full suite not run"
-  echo "This pull request ran the cheap tier: verify, typecheck, gitleaks, the dependency audit and the stress gate on changed tests. Unit shards and serial did not run."
-  echo "The full suite runs when a maintainer adds the \`full-ci\` label, which dispatches Test on the head branch (a thread can dispatch it itself). Merge requires the \`full-suite\` check on the exact head."
+  echo "This pull request ran the cheap tier: verify, typecheck, gitleaks, the dependency audit and the stress gate on changed tests. Unit shards, serial and the E2E lane did not run."
+  echo "The full suite runs when a maintainer adds the \`full-ci\` label, which dispatches Test on the head branch (a thread can dispatch it itself: \`gh workflow run test.yml --ref <branch>\`). Only that run reports the \`full-suite\` check."
 } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
-echo "::notice::Full suite not run on this head (cheap tier). Merge requires full-suite from a full-ci run."
+echo "::notice::Full suite not run on this head (cheap tier). Add the full-ci label to run it."
 
 if [ "$fail" -ne 0 ]; then echo "✗ cheap tier failed"; exit 1; fi
 echo "✓ cheap tier green (full suite not run)"

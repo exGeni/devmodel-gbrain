@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Record the tree a full-profile run tested and the test files it executed
-# (docs/ci-event-parity.md#full-ci-on-pull-requests, #remote-gate-reuse).
+# (docs/ci-event-parity.md#full-ci-on-pull-requests, #run-evidence-for-gstack-gstack-pregate-clear---run).
 # Called by test.yml `full-suite` after its aggregate succeeded.
 # scripts/ci-reuse.ts reads the artifact on a push to main;
-# `gstack-pregate clear --run` reads it as run evidence for the remote gate.
+# `gstack-pregate clear --run` reads it as run evidence.
 # Input (environment): ARTIFACT_DIR, RUN_ID, RUN_ATTEMPT, WORKFLOW, EVENT, and
 # optionally MANIFEST, the run's ci-manifest.json (scripts/ci-manifest.ts).
 # Output: $ARTIFACT_DIR/tree.json and step-summary lines.

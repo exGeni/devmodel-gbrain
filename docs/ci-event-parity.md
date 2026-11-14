@@ -18,8 +18,8 @@ master-push reuse and gstack's run evidence read, never per-cell matrix names.
 
 | Workflow | Condition | Class | Covered by |
 | --- | --- | --- | --- |
-| `test.yml` | `dynamic-ci` filter (Trunk Dynamic CI) on pull requests; its gated job, `stress-changed-tests`, runs unless the verdict is exactly `'false'` | Named exception ([below](#trunk-dynamic-ci)): pull requests only, Learning mode skips nothing | The full-ci dispatch, every push to main, the merge queue and the nightly schedule, which never run the filter |
-| `test.yml` | Cheap tier on pull requests: no unit shards, `serial-tests`, `e2e` lane, `coverage-report`, `test-status` or `full-suite`; the pull request gets `cheap-tier (full suite not run)` instead | Named exception ([below](#full-ci-on-pull-requests)) | The full-ci dispatch on the head before merge, every push to main, the merge queue and the nightly Test schedule run the full profile |
+| `test.yml` | `dynamic-ci` filter (Trunk Dynamic CI) on pull requests; its gated job, `stress-changed-tests`, runs unless the verdict is exactly `'false'` | Named exception ([below](#trunk-dynamic-ci)): pull requests only, Learning mode skips nothing | The full-ci dispatch, every push to main, a merge-queue entry (when a queue is enabled) and the nightly schedule, which never run the filter |
+| `test.yml` | Cheap tier on pull requests: no unit shards, `serial-tests`, `e2e` lane, `coverage-report`, `test-status` or `full-suite`; the pull request gets `cheap-tier (full suite not run)` instead | Named exception ([below](#full-ci-on-pull-requests)) | The full-ci dispatch on the head before merge, every push to main, a merge-queue entry (when a queue is enabled) and the nightly Test schedule run the full profile |
 | `test.yml` | `changes` computes the master-push reuse decision on `push` only; a push whose tree equals a passed full run skips the full lanes and both aggregates | Named exception ([below](#master-push-reuse)) | The reused run (same tree, full profile); schedules, merge-queue entries and dispatches never reuse |
 | `test.yml` | `gitleaks` commit range by event | Parity: each event scans the range it introduces | — |
 | `test.yml` | `dependency-audit` blocking scope | Named exception with a rule ([below](#dependency-audit-rule)) | Every push to main, the nightly Test schedule and every manual run (always blocking) |
@@ -52,8 +52,12 @@ branch, and again on every later push while the label stays. A fork's branch is
 never dispatched. A thread that wants the full suite earlier, for a risky
 change, dispatches it itself: `gh workflow run test.yml --ref <branch>`.
 
-Merge needs the `full-suite` check passed on the exact head. It succeeds only
-when its own run's aggregate (`test-status`) did. A pull-request run skips both
+`full-suite` succeeds only when its own run's aggregate (`test-status`) did.
+No branch protection makes it a required check in this repository, so it does
+not block a merge: under `merge: direct`, `gstack-ship-queue land` gates on
+GitHub's required checks and on `land.merged_checks` in
+`.gstack/ship-policy.json` (`bun run typecheck`, `bun run verify`)
+([gstack docs/ship-policy.md#land-direct](https://github.com/garrytan/gstack/blob/main/docs/ship-policy.md#land-direct)). A pull-request run skips both
 and names them `full-suite-not-run`, so a cheap green can never produce either.
 `full-suite` uploads `full-suite-tree`, a `tree.json` recording the tested tree
 (`scripts/ci-full-suite-tree.sh`). Pushes to main, merge-queue entries and

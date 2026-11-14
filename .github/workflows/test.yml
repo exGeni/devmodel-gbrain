@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Merge queue (inert until the queue is enabled on main): the PR profile,
+  # Merge queue (inert until the queue is enabled on main): the full profile,
   # run against the queued merge commit. docs/RELEASING.md#merge-queue.
   merge_group:
   # Nightly full run, like a push to main.
@@ -417,7 +417,7 @@ jobs:
 
   # Event parity (docs/ci-event-parity.md#full-ci-on-pull-requests): full profile only. A
   # pull request runs the cheap tier; this job runs in the full-ci dispatch on its
-  # head before merge (merge-train requires full-suite), on every push to main
+  # head before merge, on every push to main
   # and on the nightly schedule.
   serial-tests:
     needs: [changes]
@@ -493,7 +493,7 @@ jobs:
 
   # Event parity (docs/ci-event-parity.md#full-ci-on-pull-requests): full profile only. A
   # pull request runs the cheap tier; this job runs in the full-ci dispatch on its
-  # head before merge (merge-train requires full-suite), on every push to main
+  # head before merge, on every push to main
   # and on the nightly schedule.
   e2e:
     needs: [changes]
@@ -538,7 +538,7 @@ jobs:
 
   # Event parity (docs/ci-event-parity.md#full-ci-on-pull-requests): full profile only. A
   # pull request runs the cheap tier; this job runs in the full-ci dispatch on its
-  # head before merge (merge-train requires full-suite), on every push to main
+  # head before merge, on every push to main
   # and on the nightly schedule.
   test:
     name: test (${{ join(matrix.shards, ', ') }})
@@ -689,7 +689,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────
   # Event parity (docs/ci-event-parity.md#full-ci-on-pull-requests): full profile only. A
   # pull request runs the cheap tier; this job runs in the full-ci dispatch on its
-  # head before merge (merge-train requires full-suite), on every push to main
+  # head before merge, on every push to main
   # and on the nightly schedule.
   coverage-report:
     needs: [changes, serial-tests, test]
@@ -853,7 +853,7 @@ jobs:
   # Coverage percentages remain advisory until their separate graduation.
   # Event parity (docs/ci-event-parity.md#full-ci-on-pull-requests): full profile only. A
   # pull request runs the cheap tier; this job runs in the full-ci dispatch on its
-  # head before merge (merge-train requires full-suite), on every push to main
+  # head before merge, on every push to main
   # and on the nightly schedule.
   test-status:
     name: ${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && (inputs.stress_files != '' || inputs.stress_base != ''))) && 'full-suite-not-run' || 'test-status' }}

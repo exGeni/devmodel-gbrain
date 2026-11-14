@@ -112,7 +112,7 @@ failing test file with its `bun run test:stress` reproduce line, and the suspect
 
 `test.yml` carries a `merge_group` trigger, inert until a merge queue is enabled for
 `main` in the repository settings (`gh api repos/<owner>/<repo>/rulesets` shows it).
-Queue runs use the pull-request profile against the queued merge commit. With the queue
+Queue runs use the full profile against the queued merge commit. With the queue
 on, `gh pr merge` only enqueues a PR: wait until it is merged
 (`gh pr view <n> --json state,mergedAt`) before starting work that depends on it.
 
