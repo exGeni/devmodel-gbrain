@@ -91,12 +91,12 @@ test('every workflow install of the root package goes through the bounded wrappe
         if (/scripts\/ci-bun-install\.ts/.test(line) && wrapped) {
           bounded.push(`${file} ${job}`);
           expect(step['timeout-minutes'], `${file} ${job}`).toBe(8);
-          // The path is relative to the step's working directory (admin installs run in admin/).
+          // The path is relative to the step's working directory (a step may run in a subdirectory).
           expect(existsSync(join(ROOT, step['working-directory'] ?? '.', wrapped[1])), `${file} ${job}: ${wrapped[1]}`).toBe(true);
         }
       }
     }
   }
   expect(direct).toEqual([]);
-  expect(bounded.length).toBeGreaterThan(40);
+  expect(bounded.length).toBeGreaterThan(5);
 });

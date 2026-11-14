@@ -1,7 +1,7 @@
 name: CI health
 
 # CI health report (scripts/ci-health-report.ts; docs/ci-red-runbook.md#ci-health-report):
-# first-attempt pass rate of same-repository PR runs and push-to-master runs,
+# first-attempt pass rate of same-repository PR runs and push-to-main runs,
 # the exit criteria (met / missed / indeterminate), stress-gate failures,
 # failure classes, cancellation and completion coverage, master-red time to
 # first response, the nightly-watch residual, the test files with the most
@@ -11,11 +11,6 @@ name: CI health
 # wave merges) and opens a follow-up issue when a target is missed. Reads
 # runs, jobs, check-run annotations and issues only (no logs, no fork runs
 # or artifacts). nightly-watch watches this workflow like any scheduled one.
-# A second step writes the CI cost ledger (scripts/ci-cost-ledger.ts) to the
-# step summary: Ubicloud runner $/week by workflow, event and conclusion and
-# the median $/run of green Test and E2E runs against
-# scripts/ci-cost-baseline.json. It is report-only: a rise over 20% shows as
-# a warning annotation, never a red run.
 
 on:
   schedule:
@@ -43,7 +38,7 @@ concurrency:
 
 jobs:
   report:
-    runs-on: ubicloud-standard-2-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
@@ -83,8 +78,3 @@ jobs:
           [ -z "$UNTIL" ] || args+=(--until "$UNTIL")
           [ -z "$DRY_RUN" ] || args+=("$DRY_RUN")
           bun scripts/ci-health-report.ts "${args[@]}"
-      - name: CI cost ledger (report only)
-        if: ${{ !cancelled() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bun scripts/ci-cost-ledger.ts --repo "$GITHUB_REPOSITORY" --report-only --step-summary --max-requests 500

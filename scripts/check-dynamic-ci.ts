@@ -17,10 +17,11 @@
  *     `continue-on-error: true` plus a step timeout below the job's on that
  *     step, so a failed or hung step reads as "run";
  *   - a gated job (one whose key is a filter output and that needs the filter)
- *     has an `if` that starts `!cancelled() && needs.<filter>.outputs.<key>
- *     != 'false' &&`, requires `needs.<other>.result == 'success'` for each
- *     other job it needs (what the implicit success() checked before), uses
- *     no other status function, and has no top-level || after the prefix;
+ *     has an `if` that is, or starts with, `!cancelled() &&
+ *     needs.<filter>.outputs.<key> != 'false'` (then ` &&` and the rest),
+ *     requires `needs.<other>.result == 'success'` for each other job it
+ *     needs (what the implicit success() checked before), uses no other
+ *     status function, and has no top-level || after the prefix;
  *   - every other job that needs a filter only reads its outputs: its `if`
  *     starts with always(), and it is not a filter output;
  *   - every filter output is a job that needs that filter, and no merge or
@@ -101,12 +102,13 @@ export function checkWorkflow(file: string, doc: Workflow): string[] {
         if (!condition.startsWith('always()')) problems.push(`${at}: needs ${filter} but is not one of its outputs; only an aggregate whose if starts with always() may read the verdicts`);
         continue;
       }
-      const prefix = `!cancelled() && needs.${filter}.outputs.${key} != 'false' && `;
-      if (!condition.startsWith(prefix)) {
-        problems.push(`${at}: a gated job's if must start with "${prefix}" (got ${JSON.stringify(condition)}); without !cancelled() a skipped or failed filter skips the job, and only an exact 'false' verdict may skip it`);
+      const gate = `!cancelled() && needs.${filter}.outputs.${key} != 'false'`;
+      const prefix = `${gate} && `;
+      if (condition !== gate && !condition.startsWith(prefix)) {
+        problems.push(`${at}: a gated job's if must start with "${prefix}" or be exactly "${gate}" (got ${JSON.stringify(condition)}); without !cancelled() a skipped or failed filter skips the job, and only an exact 'false' verdict may skip it`);
         continue;
       }
-      const rest = condition.slice(prefix.length);
+      const rest = condition === gate ? '' : condition.slice(prefix.length);
       if (/\b(?:always|success|failure|cancelled)\(\)/.test(rest)) problems.push(`${at}: no other status function may follow the gate prefix`);
       if (topLevelOr(rest)) problems.push(`${at}: wrap the condition after the gate prefix in parentheses; a top-level || would run the job past a 'false' verdict or a failed need`);
       for (const other of needs.filter(n => n !== filter)) {

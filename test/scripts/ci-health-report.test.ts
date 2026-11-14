@@ -1,6 +1,6 @@
 /**
  * scripts/ci-health-report.ts (GBRA-47 V-6, ENG-14; green master wave E6):
- * same-repo runs only, first-attempt pass rate for PR and push-to-master runs,
+ * same-repo runs only, first-attempt pass rate for PR and push-to-main runs,
  * full-window paging (split over the search cap, indeterminate when it cannot
  * be read in full), stress-gate failures and failure classes, master-red time
  * to first response, the nightly-watch residual, shard spread with the miner
@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CAPS, classify, collectHealth, firstAttempt, parseWindow, renderHealth, shardRatio, topFailingFiles, type Annotation, type Job, type Run } from '../../scripts/ci-health-report.ts';
 
-const repo = { full_name: 'garrytan/gbrain' };
+const repo = { full_name: 'acme-example/gbrain' };
 const run = (id: number, conclusion: string, attempt = 1, fork = false): Run => ({
   id, event: 'pull_request', status: 'completed', conclusion, run_attempt: attempt, created_at: '2026-10-01T00:00:00Z',
   repository: repo, head_repository: fork ? { full_name: 'someone/gbrain' } : repo,
@@ -68,9 +68,9 @@ describe('ci-health-report', () => {
         calls.push(path);
         if (path.includes('/workflows/nightly-watch.yml/runs?status=skipped')) return { total_count: 9, workflow_runs: [] } as T;
         if (path.includes('/workflows/nightly-watch.yml/runs')) return { workflow_runs: [{ conclusion: 'success', status: 'completed' }] } as T;
-        if (path.includes('&branch=master&created=') && /per_page=1$/.test(path)) return { total_count: path.includes('event=workflow_dispatch') ? 1 : 0, workflow_runs: [] } as T;
+        if (path.includes('&branch=main&created=') && /per_page=1$/.test(path)) return { total_count: path.includes('event=workflow_dispatch') ? 1 : 0, workflow_runs: [] } as T;
         if (path.includes('event=push&status=success')) return { workflow_runs: [{ id: 555 }] } as T;
-        if (path.includes('event=push&branch=master')) return { workflow_runs: opts.push ?? [], total_count: (opts.push ?? []).length } as T;
+        if (path.includes('event=push&branch=main')) return { workflow_runs: opts.push ?? [], total_count: (opts.push ?? []).length } as T;
         if (path.includes('event=pull_request')) {
           const page = Number(/[?&]page=(\d+)/.exec(path)![1]);
           return (opts.pr ? opts.pr(page, path) : { workflow_runs: page === 1 ? [run(1, 'success')] : [], total_count: 1 }) as T;
@@ -81,7 +81,7 @@ describe('ci-health-report', () => {
           if (id % 7 === 0) return { jobs: [{ id: 9, name: 'stress-changed-tests', conclusion: 'failure' }, { id: 10, name: 'test-status', conclusion: 'failure' }] } as T;
           if (id % 7 === 1) return { jobs: [{ id: 11, name: 'verify', conclusion: 'timed_out' }] } as T;
           const [first, second] = opts.unitJobs ?? ['test (1)', 'test (2)'];
-          return { jobs: [shard(1, first, 100), shard(2, second, 300, 'failure'), shard(3, 'Selected E2E (diff-relevant) 1', 50)] } as T;
+          return { jobs: [shard(1, first, 100), shard(2, second, 300, 'failure'), shard(3, 'other lane (diff-relevant) 1', 50)] } as T;
         }
         if (path.includes('/annotations')) return [{ annotation_level: 'failure', path: 'test/flaky.test.ts', title: 'error: timeout', message: '' }] as T;
         if (path.includes('issues?labels=master-red')) return (opts.issues ?? []) as T;
@@ -145,21 +145,21 @@ describe('ci-health-report', () => {
   });
 
   test('push-to-master pass rate per workflow with exit criteria; stress-gate failures and failure classes are reported separately; cancellation coverage is counted', async () => {
-    const push = [run(14, 'failure'), run(15, 'failure'), run(16, 'success'), run(17, 'success', 2), run(18, 'cancelled'), ...Array.from({ length: 15 }, (_, i) => run(100 + i, 'success'))].map(r => ({ ...r, event: 'push', head_branch: 'master' }));
+    const push = [run(14, 'failure'), run(15, 'failure'), run(16, 'success'), run(17, 'success', 2), run(18, 'cancelled'), ...Array.from({ length: 15 }, (_, i) => run(100 + i, 'success'))].map(r => ({ ...r, event: 'push', head_branch: 'main' }));
     const { client } = fakeApi({ push, pr: p => ({ workflow_runs: p === 1 ? [run(21, 'failure'), run(22, 'success')] : [], total_count: 2 }) });
     const data = await collectHealth(client, W);
     const masterTest = data.master.find(s => s.workflow === 'test.yml')!;
     expect(masterTest).toMatchObject({ event: 'push', runs: 19, first_attempt_pass: 16 });
     expect(masterTest.coverage).toEqual({ total: 20, completed: 20, cancelled: 1, skipped: 0 });
     expect(masterTest.classification).toEqual({ stress_gate: 1, test: 1, infrastructure: 1, unread: 0 });
-    expect(data.criteria.find(c => c.name === 'master Test push runs')).toMatchObject({ verdict: 'missed', target: 0.95 });
+    expect(data.criteria.find(c => c.name === 'main Test push runs')).toMatchObject({ verdict: 'missed', target: 0.95 });
     const prTest = data.workflows.find(w => w.workflow === 'test.yml')!;
     expect(prTest.stress_gate_failures).toBe(1);
     expect(prTest.classification.stress_gate).toBe(1);
     const body = renderHealth(data);
-    expect(body).toContain('| test.yml | push to master | 19 | 16 (84%) | 1 | 1 / 1 / 1 | 1 of 20 cancelled; 20 of 20 completed |');
-    expect(body).toContain('Exit criterion missed: master Test push runs at 84% (target 95%)');
-    expect(body).toContain('**Nightly-watch residual:** 9 skipped watch runs; 8 watched-workflow runs on master outside the schedule and push allowlist');
+    expect(body).toContain('| test.yml | push to main | 19 | 16 (84%) | 1 | 1 / 1 / 1 | 1 of 20 cancelled; 20 of 20 completed |');
+    expect(body).toContain('Exit criterion missed: main Test push runs at 84% (target 95%)');
+    expect(body).toContain('**Nightly-watch residual:** 9 skipped watch runs; 4 watched-workflow runs on main outside the schedule and push allowlist');
   });
 
   test('master-red first response: an allowlisted comment or the first linked PR from anyone; bot comments never count', async () => {

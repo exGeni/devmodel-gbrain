@@ -15,7 +15,6 @@ type Workflow = { on: Record<string, { types?: string[]; branches?: string[] } |
 const root = join(import.meta.dir, '../..');
 const workflow = (name: string) => load(readFileSync(join(root, '.github/workflows', name), 'utf8')) as Workflow;
 const unit = workflow('test.yml');
-const e2e = workflow('e2e.yml');
 const dispatcher = workflow('full-ci.yml');
 
 type Context = { event: string; inputs?: Record<string, unknown>; outputs?: Record<string, string>; action?: string; label?: string; pr?: Record<string, unknown>;
@@ -25,7 +24,7 @@ function evaluate(expression: string, context: Context): unknown {
     .replace(/needs\.(\w+(?:-\w+)+)\./g, (_, job) => `needs['${job}'].`)
     .replace(/outputs\.(\w+(?:-\w+)+)/g, (_, key) => `outputs['${key}']`)
     .replace(/labels\.\*\.name/g, 'labels.map(label => label.name)');
-  const outputs = { 'native-scope': 'full', convergence: 'run', reuse: '', ...context.outputs };
+  const outputs = { reuse: '', ...context.outputs };
   return runInNewContext(js, {
     always: () => true,
     cancelled: () => false,
@@ -35,7 +34,7 @@ function evaluate(expression: string, context: Context): unknown {
     github: { event_name: context.event, repository: 'acme-example/gbrain',
       event: { action: context.action, label: { name: context.label }, pull_request: context.pr ?? {} } },
     inputs: context.inputs ?? {},
-    needs: { changes: { outputs, result: context.changes ?? 'success' }, 'prepare-e2e': { outputs }, 'dynamic-ci': { outputs: context.verdicts ?? {} } },
+    needs: { changes: { outputs, result: context.changes ?? 'success' }, 'dynamic-ci': { outputs: context.verdicts ?? {} } },
   }, { timeout: 100 });
 }
 const template = (value: string, context: Context) => value.replace(/\$\{\{(.*?)\}\}/g, (_, expression) => String(evaluate(expression.trim(), context)));
@@ -45,33 +44,18 @@ const step = (job: Job, name: string) => job.steps!.find(s => s.name === name)!;
 const bash = (script: string, env: Record<string, string>, cwd = root) =>
   spawnSync('bash', ['-c', script], { cwd, encoding: 'utf8', env: { PATH: process.env.PATH, ...env } });
 
-const CHEAP = ['changes', 'cheap-tier', 'dependency-audit', 'enumeration-census-tests', 'executed-receipts', 'gitleaks', 'security-regressions', 'stress-changed-tests', 'typecheck', 'verify'];
-const FULL_ONLY = ['serial-tests', 'slow-brainbench-e2e', 'brainbench', 'slow-entity-resolve-perf', 'test', 'admin-browser',
-  'shared-skills-compatibility', 'coverage-report', 'test-status', 'full-suite'];
+const CHEAP = ['changes', 'cheap-tier', 'dependency-audit', 'executed-receipts', 'gitleaks', 'stress-changed-tests', 'typecheck', 'verify'];
+const FULL_ONLY = ['serial-tests', 'test', 'coverage-report', 'test-status', 'full-suite'];
 
 describe('full CI on pull requests', () => {
-  test('a pull request runs exactly the cheap tier, plus the persistence and native lanes its diff selects', () => {
-    expect(runs(unit, { event: 'pull_request', outputs: { 'native-scope': 'smoke', convergence: 'skip' } })).toEqual([...CHEAP, 'dynamic-ci'].sort());
-    expect(runs(unit, { event: 'pull_request', outputs: { 'native-scope': 'primary', convergence: 'run' } }))
-      .toEqual([...CHEAP, 'dynamic-ci', 'native-locks', 'persistence-validation'].sort());
+  test('a pull request runs exactly the cheap tier; every other event runs the full profile', () => {
+    expect(runs(unit, { event: 'pull_request' })).toEqual([...CHEAP, 'dynamic-ci'].sort());
     for (const event of ['push', 'merge_group', 'schedule', 'workflow_dispatch']) {
       const full = runs(unit, { event });
-      for (const job of [...FULL_ONLY, 'native-locks', 'persistence-validation']) expect(full, `${event}: ${job}`).toContain(job);
+      for (const job of FULL_ONLY) expect(full, `${event}: ${job}`).toContain(job);
       expect(full).not.toContain('cheap-tier');
       expect(full).not.toContain('dynamic-ci');
-      expect(full).not.toContain('enumeration-census-tests');
     }
-  });
-
-  // docs/ci-event-parity.md#enumeration-and-census-tests: a doc-only pull request skips the job, a failed
-  // classifier runs it, and no aggregate, merge check or reuse rule waits for it.
-  test('the enumeration and census tests run on every pull request that is not doc-only and nothing needs them', () => {
-    const smoke = { 'native-scope': 'smoke', convergence: 'skip' };
-    expect(runs(unit, { event: 'pull_request', outputs: { ...smoke, census: 'skip' } })).not.toContain('enumeration-census-tests');
-    expect(runs(unit, { event: 'pull_request', outputs: { ...smoke, census: 'run' } })).toContain('enumeration-census-tests');
-    expect(runs(unit, { event: 'pull_request', outputs: smoke, changes: 'failure' })).not.toContain('enumeration-census-tests');
-    for (const [name, job] of Object.entries(unit.jobs)) expect(job.needs ?? [], name).not.toContain('enumeration-census-tests');
-    expect(step(unit.jobs['enumeration-census-tests']!, 'Run shard ${{ matrix.shard }} of 2').run).toBe('bash scripts/ci-census-tests.sh --run ${{ matrix.shard }} 2');
   });
 
   // Trunk Dynamic CI (docs/ci-event-parity.md#trunk-dynamic-ci): the filter runs only on pull requests, so every other event
@@ -79,22 +63,17 @@ describe('full CI on pull requests', () => {
   // waits for its other needs to succeed.
   test('Dynamic CI skips a gated pull-request lane only on an exact false verdict and never filters another event', () => {
     const gated = Object.keys(unit.jobs['dynamic-ci']!.outputs!).sort();
-    expect(gated).toEqual(['enumeration-census-tests', 'native-locks', 'persistence-validation', 'security-regressions', 'stress-changed-tests']);
-    const selected = { 'native-scope': 'primary', convergence: 'run' };
-    const all = runs(unit, { event: 'pull_request', outputs: selected });
+    expect(gated).toEqual(['stress-changed-tests']);
+    const all = runs(unit, { event: 'pull_request' });
     for (const verdict of ['', 'true']) {
-      expect(runs(unit, { event: 'pull_request', outputs: selected, verdicts: Object.fromEntries(gated.map(job => [job, verdict])) }), verdict).toEqual(all);
+      expect(runs(unit, { event: 'pull_request', verdicts: Object.fromEntries(gated.map(job => [job, verdict])) }), verdict).toEqual(all);
     }
     for (const job of gated) {
-      expect(runs(unit, { event: 'pull_request', outputs: selected, verdicts: { [job]: 'false' } }), job).toEqual(all.filter(name => name !== job));
+      expect(runs(unit, { event: 'pull_request', verdicts: { [job]: 'false' } }), job).toEqual(all.filter(name => name !== job));
     }
     for (const event of ['push', 'merge_group', 'schedule', 'workflow_dispatch']) {
       expect(Boolean(evaluate(unit.jobs['dynamic-ci']!.if!, { event })), event).toBe(false);
-      for (const job of gated.filter(name => name !== 'enumeration-census-tests')) expect(runs(unit, { event }), `${event}: ${job}`).toContain(job);
-    }
-    for (const job of ['native-locks', 'persistence-validation']) {
-      expect(runs(unit, { event: 'push', changes: 'failure' }), job).not.toContain(job);
-      expect(runs(unit, { event: 'pull_request', outputs: selected, changes: 'failure' }), job).not.toContain(job);
+      for (const job of gated) expect(runs(unit, { event }), `${event}: ${job}`).toContain(job);
     }
   });
 
@@ -102,15 +81,14 @@ describe('full CI on pull requests', () => {
     for (const job of ['test-status', 'full-suite']) {
       expect(template(unit.jobs[job]!.name!, { event: 'pull_request' })).toBe('full-suite-not-run');
       for (const event of ['push', 'merge_group', 'schedule', 'workflow_dispatch']) {
-        expect(template(unit.jobs[job]!.name!, { event, inputs: event === 'workflow_dispatch' ? { native_only: false, race_hunt: false, stress_files: '', stress_base: '' } : {} })).toBe(job);
+        expect(template(unit.jobs[job]!.name!, { event, inputs: event === 'workflow_dispatch' ? { stress_files: '', stress_base: '' } : {} })).toBe(job);
       }
     }
     expect(unit.jobs['cheap-tier']!.name).toBe('cheap-tier (full suite not run)');
     expect(unit.jobs['full-suite']!.needs).toContain('test-status');
-    expect(e2e.jobs['e2e-full-suite']!.needs).toContain('e2e-status');
   });
 
-  test.each([['test.yml', 'full-suite', 'TEST_STATUS', 'Require test-status'], ['e2e.yml', 'e2e-full-suite', 'E2E_STATUS', 'Require e2e-status']])(
+  test.each([['test.yml', 'full-suite', 'TEST_STATUS', 'Require test-status']])(
     '%s %s succeeds only when its aggregate succeeded on the same run', (file, job, variable, name) => {
       const require = step(workflow(file).jobs[job]!, name);
       for (const result of ['success', 'failure', 'cancelled', 'skipped']) {
@@ -137,7 +115,7 @@ describe('full CI on pull requests', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-    for (const [w, job, artifact] of [[unit, 'full-suite', 'full-suite-tree'], [e2e, 'e2e-full-suite', 'e2e-full-suite-tree']] as const) {
+    for (const [w, job, artifact] of [[unit, 'full-suite', 'full-suite-tree']] as const) {
       const upload = w.jobs[job]!.steps!.find(s => s.uses?.startsWith('actions/upload-artifact@'))!;
       expect(upload.with).toMatchObject({ name: artifact, overwrite: true });
       expect(step(w.jobs[job]!, 'Record the tested tree').run).toBe('bash scripts/ci-full-suite-tree.sh');
@@ -193,7 +171,7 @@ describe('full CI on pull requests', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-    for (const [w, job] of [[unit, 'full-suite'], [e2e, 'e2e-full-suite']] as const) {
+    for (const [w, job] of [[unit, 'full-suite']] as const) {
       expect(w.jobs[job]!.needs).toContain('executed-receipts');
       const steps = w.jobs[job]!.steps!;
       const download = steps.findIndex(s => s.name === 'Download the execution manifest');
@@ -206,9 +184,8 @@ describe('full CI on pull requests', () => {
     }
   });
 
-  test('E2E never runs on pull_request events; the full-ci label dispatches Test and E2E on a same-repository head', () => {
-    expect(e2e.on.pull_request).toBeUndefined();
-    expect(dispatcher.on.pull_request).toEqual({ branches: ['master'], types: ['labeled', 'synchronize', 'reopened'] });
+  test('the full-ci label dispatches Test on a same-repository head', () => {
+    expect(dispatcher.on.pull_request).toEqual({ branches: ['main'], types: ['labeled', 'synchronize', 'reopened'] });
     expect(dispatcher.permissions).toEqual({});
     const job = dispatcher.jobs.dispatch!;
     expect(job.permissions).toEqual({ actions: 'write', contents: 'read' });
@@ -227,13 +204,11 @@ describe('full CI on pull requests', () => {
     for (const [context, expected] of cases) expect(Boolean(evaluate(job.if!, context)), JSON.stringify(context)).toBe(expected);
     const run = job.steps![0]!.run!;
     expect(run).toContain('gh workflow run test.yml -R "$REPO" --ref "$BRANCH"');
-    expect(run).toContain('gh workflow run e2e.yml -R "$REPO" --ref "$BRANCH"');
     expect(run.indexOf('"$current" != "$HEAD_SHA"')).toBeLessThan(run.indexOf('gh workflow run'));
   });
 
   describe('cheap-tier aggregator', () => {
-    const green = { CHANGES: 'success', GITLEAKS: 'success', SECURITY: 'success', AUDIT: 'success', VERIFY: 'success', TYPECHECK: 'success', STRESS: 'success',
-      NATIVE: 'skipped', NATIVE_SCOPE: 'smoke', PERSISTENCE: 'skipped', CONVERGENCE: 'skip' };
+    const green = { CHANGES: 'success', GITLEAKS: 'success', AUDIT: 'success', VERIFY: 'success', TYPECHECK: 'success', STRESS: 'success' };
     const aggregate = (env: Record<string, string>) => {
       const dir = mkdtempSync(join(tmpdir(), 'gbrain-cheap-tier-'));
       try {
@@ -249,64 +224,44 @@ describe('full CI on pull requests', () => {
       const result = aggregate(green);
       expect(result.status).toBe(0);
       expect(result.summary).toContain('## Full suite not run');
-      expect(result.summary).toContain('`full-suite` and `e2e-full-suite`');
-      expect(aggregate({ ...green, NATIVE: 'success', NATIVE_SCOPE: 'primary', PERSISTENCE: 'success', CONVERGENCE: 'run' }).status).toBe(0);
+      expect(result.summary).toContain('`full-suite`');
     });
 
-    test.each(['CHANGES', 'GITLEAKS', 'SECURITY', 'AUDIT', 'VERIFY', 'TYPECHECK', 'STRESS'])('%s not succeeding fails the tier', lane => {
+    test.each(['CHANGES', 'GITLEAKS', 'AUDIT', 'VERIFY', 'TYPECHECK', 'STRESS'])('%s not succeeding fails the tier', lane => {
       for (const result of ['failure', 'cancelled', 'skipped', '']) {
         expect(aggregate({ ...green, [lane]: result }).status, `${lane}=${result}`).toBe(1);
       }
     });
 
-    test('a selected persistence or native lane must succeed; only an unselected one may skip', () => {
-      for (const result of ['failure', 'cancelled', 'skipped']) {
-        expect(aggregate({ ...green, NATIVE: result, NATIVE_SCOPE: 'primary' }).status).toBe(1);
-        expect(aggregate({ ...green, PERSISTENCE: result, CONVERGENCE: 'run' }).status).toBe(1);
-      }
-      expect(aggregate({ ...green, NATIVE: 'failure' }).status).toBe(1);
-      expect(aggregate({ ...green, PERSISTENCE: 'cancelled' }).status).toBe(1);
-    });
-
-    test.each([['SECURITY', 'DCI_SECURITY', {}], ['STRESS', 'DCI_STRESS', {}], ['NATIVE', 'DCI_NATIVE', { NATIVE_SCOPE: 'primary' }],
-      ['PERSISTENCE', 'DCI_PERSISTENCE', { CONVERGENCE: 'run' }]] as const)('%s may skip only when Trunk Dynamic CI said false', (lane, verdict, selected) => {
-      expect(aggregate({ ...green, ...selected, [lane]: 'skipped', [verdict]: 'false' }).status).toBe(0);
-      for (const other of ['', 'true']) expect(aggregate({ ...green, ...selected, [lane]: 'skipped', [verdict]: other }).status, other).toBe(1);
-      expect(aggregate({ ...green, ...selected, [lane]: 'failure', [verdict]: 'false' }).status).toBe(1);
+    test.each([['STRESS', 'DCI_STRESS']] as const)('%s may skip only when Trunk Dynamic CI said false', (lane, verdict) => {
+      expect(aggregate({ ...green, [lane]: 'skipped', [verdict]: 'false' }).status).toBe(0);
+      for (const other of ['', 'true']) expect(aggregate({ ...green, [lane]: 'skipped', [verdict]: other }).status, other).toBe(1);
+      expect(aggregate({ ...green, [lane]: 'failure', [verdict]: 'false' }).status).toBe(1);
     });
 
     test('a failed changes job fails the tier even when Trunk said false for every gated lane', () => {
-      expect(aggregate({ ...green, CHANGES: 'failure', NATIVE: 'skipped', NATIVE_SCOPE: '', PERSISTENCE: 'skipped', CONVERGENCE: '',
-        DCI_NATIVE: 'false', DCI_PERSISTENCE: 'false', SECURITY: 'skipped', DCI_SECURITY: 'false', STRESS: 'skipped', DCI_STRESS: 'false' }).status).toBe(1);
+      expect(aggregate({ ...green, CHANGES: 'failure', STRESS: 'skipped', DCI_STRESS: 'false' }).status).toBe(1);
     });
   });
 });
 
 describe('master-push reuse of a passed full-suite run', () => {
   test('only a push computes reuse, and a crash leaves it unset (a full run)', () => {
-    for (const [w, job] of [[unit, 'changes'], [e2e, 'prepare-e2e']] as const) {
+    for (const [w, job] of [[unit, 'changes']] as const) {
       const reuse = w.jobs[job]!.steps!.find(s => s.id === 'reuse')!;
       expect(reuse.if).toBe("github.event_name == 'push'");
       expect(reuse['continue-on-error']).toBe(true);
-      expect(reuse.run).toContain(`--workflow ${w === unit ? 'test' : 'e2e'}`);
+      expect(reuse.run).toContain('--workflow test');
       expect(w.jobs[job]!.permissions).toMatchObject({ actions: 'read', contents: 'read' });
     }
   });
 
-  test('a reusing push skips every full lane and both aggregates, and runs the marker the release gate reads', () => {
+  test('a reusing push skips every full lane and the aggregate, and runs the reuse marker', () => {
     const reused = runs(unit, { event: 'push', outputs: { reuse: 'true' } });
     expect(reused).toContain('reused-full-suite');
-    for (const job of [...FULL_ONLY, 'native-locks', 'persistence-validation', 'executed-receipts']) expect(reused, job).not.toContain(job);
+    for (const job of [...FULL_ONLY, 'executed-receipts']) expect(reused, job).not.toContain(job);
     const full = runs(unit, { event: 'push' });
     expect(full).not.toContain('reused-full-suite');
-    for (const job of [...FULL_ONLY, 'native-locks', 'persistence-validation']) expect(full, job).toContain(job);
-
-    const e2eReused = runs(e2e, { event: 'push', outputs: { reuse: 'true' } });
-    expect(e2eReused).toContain('reused-full-suite');
-    for (const job of ['jsonb-parity', 'tier1', 'tier1-graduation', 'tier1-backend-matrix', 'selected-e2e', 'executed-receipts', 'e2e-status', 'e2e-full-suite']) {
-      expect(e2eReused, job).not.toContain(job);
-      expect(runs(e2e, { event: 'push' }), job).toContain(job);
-    }
-    expect(e2e.jobs.tier2!.needs).toBe('jsonb-parity');
+    for (const job of FULL_ONLY) expect(full, job).toContain(job);
   });
 });

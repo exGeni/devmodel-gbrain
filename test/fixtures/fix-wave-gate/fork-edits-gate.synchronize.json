@@ -9,7 +9,7 @@
     },
     "labels": [],
     "head": {
-      "ref": "garrytan/fix-wave-gate",
+      "ref": "maintainer-example/fix-wave-gate",
       "sha": "1111111111111111111111111111111111111111",
       "repo": {
         "id": 2000000002,
@@ -21,17 +21,17 @@
       }
     },
     "base": {
-      "ref": "master",
+      "ref": "main",
       "sha": "2222222222222222222222222222222222222222",
       "repo": {
         "id": 1000000001,
-        "full_name": "garrytan/gbrain"
+        "full_name": "acme-example/gbrain"
       }
     }
   },
   "repository": {
     "id": 1000000001,
-    "full_name": "garrytan/gbrain"
+    "full_name": "acme-example/gbrain"
   },
   "sender": {
     "login": "alice-example",

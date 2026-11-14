@@ -6,7 +6,7 @@
       "name": "opencode door e2e (keyless)",
       "status": "completed",
       "conclusion": "success",
-      "html_url": "https://github.com/garrytan/gbrain/actions/runs/37195155240/job/111415376143",
+      "html_url": "https://github.com/acme-example/gbrain/actions/runs/37195155240/job/111415376143",
       "steps": [
         {
           "number": 1,
@@ -115,7 +115,7 @@
       "name": "Heavy tests",
       "status": "completed",
       "conclusion": "failure",
-      "html_url": "https://github.com/garrytan/gbrain/actions/runs/37195155240/job/111415376248",
+      "html_url": "https://github.com/acme-example/gbrain/actions/runs/37195155240/job/111415376248",
       "steps": [
         {
           "number": 1,
@@ -204,7 +204,7 @@
       "name": "Real-agent door e2e (skips without authed binaries)",
       "status": "completed",
       "conclusion": "success",
-      "html_url": "https://github.com/garrytan/gbrain/actions/runs/37195155240/job/111415376262",
+      "html_url": "https://github.com/acme-example/gbrain/actions/runs/37195155240/job/111415376262",
       "steps": [
         {
           "number": 1,
@@ -268,7 +268,7 @@
       "name": "Hermes door e2e (credentialed, real binary, loud-fail)",
       "status": "completed",
       "conclusion": "failure",
-      "html_url": "https://github.com/garrytan/gbrain/actions/runs/37195155240/job/111415376292",
+      "html_url": "https://github.com/acme-example/gbrain/actions/runs/37195155240/job/111415376292",
       "steps": [
         {
           "number": 1,
@@ -367,7 +367,7 @@
       "name": "opencode door canary (latest, keyless, non-gating)",
       "status": "completed",
       "conclusion": "success",
-      "html_url": "https://github.com/garrytan/gbrain/actions/runs/37195155240/job/111415376295",
+      "html_url": "https://github.com/acme-example/gbrain/actions/runs/37195155240/job/111415376295",
       "steps": [
         {
           "number": 1,
@@ -436,7 +436,7 @@
       "name": "Plugin doors (codex + claude, install tier)",
       "status": "completed",
       "conclusion": "failure",
-      "html_url": "https://github.com/garrytan/gbrain/actions/runs/37195155240/job/111415376359",
+      "html_url": "https://github.com/acme-example/gbrain/actions/runs/37195155240/job/111415376359",
       "steps": [
         {
           "number": 1,
@@ -510,7 +510,7 @@
       "name": "Grok door e2e (real binary, keyless-first)",
       "status": "completed",
       "conclusion": "skipped",
-      "html_url": "https://github.com/garrytan/gbrain/actions/runs/37195155240/job/111415376784",
+      "html_url": "https://github.com/acme-example/gbrain/actions/runs/37195155240/job/111415376784",
       "steps": []
     }
   ]

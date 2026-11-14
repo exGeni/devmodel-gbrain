@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # scripts/e2e-provider-key-notice.sh — make keyless E2E coverage visible (GBRA-47 A9).
 #
-# e2e.yml passes the OPENAI_API_KEY / ANTHROPIC_API_KEY repo secrets to its
-# key-gated jobs; when a secret is empty, the key-gated tests self-skip and
+# An E2E workflow passes the OPENAI_API_KEY / ANTHROPIC_API_KEY repo secrets to
+# its key-gated jobs; when a secret is empty, the key-gated tests self-skip and
 # the job still goes green. The test preload (test/helpers/provider-keys-preload.ts)
 # also strips both keys from every test process unless the step that ran the
 # tests set GBRAIN_TEST_KEEP_PROVIDER_KEYS=1 (scripts/run-e2e.sh sets it, and

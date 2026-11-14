@@ -12,16 +12,19 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { load } from 'js-yaml';
+import { withEnv } from '../helpers/with-env.ts';
 import {
   COMMENT_MARKER, closeoutMessage, isMergedWave, runCloseout, supersededNumbers,
   type CloseoutClient, type CloseoutEvent, type PullInfo,
 } from '../../scripts/fix-wave-closeout.ts';
 
 const ROOT = join(import.meta.dir, '..', '..');
-const REPO = { id: 1, full_name: 'garrytan/gbrain' };
+const REPO = { id: 1, full_name: 'acme-example/gbrain' };
+// The workflow runs in this repository: Actions sets GITHUB_REPOSITORY and the closeout trusts only that head repository.
+const IN_REPO = { GITHUB_REPOSITORY: REPO.full_name };
 
 function wave(body: string, over: Partial<NonNullable<CloseoutEvent['pull_request']>> = {}): CloseoutEvent {
-  return { action: 'closed', pull_request: { number: 9000, title: 'v0.60.70.0 fix wave 9', merged: true, body, head: { repo: REPO }, base: { repo: REPO, ref: 'master' }, ...over } };
+  return { action: 'closed', pull_request: { number: 9000, title: 'v0.60.70.0 fix wave 9', merged: true, body, head: { repo: REPO }, base: { repo: REPO, ref: 'main' }, ...over } };
 }
 
 function fakeClient(pulls: Record<number, PullInfo>, comments: Record<number, string[]> = {}) {
@@ -38,7 +41,7 @@ function fakeClient(pulls: Record<number, PullInfo>, comments: Record<number, st
 async function run(event: CloseoutEvent, client: CloseoutClient, dryRun = false) {
   const lines: string[] = [];
   const summary: string[] = [];
-  const code = await runCloseout(event, client, { line: s => lines.push(s), summary: s => summary.push(s) }, dryRun);
+  const code = await withEnv(IN_REPO, () => runCloseout(event, client, { line: s => lines.push(s), summary: s => summary.push(s) }, dryRun));
   return { code, out: lines.join('\n'), summary: summary.join('') };
 }
 
@@ -114,10 +117,10 @@ describe('fix-wave closeout run', () => {
       wave('Supersedes #1', { merged: false }),
       wave('Supersedes #1', { head: { repo: forkRepo } }),
       wave('Supersedes #1', { head: { repo: null } }),
-      wave('Supersedes #1', { head: { repo: { id: 2, full_name: 'garrytan/gbrain' } } }),
+      wave('Supersedes #1', { head: { repo: { id: 2, full_name: REPO.full_name } } }),
     ]) {
       const { client, calls } = fakeClient({ 1: open(1) });
-      expect(isMergedWave(event)).toBe(false);
+      expect(await withEnv(IN_REPO, async () => isMergedWave(event))).toBe(false);
       await run(event, client);
       expect(calls).toEqual([]);
     }
@@ -146,13 +149,13 @@ describe('fix-wave-closeout workflow', () => {
     jobs: Record<string, { if?: string; permissions: Record<string, string>; steps: Array<{ uses?: string; with?: Record<string, unknown>; run?: string }> }>;
   };
 
-  test('runs only from the default branch on a merged same-repo PR into master', () => {
+  test('runs only from the default branch on a merged same-repo PR into main', () => {
     expect(Object.keys(wf.on)).toEqual(['pull_request_target']);
-    expect(wf.on.pull_request_target!.branches).toEqual(['master']);
+    expect(wf.on.pull_request_target!.branches).toEqual(['main']);
     expect(wf.on.pull_request_target!.types).toEqual(['closed']);
     const job = wf.jobs['close-superseded']!;
     expect(job.if).toContain('github.event.pull_request.merged == true');
-    expect(job.if).toContain("github.event.pull_request.head.repo.full_name == 'garrytan/gbrain'");
+    expect(job.if).toContain('github.event.pull_request.head.repo.full_name == github.repository');
   });
 
   test('checks out only the script, never PR code, with least privilege', () => {

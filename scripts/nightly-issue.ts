@@ -30,7 +30,7 @@
  * fails with a 5xx is skipped with a ::warning:: naming its run id and
  * attempt, so one poison run never fails the whole watch.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import {
   commentIssue, createIssue, ensureLabel, findIssueByTitle, inert, inertBlock, jsonBlock, labelNames, readJsonBlock, redactCredentials, restClient, updateIssue,
@@ -155,13 +155,8 @@ export function assessRun(run: RunInfo, jobs: JobInfo[], annotations: Record<num
   return { state, failures, unmatched, matched, stale, reviewPassed };
 }
 
-export function dispatchArgv(run: RunInfo, failures: Failure[]): string[] {
-  const argv = ['gh', 'workflow', 'run', basename(run.path), '--ref', run.head_branch];
-  if (basename(run.path) === 'scale-tier.yml') {
-    const pages = failures.map(f => /\b(\d{4,})$/.exec(f.job)?.[1]).find(Boolean);
-    if (pages) argv.push('-f', `pages=${pages}`);
-  }
-  return argv;
+export function dispatchArgv(run: RunInfo): string[] {
+  return ['gh', 'workflow', 'run', basename(run.path), '--ref', run.head_branch];
 }
 
 const failingKey = (rec: Pick<IncidentRecord, 'failing'> | undefined) => (rec?.failing ?? []).map(f => `${f.job} > ${f.step} > ${f.errors.join(' / ')}`).sort().join('\n');
@@ -212,7 +207,7 @@ export function renderBody(rec: IncidentRecord, assessment: Assessment, exemptio
       lines.push(`<details><summary>Every failing test file (${files.length})</summary>`, '');
       for (const file of files) {
         const jobs = rec.failing.filter(f => (f.files ?? []).includes(file));
-        const repro = reproduceCommand(file, jobs.some(f => /postgres/i.test(`${f.job} ${f.errors.join(' ')}`)));
+        const repro = reproduceCommand(file);
         lines.push(`- \`${file}\`${jobs.length ? ` (${jobs.map(f => `\`${f.job}\``).join(', ')})` : ''}; reproduce: ${repro ? `\`${repro}\`` : '(path failed validation; read the job log)'}`);
       }
       lines.push('', '</details>', '');
@@ -286,7 +281,7 @@ export function planIncident(run: RunInfo, assessment: Assessment, existing: Iss
     known: assessment.matched.map(m => ({ job: inert(m.row.job), signature: inert(m.row.signature), kind: m.row.kind, todo: inert(m.row.todo), review_by: m.row.review_by })),
     first_red: continuing ? previous!.first_red : { run_id: run.id, sha: run.head_sha },
     last_green_sha: lastGreenSha,
-    dispatch_argv: dispatchArgv(run, assessment.failures),
+    dispatch_argv: dispatchArgv(run),
     next_step: assessment.state === 'red'
       ? (assessment.unmatched.every(f => OWNER_SIGNAL.test(f.errors.join(' '))) ? 'owner_action' : 'code_fix')
       : assessment.reviewPassed.length ? 'review_by_passed'
@@ -364,19 +359,19 @@ export type Route = { track: 'schedule' | 'push' | 'replay' } | { refuse: string
 
 /** Which state track a run feeds; every refusal names what nightly-watch accepts and the next command. */
 export function routeRun(run: RunInfo, repo: string, replayIssue?: number): Route {
-  const fix = 'Fix: pass a scheduled run id, a push-to-master run id of Test or E2E Tests (gh run list --workflow test.yml --event push --branch master --limit 5), or an E2E Tests dispatch run on master with replay_issue. Docs: docs/RELEASING.md#master-red-issues';
+  const fix = 'Fix: pass a scheduled run id, a push-to-main run id of Test or E2E Tests (gh run list --workflow test.yml --event push --branch main --limit 5), or an E2E Tests dispatch run on main with replay_issue. Docs: docs/RELEASING.md#master-red-issues';
   if (run.repository?.full_name && run.repository.full_name !== repo) return { refuse: `run ${run.id} belongs to ${run.repository.full_name}, not ${repo}. ${fix}` };
   if (run.event === 'schedule') return replayIssue ? { refuse: `run ${run.id} is a scheduled run; replay_issue applies only to E2E Tests dispatch runs. ${fix}` } : { track: 'schedule' };
   if (run.event === 'push') {
-    if (run.head_branch !== 'master') return { refuse: `run ${run.id} is a push to '${inert(run.head_branch, 80)}'; only push-to-master runs open master-red issues. ${fix}` };
+    if (run.head_branch !== 'main') return { refuse: `run ${run.id} is a push to '${inert(run.head_branch, 80)}'; only push-to-main runs open master-red issues. ${fix}` };
     if (!PUSH_ALLOWLIST[run.name]) return { refuse: `run ${run.id} is a push run of '${inert(run.name, 80)}', which master-red does not watch (allowlist: ${Object.keys(PUSH_ALLOWLIST).join(', ')}). ${fix}` };
     return replayIssue ? { refuse: `run ${run.id} is a push run; replay_issue applies only to E2E Tests dispatch runs. ${fix}` } : { track: 'push' };
   }
   if (run.event === 'workflow_dispatch' && replayIssue) {
-    if (run.name !== 'E2E Tests' || run.head_branch !== 'master') return { refuse: `run ${run.id} is a dispatch of '${inert(run.name, 80)}' on '${inert(run.head_branch, 80)}'; an issue-bound replay must be an E2E Tests dispatch on master (gh workflow run e2e.yml --ref master -f full_corpus=true). ${fix}` };
+    if (run.name !== 'E2E Tests' || run.head_branch !== 'main') return { refuse: `run ${run.id} is a dispatch of '${inert(run.name, 80)}' on '${inert(run.head_branch, 80)}'; an issue-bound replay must be an E2E Tests dispatch on main (gh workflow run e2e.yml --ref main -f full_corpus=true). ${fix}` };
     return { track: 'replay' };
   }
-  return { refuse: `run ${run.id} is a ${inert(run.event, 40)} run; nightly-watch evaluates scheduled runs, push-to-master runs of Test and E2E Tests, and issue-bound E2E replays only (pull-request and other runs are refused). ${fix}` };
+  return { refuse: `run ${run.id} is a ${inert(run.event, 40)} run; nightly-watch evaluates scheduled runs, push-to-main runs of Test and E2E Tests, and issue-bound E2E replays only (pull-request and other runs are refused). ${fix}` };
 }
 
 export type RoutedResult =
@@ -440,10 +435,10 @@ if (import.meta.main) {
   const runId = Number(flag('--run-id'));
   const replayRaw = flag('--replay-issue');
   const replayIssue = replayRaw ? Number(replayRaw) : undefined;
-  const repo = flag('--repo') ?? process.env.GITHUB_REPOSITORY ?? 'garrytan/gbrain';
+  const repo = flag('--repo') ?? process.env.GITHUB_REPOSITORY ?? '';
   const dryRun = process.argv.includes('--dry-run');
-  if (!Number.isInteger(runId) || runId <= 0 || (replayIssue !== undefined && (!Number.isInteger(replayIssue) || replayIssue <= 0))) {
-    console.log('Usage: bun scripts/nightly-issue.ts --run-id <id> [--replay-issue <n>] [--repo owner/name] [--dry-run] [--resolve]');
+  if (!Number.isInteger(runId) || runId <= 0 || !/^[\w.-]+\/[\w.-]+$/.test(repo) || (replayIssue !== undefined && (!Number.isInteger(replayIssue) || replayIssue <= 0))) {
+    console.log('Usage: bun scripts/nightly-issue.ts --run-id <id> [--replay-issue <n>] [--repo owner/name (default $GITHUB_REPOSITORY)] [--dry-run] [--resolve]');
     process.exit(2);
   }
   try {
@@ -454,7 +449,9 @@ if (import.meta.main) {
       process.exit(0);
     }
     const tsv = readFileSync(join(REPO_ROOT, KNOWN_RED_FILE), 'utf8');
-    const problems = validateKnownRed(tsv, readFileSync(join(REPO_ROOT, 'TODOS.md'), 'utf8'));
+    // TODOS.md belongs to gstack and may be absent; no row can then name a TODO that owns its fix.
+    const todosPath = join(REPO_ROOT, 'TODOS.md');
+    const problems = validateKnownRed(tsv, existsSync(todosPath) ? readFileSync(todosPath, 'utf8') : '');
     for (const p of problems) console.log(`::warning::${p}`);
     const { rows } = parseKnownRed(tsv);
     const today = new Date().toISOString().slice(0, 10);

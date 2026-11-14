@@ -4,18 +4,18 @@
  *
  *   bun scripts/ci-health-report.ts [--days 7 | --since <date> [--until <date>]] [--responders a,b] [--repo owner/name] [--dry-run]
  *
- * Reads one window of runs of test.yml and e2e.yml through the REST API
+ * Reads one window of runs of test.yml through the REST API
  * (runs, jobs, check-run annotations, issues; never logs, fork runs or fork
  * artifacts) and upserts one issue (label `ci-health`): `CI health (week of
  * <since>)` for the weekly `--days` window, `CI health (<since>..<until>)`
  * for an explicit acceptance window. It reports:
  *
  * - first-attempt pass rate of same-repository pull-request runs and of
- *   push-to-master runs, per workflow (`firstAttempt()`: a run that needed a
+ *   push-to-main runs, per workflow (`firstAttempt()`: a run that needed a
  *   re-run failed its first attempt; cancelled and skipped runs are excluded;
  *   dispatch and scheduled runs are not read);
- * - the exit criteria (master Test and E2E >= 95%, PR test.yml and e2e.yml
- *   >= 90%), each met, missed or indeterminate. The window is paged in full
+ * - the exit criteria (main Test >= 95%, PR test.yml >= 90%), each met,
+ *   missed or indeterminate. The window is paged in full
  *   (a query over the API's 1000-result search cap is split in halves);
  *   when completeness cannot be established the criterion is indeterminate,
  *   never satisfied. In an explicit window a missed target upserts a
@@ -28,7 +28,7 @@
  *   collaborator, or a `--responders` login; bots other than those never
  *   count) or the first linked repair PR from any author. The 1-hour target
  *   is measured, not enforced;
- * - the nightly-watch residual (watched-workflow runs on master that still
+ * - the nightly-watch residual (watched-workflow runs on main that still
  *   create a skipped watch run), the test files with the most failure
  *   annotations (failed runs sampled), shard spread with the weights miner
  *   command, serial files added in the window and nightly-watch's status.
@@ -49,13 +49,12 @@ export const SPREAD_LIMIT = 1.25;
 export const CAPS = { failedRunsSampled: 15, spreadRunsSampled: 10, searchResults: 1000, minSplitMs: 3_600_000 };
 export const TARGETS = { master: 0.95, pr: 0.9 };
 export const STRESS_JOB = 'stress-changed-tests';
-const AGGREGATORS = new Set(['test-status', 'e2e-status']);
+const AGGREGATORS = new Set(['test-status']);
 const WORKFLOWS = [
   { file: 'test.yml', name: 'Test', shard: /^test \(\d+(?:, \d+)*\)$/, lane: 'unit' },
-  { file: 'e2e.yml', name: 'E2E Tests', shard: /^Selected E2E \(diff-relevant\)/, lane: 'e2e' },
 ] as const;
-const WATCHED = ['test.yml', 'e2e.yml', 'heavy-tests.yml', 'scale-tier.yml', 'macos-validation.yml', 'semgrep.yml', 'osv-scanner.yml', 'ci-health.yml'];
-const ALLOWLISTED_PUSH = new Set(['test.yml', 'e2e.yml']);
+const WATCHED = ['test.yml', 'semgrep.yml', 'osv-scanner.yml', 'ci-health.yml'];
+const ALLOWLISTED_PUSH = new Set(['test.yml']);
 const RESPONDER_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
 export interface Run {
@@ -258,9 +257,9 @@ export function renderHealth(data: HealthData): string {
   if (slow.length) steps.push(`${slow.length} master-red issue(s) got no first response within 1 hour (${slow.map(r => `#${r.issue}`).join(', ')}): the agent on release duty answers with a comment or a linked repair PR. Docs: docs/RELEASING.md#master-red-issues`);
   if (data.serial_added?.length) steps.push(`Review the ${data.serial_added.length} new serial file(s) below: each needs a reason it cannot run in parallel (\`bash scripts/check-test-isolation.sh <file>\`).`);
   if (data.nightly_watch !== 'success') steps.push(`nightly-watch's latest run is \`${inert(data.nightly_watch, 40)}\`: read it with \`gh run list --workflow nightly-watch.yml --limit 3\` before trusting nightly issues.`);
-  const seriesRow = (s: Series) => `| ${s.workflow} | ${s.event === 'push' ? 'push to master' : 'pull request'} | ${s.runs} | ${s.first_attempt_pass} (${pct(s.first_attempt_rate)})${s.complete ? '' : ' (incomplete)'} | ${s.stress_gate_failures} | ${s.classification.stress_gate} / ${s.classification.test} / ${s.classification.infrastructure}${s.classification.unread ? ` (+${s.classification.unread} unread)` : ''} | ${s.coverage.cancelled} of ${s.coverage.total} cancelled; ${s.coverage.completed} of ${s.coverage.total} completed |`;
+  const seriesRow = (s: Series) => `| ${s.workflow} | ${s.event === 'push' ? 'push to main' : 'pull request'} | ${s.runs} | ${s.first_attempt_pass} (${pct(s.first_attempt_rate)})${s.complete ? '' : ' (incomplete)'} | ${s.stress_gate_failures} | ${s.classification.stress_gate} / ${s.classification.test} / ${s.classification.infrastructure}${s.classification.unread ? ` (+${s.classification.unread} unread)` : ''} | ${s.coverage.cancelled} of ${s.coverage.total} cancelled; ${s.coverage.completed} of ${s.coverage.total} completed |`;
   const lines = [
-    `Runs created ${data.since} .. ${data.until} (same-repository pull-request runs and push-to-master runs; dispatch and scheduled runs are not counted).`,
+    `Runs created ${data.since} .. ${data.until} (same-repository pull-request runs and push-to-main runs; dispatch and scheduled runs are not counted).`,
     '',
     '| workflow | event | completed runs | first-attempt pass | stress-gate failures | failure classes (stress / test / infra) | coverage |',
     '|---|---|---|---|---|---|---|',
@@ -274,7 +273,7 @@ export function renderHealth(data: HealthData): string {
     ...data.master_red.issues.map(r => `- #${r.issue} opened ${r.opened}: ${r.first_response ? `${r.via === 'pull_request' ? 'linked PR' : 'comment'} after ${hrs(r.hours)}` : 'no response yet'}`),
     '',
     `**Shard spread:** ${data.workflows.map(w => `${w.workflow} ${ratio(w.spread.mean_ratio)} / ${ratio(w.spread.worst_ratio)} (mean / worst slowest-to-mean over ${w.spread.runs} runs); fork runs not read: ${w.fork_runs_excluded}`).join('; ')}.`,
-    `**Nightly-watch residual:** ${data.watch_residual.skipped_watch_runs ?? 'n/a'} skipped watch runs; ${data.watch_residual.master_runs_outside_allowlist ?? 'n/a'} watched-workflow runs on master outside the schedule and push allowlist (each creates a skipped watch run; no trigger-level event filter exists).`,
+    `**Nightly-watch residual:** ${data.watch_residual.skipped_watch_runs ?? 'n/a'} skipped watch runs; ${data.watch_residual.master_runs_outside_allowlist ?? 'n/a'} watched-workflow runs on main outside the schedule and push allowlist (each creates a skipped watch run; no trigger-level event filter exists).`,
     '',
     '**Most failure annotations by test file** (failed runs sampled):',
     ...(data.failing_files.length ? data.failing_files.map(f => `- \`${f.file}\`: ${f.count} (e.g. \`${f.sample}\`)`) : ['- none']),
@@ -301,10 +300,10 @@ async function jobsOf(client: GitHubClient, run: Run, attempt: number): Promise<
 }
 
 async function series(client: GitHubClient, wf: typeof WORKFLOWS[number], event: Series['event'], window: Window, truncated: string[]): Promise<{ s: Series; mine: Run[]; failed: Run[]; jobs: Map<number, Job[]> }> {
-  const query = event === 'push' ? 'event=push&branch=master' : 'event=pull_request';
+  const query = event === 'push' ? 'event=push&branch=main' : 'event=pull_request';
   const listed = await listRuns(client, wf.file, query, Date.parse(window.since), Date.parse(window.until));
   if (!listed.complete) truncated.push(`${wf.file} ${event}: the window could not be read in full (search cap), so its rate is indeterminate`);
-  const mine = listed.runs.filter(r => sameRepo(r) && r.event === event && (event !== 'push' || !r.head_branch || r.head_branch === 'master'));
+  const mine = listed.runs.filter(r => sameRepo(r) && r.event === event && (event !== 'push' || !r.head_branch || r.head_branch === 'main'));
   const fa = firstAttempt(mine);
   const failed = mine.filter(r => r.status === 'completed' && r.conclusion !== 'cancelled' && r.conclusion !== 'skipped' && (r.conclusion !== 'success' || r.run_attempt > 1));
   const classification: Classification = { stress_gate: 0, test: 0, infrastructure: 0, unread: 0 };
@@ -335,7 +334,7 @@ async function watchResidual(client: GitHubClient, window: Window): Promise<Heal
     for (const file of WATCHED) {
       for (const event of ['push', 'workflow_dispatch']) {
         if (event === 'push' && ALLOWLISTED_PUSH.has(file)) continue;
-        outside += await count(`repos/{repo}/actions/workflows/${file}/runs?event=${event}&branch=master&created=${range}&per_page=1`);
+        outside += await count(`repos/{repo}/actions/workflows/${file}/runs?event=${event}&branch=main&created=${range}&per_page=1`);
       }
     }
     const skipped = await count(`repos/{repo}/actions/workflows/nightly-watch.yml/runs?status=skipped&created=${range}&per_page=1`);
@@ -376,10 +375,8 @@ export async function collectHealth(client: GitHubClient, window: Window, opts: 
     });
   }
   const criteria = [
-    criterion('master Test push runs', TARGETS.master, master[0]!),
-    criterion('master E2E Tests push runs', TARGETS.master, master[1]!),
+    criterion('main Test push runs', TARGETS.master, master[0]!),
     criterion('PR test.yml first attempt', TARGETS.pr, workflows[0]!),
-    criterion('PR e2e.yml first attempt', TARGETS.pr, workflows[1]!),
   ];
   const watch = await client.request<{ workflow_runs: Array<{ conclusion: string | null; status: string }> }>('GET', 'repos/{repo}/actions/workflows/nightly-watch.yml/runs?per_page=1')
     .catch(() => ({ workflow_runs: [] }));
@@ -418,11 +415,12 @@ export function parseWindow(args: { days?: string; since?: string; until?: strin
 
 if (import.meta.main) {
   const flag = (name: string) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; };
-  const repo = flag('--repo') ?? process.env.GITHUB_REPOSITORY ?? 'garrytan/gbrain';
+  const repo = flag('--repo') ?? process.env.GITHUB_REPOSITORY ?? '';
   const dryRun = process.argv.includes('--dry-run');
   const parsed = parseWindow({ days: flag('--days'), since: flag('--since') || undefined, until: flag('--until') || undefined });
-  if ('error' in parsed) {
-    console.log(`Usage: bun scripts/ci-health-report.ts [--days 1-31 | --since <date> [--until <date>]] [--responders login,login] [--repo owner/name] [--dry-run]\nWhy: ${parsed.error}. Docs: ${DOCS}`);
+  if ('error' in parsed || !/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+    const why = 'error' in parsed ? parsed.error : 'pass --repo owner/name or set GITHUB_REPOSITORY';
+    console.log(`Usage: bun scripts/ci-health-report.ts [--days 1-31 | --since <date> [--until <date>]] [--responders login,login] [--repo owner/name (default $GITHUB_REPOSITORY)] [--dry-run]\nWhy: ${why}. Docs: ${DOCS}`);
     process.exit(2);
   }
   const { window, explicit } = parsed;

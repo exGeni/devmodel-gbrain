@@ -4,7 +4,7 @@
 # GitHub API (no git history needed, so the checkout stays shallow).
 #
 # Exits 1 with the reason on stderr whenever the list cannot be complete, so
-# callers fail closed (prepare-e2e then runs the full E2E corpus):
+# callers fail closed (an E2E selection step then runs the full E2E corpus):
 #   - no pull_request or merge_group context (push, schedule, dispatch);
 #   - an unknown or capped size: the pull request files API returns at most
 #     3000 files and the compare API at most 300;

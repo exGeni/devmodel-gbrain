@@ -2,8 +2,8 @@
 /**
  * CI's `bun install`, bounded and retried once.
  *
- * Bun normally installs this repository in 4-14 s. On .195's master Test run
- * one macos-26-intel runner's install sat for 805 s, a registry or network stall,
+ * Bun normally installs this repository in 4-14 s. On one Test run on main
+ * a runner's install sat for 805 s, a registry or network stall,
  * and the job's 15-minute budget cancelled it a minute short of finishing, with
  * nothing naming the cause. This wrapper ends a stalled attempt after
  * GBRAIN_CI_INSTALL_ATTEMPT_S, retries once after a short pause, and on a

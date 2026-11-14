@@ -2,8 +2,8 @@
 /**
  * scripts/fix-wave-closeout.ts — the decision behind .github/workflows/fix-wave-closeout.yml.
  *
- * When a same-repo PR (a fix wave on a capy/* or garrytan/* branch) merges into
- * master, every pull request its body names on a `Supersedes #N` line is closed
+ * When a same-repo PR (a fix wave on a branch of this repository) merges into
+ * main, every pull request its body names on a `Supersedes #N` line is closed
  * with a thank-you comment that links the merged PR. Issues need no help here:
  * `Fixes #N` in the same body closes them through GitHub itself.
  *
@@ -28,7 +28,8 @@
  */
 import { appendFileSync, readFileSync } from 'node:fs';
 
-export const TRUSTED_HEAD_REPO = 'garrytan/gbrain';
+/** The repository the workflow runs in; Actions sets it. Empty when unset, so no head repository is trusted. */
+export const repository = (): string => process.env.GITHUB_REPOSITORY ?? '';
 export const COMMENT_MARKER = '<!-- fix-wave-closeout -->';
 export const MAX_CLOSES = 50;
 
@@ -71,7 +72,8 @@ export function supersededNumbers(body: string | null | undefined, self: number)
 export function isMergedWave(event: CloseoutEvent): boolean {
   const pr = event.pull_request;
   const head = pr?.head?.repo, base = pr?.base?.repo;
-  return !!pr?.merged && !!head && !!base && head.full_name === TRUSTED_HEAD_REPO && head.id !== undefined && head.id === base.id;
+  const trusted = repository();
+  return !!pr?.merged && !!trusted && !!head && !!base && head.full_name === trusted && head.id !== undefined && head.id === base.id;
 }
 
 export function closeoutMessage(handle: string, wave: number, waveTitle: string, credited: boolean): string {
@@ -80,7 +82,7 @@ export function closeoutMessage(handle: string, wave: number, waveTitle: string,
     : '.';
   return [
     COMMENT_MARKER,
-    `Thank you, @${handle}. Fix-wave PR #${wave} (${waveTitle}) merged into master and supersedes this PR, so the change it proposed has landed there${credit}`,
+    `Thank you, @${handle}. Fix-wave PR #${wave} (${waveTitle}) merged into main and supersedes this PR, so the change it proposed has landed there${credit}`,
     '',
     `I'm closing this PR because nothing is left for it to land, not because anything was wrong with it. If part of it didn't make it into #${wave}, reply here with what's missing and the next fix wave will pick it up.`,
     '',
@@ -124,7 +126,7 @@ export async function runCloseout(event: CloseoutEvent, client: CloseoutClient, 
 
 function restClient(): CloseoutClient {
   const api = process.env.GITHUB_API_URL ?? 'https://api.github.com';
-  const repo = process.env.GITHUB_REPOSITORY ?? TRUSTED_HEAD_REPO;
+  const repo = repository();
   const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
   const call = async (path: string, init: RequestInit = {}): Promise<Response> => fetch(`${api}/repos/${repo}${path}`, {
     ...init,
@@ -161,6 +163,10 @@ if (import.meta.main) {
   const path = at >= 0 ? args[at + 1] : process.env.GITHUB_EVENT_PATH;
   if (!path) {
     console.log('::error title=Fix-wave closeout::No event payload. Why: neither --event nor GITHUB_EVENT_PATH is set. Fix: run inside the fix-wave-closeout workflow or pass --event <payload.json>.');
+    process.exit(1);
+  }
+  if (!repository()) {
+    console.log('::error title=Fix-wave closeout::No repository. Why: GITHUB_REPOSITORY is not set. Fix: run inside the fix-wave-closeout workflow or export GITHUB_REPOSITORY=<owner/name>.');
     process.exit(1);
   }
   const event = JSON.parse(readFileSync(path, 'utf8')) as CloseoutEvent;

@@ -1,10 +1,10 @@
 /**
- * Vendored contract of the PR stress gate's exemption parser (lane D,
- * origin/capy/gmw-d @ 60557b495: scripts/stress/gate.ts `parseExemptionBlocks`
- * and scripts/stress/run.ts `failureSignature`, copied verbatim). The
- * nightly-watch tests feed the issue bodies the watcher writes through it, so
- * a format drift on either side fails test/scripts/nightly-issue.test.ts.
- * When both branches are on master, import scripts/stress/gate.ts instead.
+ * Vendored contract of the PR stress gate's exemption parser
+ * (scripts/stress/gate.ts `parseExemptionBlocks` and scripts/stress/run.ts
+ * `failureSignature`, copied verbatim). The nightly-watch tests feed the issue
+ * bodies the watcher writes through it, so a format drift on either side fails
+ * test/scripts/nightly-issue.test.ts. The copy has no imports, so the watcher
+ * tests do not load the gate's own dependencies.
  */
 export interface VendoredExemption { file: string; test: string; backend: string; signature: string; owner: string; expires: string }
 

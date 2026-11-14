@@ -24,7 +24,7 @@ import {
 const ROOT = join(import.meta.dir, '../..');
 const FIX = join(ROOT, 'test/fixtures/nightly-watch');
 const load = <T>(name: string): T => JSON.parse(readFileSync(join(FIX, name), 'utf8')) as T;
-const REPO = 'garrytan/gbrain';
+const REPO = 'acme-example/gbrain';
 const TODAY = '2026-10-05';
 
 interface Call { method: string; path: string; body?: Record<string, unknown> }
@@ -78,11 +78,11 @@ describe('nightly-watch incidents', () => {
     expect(body).toContain('| `Heavy tests` | `Bootstrap offline Docker e2e (placeholder)` | failure | no |');
     expect(body).toContain('### Next step for the agent');
     expect(body).toContain('owner action');
-    expect(body).toContain('https://github.com/garrytan/gbrain/compare/');
+    expect(body).toContain('https://github.com/acme-example/gbrain/compare/');
     const record = recordOf(body);
     expect(record.failing.map(f => f.job).sort()).toEqual(['Heavy tests', 'Hermes door e2e (credentialed, real binary, loud-fail)', 'Plugin doors (codex + claude, install tier)']);
     expect(record.first_red).toEqual({ run_id: 37195155240, sha: record.head_sha });
-    expect(record.dispatch_argv).toEqual(['gh', 'workflow', 'run', 'heavy-tests.yml', '--ref', 'master']);
+    expect(record.dispatch_argv).toEqual(['gh', 'workflow', 'run', 'heavy-tests.yml', '--ref', 'main']);
     expect(record.next_step).toBe('code_fix');
     expect(calls.filter(c => c.path === 'repos/{repo}/labels').map(c => c.body!.name)).toEqual(['nightly-red']);
   });
@@ -144,7 +144,7 @@ describe('nightly-watch incidents', () => {
     expect(known.assessment.state).toBe('known-red');
     expect(known.plan.labels).toEqual(['nightly-red', 'known-red']);
     expect(known.plan.record!.next_step).toBe('known_red_wait');
-    expect(known.plan.record!.dispatch_argv).toEqual(['gh', 'workflow', 'run', 'scale-tier.yml', '--ref', 'master', '-f', 'pages=20000']);
+    expect(known.plan.record!.dispatch_argv).toEqual(['gh', 'workflow', 'run', 'scale-tier.yml', '--ref', 'main']);
 
     const unchanged = fakeClient({ ...scaleRun(watchdog), issues: [{ ...issueWith('open', known.plan.record!, ['nightly-red', 'known-red']), title: 'Nightly red: Scale tier' }] });
     await watchRun({ client: unchanged.client, repo: REPO, runId: 1, rows: scaleRows, today: TODAY, dryRun: false });
@@ -210,7 +210,8 @@ describe('nightly-watch incidents', () => {
 });
 
 describe('.github/nightly-known-red.tsv', () => {
-  const todos = readFileSync(join(ROOT, 'TODOS.md'), 'utf8');
+  // TODOS.md belongs to gstack and may be absent from this repository: a fixture holds the TODO titles the rows name.
+  const todos = '- Set the ANTHROPIC_API_KEY and OPENAI_API_KEY repo secrets\n';
   const header = '# Columns: workflow, job, signature, kind, todo, review_by\n';
   const row = (r: Partial<KnownRow> = {}) => [r.workflow ?? 'W', r.job ?? 'j', r.signature ?? 's', r.kind ?? 'known-red', r.todo ?? 'Set the ANTHROPIC_API_KEY and OPENAI_API_KEY repo secrets', r.review_by ?? '2026-10-25'].join('\t');
 
@@ -237,7 +238,7 @@ describe('nightly-watch coverage ratchet', () => {
     const watch = loadYaml(readFileSync(join(dir, 'nightly-watch.yml'), 'utf8')) as { on: { workflow_run: { workflows: string[] } } };
     const scheduled = readdirSync(dir).filter(f => f.endsWith('.yml')).map(f => loadYaml(readFileSync(join(dir, f), 'utf8')) as { name: string; on?: { schedule?: unknown } })
       .filter(w => w.on && typeof w.on === 'object' && 'schedule' in w.on).map(w => w.name);
-    expect(scheduled.length).toBeGreaterThan(5);
+    expect(scheduled.length).toBeGreaterThan(3);
     const missing = scheduled.filter(name => !watch.on.workflow_run.workflows.includes(name));
     expect(missing, `Add ${missing.join(', ')} to .github/workflows/nightly-watch.yml on.workflow_run.workflows`).toEqual([]);
   });
@@ -356,7 +357,7 @@ class World {
           return { artifacts: world.manifests.has(`${run.id}/${run.run_attempt}`) ? [{ id: run.id * 10 + run.run_attempt, name: 'ci-manifest', expired: false }] : [] } as R;
         }
         if ((m = /^repos\/\{repo\}\/actions\/workflows\/(\d+)\/runs\?event=(\w+)/.exec(path))) {
-          const runs = [...world.runs.values()].filter(r => r.workflow_id === Number(m![1]) && r.event === m![2] && (m![2] !== 'push' || r.head_branch === 'master'))
+          const runs = [...world.runs.values()].filter(r => r.workflow_id === Number(m![1]) && r.event === m![2] && (m![2] !== 'push' || r.head_branch === 'main'))
             .filter(r => !path.includes('status=success') || r.conclusion === 'success').sort((x, y) => y.run_number - x.run_number);
           return { workflow_runs: runs } as R;
         }
@@ -406,7 +407,7 @@ describe('master-red: push-to-master runs', () => {
     const body = issue.body!;
     expect(body).toContain(`https://github.com/${REPO}/compare/${T.g8315.head_sha}...${T.r8320.head_sha}`);
     expect(body).toContain('PRs merged in range: #6067');
-    expect(body).toContain('`bun run test:stress test/persistence-history-fixture.test.ts --iterations 10 --postgres`');
+    expect(body).toContain('`bun run test:stress test/persistence-history-fixture.test.ts --iterations 10`');
     expect(body).toContain(`Fixes #${issue.number}`);
     expect(body).toContain('known-red rows never apply to push runs');
     expect(body).toContain('within 1 hour');
@@ -442,7 +443,7 @@ describe('master-red: push-to-master runs', () => {
     expect(flakes.map(f => f.title).sort()).toEqual(['Flake: test/managed-lint.test.ts', 'Flake: test/pack-relation-direction-engine.test.ts', 'Flake: test/persistence-history-fixture.test.ts']);
     const rec = readJsonBlock<FlakeRecord>(flakes[0]!.body, FLAKE_MARKER)!;
     expect(rec).toMatchObject({ schema: 'flake/v1', master_red_issue: issue.number, owner: 'agent on release duty', platform: 'linux' });
-    expect(rec.reproduce).toMatch(/^bun run test:stress test\/[\w./-]+\.test\.ts --iterations 10 --postgres$/);
+    expect(rec.reproduce).toMatch(/^bun run test:stress test\/[\w./-]+\.test\.ts --iterations 10$/);
     expect(rec.expires).toBe('2026-10-19');
     expect(flakes[0]!.body).toContain(`master-red #${issue.number}`);
   });
@@ -877,7 +878,7 @@ describe('master-red: push-to-master runs', () => {
     w.manifests.set(`${run.id}/1`, completeManifest(run));
     await go(w, run);
     const body = masterIssue(w)!.body!;
-    for (const f of files) expect(body).toContain(`\`bun run test:stress ${f} --iterations 10 --postgres\``);
+    for (const f of files) expect(body).toContain(`\`bun run test:stress ${f} --iterations 10\``);
     expect(body).not.toContain('hunter2');
     expect(body).toContain('postgresql:\u200b//‹redacted›@');
     expect(body).not.toMatch(/test:stress[^`]*postgres(ql)?:/);
@@ -991,7 +992,7 @@ describe('master-red: push-to-master runs', () => {
   test('a flake outside the Postgres arms closes after its repair PR merged and a later complete run passed its file and arm', async () => {
     const w = testWorld(T.g8352);
     const rec: FlakeRecord = {
-      schema: 'flake/v1', workflow: 'Test', file: 'test/unit-only.test.ts', test: 'ordering', lane: 'unit', arm: '', platform: 'linux', backend: 'pglite', job: 'test (2)', signature: 'expected 7',
+      schema: 'flake/v1', workflow: 'Test', file: 'test/unit-only.test.ts', test: 'ordering', lane: 'unit', arm: '', platform: 'linux', backend: 'unit', job: 'test (2)', signature: 'expected 7',
       first_seen: { run_id: 1, run_number: 1, run_attempt: 1, sha: 'c'.repeat(40) }, master_red_issue: 1, owner: 'agent on release duty', opened: TODAY, expires: '2026-10-19', reproduce: null,
     };
     const flake: WorldIssue = { number: 50, title: 'Flake: test/unit-only.test.ts › ordering', state: 'open', labels: [{ name: 'flake' }], body: jsonBlock(FLAKE_MARKER, rec), created: 0, comments: [] };
@@ -1014,7 +1015,7 @@ describe('nightly-watch routing and guard', () => {
     await expect(watch({ client: w.client(), repo: REPO, runId: run.id, rows: realRows, today: TODAY, dryRun: false, replayIssue })).rejects.toThrow(msg);
     expect(w.calls.filter(c => c.method !== 'GET')).toEqual([]);
   };
-  test('schedule accepted; push-to-master of Test and E2E Tests accepted, including by dispatch with a push-to-master run id', () => {
+  test('schedule accepted; push-to-main of Test and E2E Tests accepted, including by dispatch with a push-to-main run id', () => {
     expect(routeRun(load<RunInfo>('run-heavy.json'), REPO)).toEqual({ track: 'schedule' });
     expect(routeRun(T.r8320, REPO)).toEqual({ track: 'push' });
     expect(routeRun(E.r8486, REPO)).toEqual({ track: 'push' });
@@ -1023,16 +1024,16 @@ describe('nightly-watch routing and guard', () => {
   test('fork run refused', () => refuse({ ...T.r8320, head_repository: { full_name: 'someone/fork' } }, 'fork'));
   test('push to another branch refused', () => refuse({ ...T.r8320, head_branch: 'capy/topic' }, "push to 'capy/topic'"));
   test('push run of a non-allowlisted workflow refused', () => refuse({ ...T.r8320, name: 'Heavy Tests', path: '.github/workflows/heavy-tests.yml' }, 'which master-red does not watch'));
-  test('a replay must be an E2E Tests dispatch on master', () => refuse({ ...T.r8320, event: 'workflow_dispatch' }, 'issue-bound replay must be an E2E Tests dispatch', 7));
+  test('a replay must be an E2E Tests dispatch on main', () => refuse({ ...T.r8320, event: 'workflow_dispatch' }, 'issue-bound replay must be an E2E Tests dispatch', 7));
 
   const yaml = (f: string) => loadYaml(readFileSync(join(ROOT, '.github/workflows', f), 'utf8')) as Record<string, any>;
-  test('nightly-watch.yml: master-only workflow_run, guard for schedule + allowlisted push-to-master from this repo, one queue per repo + workflow + track', () => {
+  test('nightly-watch.yml: main-only workflow_run, guard for schedule + allowlisted push-to-main from this repo, one queue per repo + workflow + track', () => {
     const w = yaml('nightly-watch.yml');
-    expect(w.on.workflow_run.branches).toEqual(['master']);
-    expect(w.on.workflow_dispatch.inputs.run_id.description).toBe('Scheduled or push-to-master run id to evaluate');
+    expect(w.on.workflow_run.branches).toEqual(['main']);
+    expect(w.on.workflow_dispatch.inputs.run_id.description).toBe('Scheduled or push-to-main run id to evaluate');
     expect(w.on.workflow_dispatch.inputs.replay_issue).toBeDefined();
     const guard: string = w.jobs.resolve.if;
-    for (const part of ["github.event_name == 'workflow_dispatch'", 'head_repository.full_name == github.repository', "workflow_run.event == 'schedule'", "workflow_run.event == 'push'", "head_branch == 'master'", '["Test","E2E Tests"]']) expect(guard).toContain(part);
+    for (const part of ["github.event_name == 'workflow_dispatch'", 'head_repository.full_name == github.repository', "workflow_run.event == 'schedule'", "workflow_run.event == 'push'", "head_branch == 'main'", '["Test","E2E Tests"]']) expect(guard).toContain(part);
     expect(Object.keys(PUSH_ALLOWLIST).sort()).toEqual(['E2E Tests', 'Test']);
     expect(w.concurrency).toBeUndefined();
     expect(w.jobs.watch.needs).toBe('resolve');
@@ -1040,8 +1041,8 @@ describe('nightly-watch routing and guard', () => {
     expect(w.jobs.watch.permissions).toEqual({ issues: 'write', actions: 'read', checks: 'read', contents: 'read', 'pull-requests': 'read' });
     for (const job of Object.values(w.jobs) as Array<{ steps: Array<{ run?: string }> }>) for (const s of job.steps) expect(s.run ?? '').not.toContain('${{');
   });
-  test('test.yml and e2e.yml upload the versioned ci-manifest from executed-receipts', () => {
-    for (const f of ['test.yml', 'e2e.yml']) {
+  test('test.yml uploads the versioned ci-manifest from executed-receipts', () => {
+    for (const f of ['test.yml']) {
       const steps = yaml(f).jobs['executed-receipts'].steps as Array<{ run?: string; with?: { name?: string } }>;
       expect(steps.some(s => s.run?.includes('bun scripts/ci-manifest.ts --receipts-dir'))).toBe(true);
       expect(steps.some(s => s.with?.name === MANIFEST_ARTIFACT)).toBe(true);
@@ -1049,7 +1050,7 @@ describe('nightly-watch routing and guard', () => {
   });
   test('a known-red row for the race-hunt job is refused', () => {
     const row = ['Test', 'race-hunt (1)', 'x', 'known-red', 'Set the ANTHROPIC_API_KEY and OPENAI_API_KEY repo secrets', '2026-10-25'].join('\t');
-    expect(validateKnownRed(`# h\n${row}`, readFileSync(join(ROOT, 'TODOS.md'), 'utf8')).join('\n')).toContain('race-hunt failures cannot be known-red');
+    expect(validateKnownRed(`# h\n${row}`, '- Set the ANTHROPIC_API_KEY and OPENAI_API_KEY repo secrets\n').join('\n')).toContain('race-hunt failures cannot be known-red');
   });
 });
 
@@ -1085,7 +1086,7 @@ describe('operator messages carry docs anchors that resolve', () => {
   const slug = (h: string) => h.trim().toLowerCase().replace(/[^\w\- ]/g, '').replace(/ /g, '-');
   const anchors = (doc: string) => new Set(readFileSync(join(ROOT, doc), 'utf8').split('\n').filter(l => /^#{1,6} /.test(l)).map(l => slug(l.replace(/^#+ /, ''))));
   test('every docs/*.md#anchor named by the CI watchers exists', () => {
-    const files = ['scripts/nightly-issue.ts', 'scripts/lib/master-red.ts', 'scripts/lib/ci-run.ts', 'scripts/ci-manifest.ts', 'scripts/ci-health-report.ts', 'scripts/release-gate.ts', '.github/workflows/nightly-watch.yml', '.github/workflows/release.yml'];
+    const files = ['scripts/nightly-issue.ts', 'scripts/lib/master-red.ts', 'scripts/lib/ci-run.ts', 'scripts/ci-manifest.ts', 'scripts/ci-health-report.ts', '.github/workflows/nightly-watch.yml'];
     const cache = new Map<string, Set<string>>();
     const refs = files.flatMap(f => [...readFileSync(join(ROOT, f), 'utf8').matchAll(/(docs\/[\w./-]+\.md)#([\w-]+)/g)].map(m => [f, m[1]!, m[2]!] as const));
     expect(refs.length).toBeGreaterThan(5);
@@ -1111,7 +1112,7 @@ describe('stress-gate exemption records (lane D contract: scripts/stress/README.
     const rows = parseExemptionBlocks(masterIssue(w, 'E2E Tests')!.body!);
     expect(rows).toHaveLength(new Set(manifestFailures.map(f => `${f.test}|${f.signature}`)).size);
     for (const row of rows) {
-      expect(row).toMatchObject({ file: 'test/e2e/fact-embedding-backfill-parity.test.ts', backend: 'postgres', owner: 'agent on release duty', expires: '2026-10-19' });
+      expect(row).toMatchObject({ file: 'test/e2e/fact-embedding-backfill-parity.test.ts', backend: 'e2e', owner: 'agent on release duty', expires: '2026-10-19' });
       const source = manifestFailures.find(f => f.test === row.test)!;
       expect(row.signature).toBe(gateSignature(source.message!));
     }
@@ -1142,7 +1143,7 @@ describe('stress-gate exemption records (lane D contract: scripts/stress/README.
     for (const f of flakes) {
       const rows = parseExemptionBlocks(f.body!);
       expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ backend: 'postgres', owner: 'agent on release duty', expires: '2026-10-19' });
+      expect(rows[0]).toMatchObject({ backend: 'e2e', owner: 'agent on release duty', expires: '2026-10-19' });
       expect(readJsonBlock<FlakeRecord>(f.body, FLAKE_MARKER)!.signature).toBe(rows[0]!.signature);
     }
     expect(parseExemptionBlocks(w.issue(n).body!)).toEqual([]);

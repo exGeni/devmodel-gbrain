@@ -6,7 +6,7 @@
       "name": "macOS 26 validation",
       "status": "completed",
       "conclusion": "success",
-      "html_url": "https://github.com/garrytan/gbrain/actions/runs/37197810506/job/111423193214",
+      "html_url": "https://github.com/acme-example/gbrain/actions/runs/37197810506/job/111423193214",
       "steps": [
         {
           "number": 1,

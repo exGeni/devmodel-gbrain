@@ -5,7 +5,7 @@
 #
 # WHY: a local machine running many Conductor agents at once gets CPU/memory
 # saturated (observed: load avg 120 on 16 cores, ~15 sibling `bun test`
-# processes). The PGLite WASM test suite then OOMs (8-shard) or crawls
+# processes). The unit suite then OOMs (8-shard) or crawls
 # (~12min for 1/3 of files vs ~85s normally). The suite already runs on
 # GitHub's ephemeral runners on every PR push; this script makes a local
 # caller (human or agent, e.g. /ship Step 5) AWAIT that cloud run exactly
@@ -19,7 +19,7 @@
 # drops into a test gate unchanged). 2 = usage/precondition error.
 #
 # REQUIRES: `gh` authenticated; the workflow must declare `workflow_dispatch:`
-# (test.yml does as of v0.41.32.0).
+# (test.yml does).
 set -euo pipefail
 
 WORKFLOW="test.yml"

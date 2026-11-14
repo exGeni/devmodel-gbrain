@@ -4,17 +4,17 @@
       "conclusion": "success",
       "created_at": "2026-10-18T23:01:27Z",
       "event": "push",
-      "head_branch": "master",
+      "head_branch": "main",
       "head_repository": {
-        "full_name": "garrytan/gbrain"
+        "full_name": "acme-example/gbrain"
       },
       "head_sha": "f1d9093164aae6e861646dc51a9a00b16d357988",
-      "html_url": "https://github.com/garrytan/gbrain/actions/runs/39174731800",
+      "html_url": "https://github.com/acme-example/gbrain/actions/runs/39174731800",
       "id": 39174731800,
       "name": "Test",
       "path": ".github/workflows/test.yml",
       "repository": {
-        "full_name": "garrytan/gbrain"
+        "full_name": "acme-example/gbrain"
       },
       "run_attempt": 1,
       "run_number": 10229,
@@ -27,15 +27,15 @@
       "event": "workflow_dispatch",
       "head_branch": "capy/gbra135-ci-cost",
       "head_repository": {
-        "full_name": "garrytan/gbrain"
+        "full_name": "acme-example/gbrain"
       },
       "head_sha": "13366cdef9f0c62eb62fd5e2e06be513eb4d39c4",
-      "html_url": "https://github.com/garrytan/gbrain/actions/runs/39170735990",
+      "html_url": "https://github.com/acme-example/gbrain/actions/runs/39170735990",
       "id": 39170735990,
       "name": "Test",
       "path": ".github/workflows/test.yml",
       "repository": {
-        "full_name": "garrytan/gbrain"
+        "full_name": "acme-example/gbrain"
       },
       "run_attempt": 1,
       "run_number": 10224,
