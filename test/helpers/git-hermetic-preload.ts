@@ -25,7 +25,7 @@
  * entries, and skips entirely if signing keys are already injected — an
  * operator or a future signing-behavior test can override deliberately.
  *
- * #7451: it first drops every variable production's `gitChildEnv` drops (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE,
+ * #7451: it first drops every variable `gitChildEnv` (test/helpers/git-env.ts) drops (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE,
  * GIT_CONFIG_* and the rest of `git rev-parse --local-env-vars`). A run started from a git hook inherits the hook's
  * repository through them, and a helper's `git -C <temp repo> config ...` then wrote into the caller's repository
  * (`core.bare=true`, `user.name t`). Transport and credential variables pass through, as in production.
@@ -37,7 +37,7 @@
  * Imported by `bunfig.toml` via
  * `preload = [..., "./test/helpers/git-hermetic-preload.ts"]`.
  */
-import { gitChildEnv } from '../../src/core/git-env.ts';
+import { gitChildEnv } from './git-env.ts';
 
 for (const name of ['spawn', 'spawnSync'] as const) {
   const original = Bun[name] as (...args: unknown[]) => unknown;
