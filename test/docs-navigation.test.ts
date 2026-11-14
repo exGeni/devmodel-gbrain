@@ -7,7 +7,7 @@ const root = resolve(import.meta.dir, '..');
 const subsystemDir = 'docs/architecture/key-files';
 const subsystems = readdirSync(join(root, subsystemDir)).filter(name => name.endsWith('.md'));
 const documents = [
-  'CLAUDE.md', 'AGENTS.md', 'docs/architecture/KEY_FILES.md', 'docs/contributing/version-recovery.md',
+  'CLAUDE.md', 'AGENTS.md', 'docs/architecture/KEY_FILES.md',
   ...subsystems.map(name => `${subsystemDir}/${name}`),
 ];
 

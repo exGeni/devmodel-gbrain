@@ -35,15 +35,7 @@ const PLACEHOLDER = /^(foo|bar|baz|x|y|z|your-[\w-]+)\.[a-z.]+$/;
 const HISTORICAL = '<!-- repo-paths: historical -->';
 
 /** file -> path -> reason. Paths that live outside this repository. */
-const ALLOWLIST: Record<string, Record<string, string>> = {
-  'docs/architecture/key-files/ci-health-and-test-guards.md': {
-    'scripts/gbrain-check.ts': 'a harness-evals script (garrytan/harness-evals), run by the advisory harness-check workflow',
-  },
-  'docs/ci-event-parity.md': {
-    'scripts/gbrain-check.ts': 'a harness-evals script (garrytan/harness-evals), run by the advisory harness-check workflow',
-    'scripts/build-gbrain-image.sh': 'a harness-evals script (garrytan/harness-evals), run by the advisory harness-check workflow',
-  },
-};
+const ALLOWLIST: Record<string, Record<string, string>> = {};
 
 function scannedFiles(): string[] {
   const tracked = execFileSync('git', ['ls-files', '*.md', '*.yml', '*.yaml'], { cwd: REPO, encoding: 'utf8' })
