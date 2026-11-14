@@ -42,36 +42,6 @@ const RERUN = 'bun run check:test-placeholders';
 const DOC = 'docs/TESTING.md#placeholder-assertions';
 
 const ALLOWLIST = [
-  {
-    path: 'test/operation-context-sourceid-required.test.ts',
-    test: 'OperationContext.sourceId — REQUIRED contract > omitting sourceId from an OperationContext literal is a type error',
-    reason: 'the assertion is the @ts-expect-error line, enforced by bun run typecheck in verify',
-  },
-  {
-    path: 'test/operation-context-sourceid-required.test.ts',
-    test: 'OperationContext.sourceId — REQUIRED contract > passing undefined for sourceId is a type error',
-    reason: 'the assertion is the @ts-expect-error line, enforced by bun run typecheck in verify',
-  },
-  {
-    path: 'test/e2e/embedding-column-postgres.test.ts',
-    test: 'postgres E2E — embedding column (skipped: DATABASE_URL unset) > skipped',
-    reason: 'body of a describe.skip visibility marker for the unset-DATABASE_URL arm; never executes',
-  },
-  {
-    path: 'test/e2e/upsert-chunks-registry-column.test.ts',
-    test: '#1262 upsertChunks registry-aware writes (postgres — skipped: DATABASE_URL unset) > skipped',
-    reason: 'body of a describe.skip visibility marker for the unset-DATABASE_URL arm; never executes',
-  },
-  {
-    path: 'test/e2e/graph-signals-eval.test.ts',
-    test: 'Gate 1 (QUALITY): no statistically significant regression in wrong direction',
-    reason: 'the gate fails by throwing a diagnostic above this line; the marker records that it passed',
-  },
-  {
-    path: 'test/e2e/sync-credential-preflight.test.ts',
-    test: 'v0.41.6.0 D1 E2E — gbrain sync preflight rejects missing OPENAI_API_KEY > does NOT write 565 identical entries to sync-failures.jsonl',
-    reason: 'an absent sync-failures.jsonl is the correct outcome; the other branch asserts the file contents',
-  },
 ];
 
 function walk(dir, pattern, out = []) {

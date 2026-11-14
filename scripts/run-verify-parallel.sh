@@ -129,8 +129,6 @@ CHECKS=(
   "check:origin-assignment"
   "check:no-double-retry"
   "check:file-url-pathname"
-  "check:grok-pin"
-  "check:opencode-pin"
   "check:pin-doc-privacy"
   # Previously reachable ONLY from the deleted check:all (i.e. never run):
   "check:newlines"

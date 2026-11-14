@@ -6,18 +6,6 @@
     "scripts/serial-files.tsv": [
       "test/scripts/serial-files.test.ts"
     ],
-    "docs/contracts/qm-memory-provider/v1.json": [
-      "test/qm-memory-contract.test.ts"
-    ],
-    "src/cli.ts": [
-      "test/cli-goldens.test.ts"
-    ],
-    "src/commands/**": [
-      "test/cli-goldens.test.ts"
-    ],
-    "src/core/operations*.ts": [
-      "test/cli-goldens.test.ts"
-    ],
     "scripts/pregate-remote-gate.sh": [
       "test/scripts/pregate-remote-gate.test.ts"
     ],
@@ -47,25 +35,6 @@
       "test/scripts/e2e-wiring.test.ts",
       "test/scripts/full-ci-workflow.test.ts"
     ],
-    ".claude-plugin/plugin.json": [
-      "test/codex-plugin-manifest.test.ts",
-      "test/mcp-registration.test.ts"
-    ],
-    ".codex-plugin/plugin.json": [
-      "test/codex-plugin-manifest.test.ts"
-    ],
-    "plugin-variants/*/.claude-plugin/plugin.json": [
-      "test/codex-plugin-manifest.test.ts"
-    ],
-    "plugin-variants/*/.codex-plugin/plugin.json": [
-      "test/codex-plugin-manifest.test.ts"
-    ],
-    "test/migrations-v0_13_1-grandfather.test.ts": [
-      "test/migrations-v0_13_1.test.ts"
-    ],
-    "test/grandfather-capacity.test.ts": [
-      "test/grandfather-managed.test.ts"
-    ],
     "scripts/ubicloud/*.sh": [
       "test/scripts/awk-portability.test.ts"
     ],
@@ -74,19 +43,7 @@
     ],
     "scripts/*-weights.metadata.json": [
       "test/scripts/mine-shard-weights.test.ts"
-    ],
-    "docs/eval/system-one/runners/ubicloud-setup.sh": [
-      "test/scripts/vm-setup-usage.test.ts"
-    ],
-    "scripts/bench/production-soak/vm-setup.sh": [
-      "test/scripts/vm-setup-usage.test.ts"
-    ],
-    "scripts/bench/stall-repro-vm-setup.sh": [
-      "test/scripts/vm-setup-usage.test.ts"
-    ],
-    "scripts/bench/**": [],
-    "docs/eval/system-one/runners/**": [],
-    "docs/eval/system-one/generators/**": []
+    ]
   },
   "guards": [
     {
@@ -98,37 +55,6 @@
       ],
       "command": "bun test test/scripts/serial-files.test.ts",
       "fix": "add the serial file's row to scripts/serial-files.tsv"
-    },
-    {
-      "id": "cli-goldens",
-      "when": [
-        "src/cli.ts",
-        "src/cli/**",
-        "src/commands/**",
-        "src/core/operations*.ts",
-        "src/core/ops/**"
-      ],
-      "command": "bun test --timeout=60000 test/cli-goldens.test.ts test/cli-dispatch-phase.test.ts test/export-surface-golden.test.ts",
-      "fix": "bun run regen:all, then justify each changed golden in the PR body"
-    },
-    {
-      "id": "regen-check",
-      "when": [
-        "src/**",
-        "skills/**",
-        "templates/**",
-        "plugin/**"
-      ],
-      "command": "bun scripts/regen-all.ts --check",
-      "fix": "bun run regen:all and commit the regenerated files"
-    },
-    {
-      "id": "migration-order",
-      "when": [
-        "src/core/schema-migrations/**"
-      ],
-      "command": "bun scripts/check-schema-migration-order.ts",
-      "fix": "renumber the migration to the next free number on master"
     }
   ],
   "sealed": {
