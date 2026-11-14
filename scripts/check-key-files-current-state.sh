@@ -120,15 +120,15 @@ for doc in "$ROOT"/docs/architecture/key-files/*.md; do
   fi
 done
 
-# ── Gate 3: one KEY_FILES.md bullet per src file ───────────────────────────
+# ── Gate 3: one KEY_FILES.md bullet per file ───────────────────────────────
 # KNOWN_DUP_PATHS seeds duplicate bullets that pre-date the gate (`|`-separated
 # paths); merge a pair and delete its entry here — never add to this list.
 KNOWN_DUP_PATHS=''
 if [ "${#KEY_FILE_DOCS[@]}" -gt 0 ]; then
-  dups=$(grep -h -oE '^- `src/[^`]+`' "${KEY_FILE_DOCS[@]}" | sort | uniq -d | grep -vE "^- \`($KNOWN_DUP_PATHS)\`$" || true)
+  dups=$(grep -h -oE '^- `[^` ]+`' "${KEY_FILE_DOCS[@]}" | sort | uniq -d | grep -vE "^- \`($KNOWN_DUP_PATHS)\`$" || true)
   if [ -n "$dups" ]; then
     fail=1
-    echo "FAIL: docs/architecture/KEY_FILES.md and its subsystems have more than one bullet for the same src file (two 'current states' for one file):" >&2
+    echo "FAIL: docs/architecture/KEY_FILES.md and its subsystems have more than one bullet for the same file (two 'current states' for one file):" >&2
     printf '%s\n' "$dups" | sed 's/^/        /' >&2
     echo "      Fold the newer sentences into the existing bullet and delete the twin." >&2
   fi

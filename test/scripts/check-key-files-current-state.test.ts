@@ -143,6 +143,17 @@ describe("check-key-files-current-state.sh", () => {
     expect(r.stderr).toContain("src/core/db.ts");
   });
 
+  it("FAILS when two subsystem bullets name the same scripts/ or workflow file", () => {
+    for (const path of ["scripts/run-e2e.sh", ".github/workflows/test.yml"]) {
+      seedClean();
+      writeDoc("docs/architecture/key-files/engines.md", `- \`${path}\` — one current truth.\n`);
+      writeDoc("docs/architecture/key-files/runtime.md", `- \`${path}\` — another current truth.\n`);
+      const r = run();
+      expect(r.status, path).toBe(1);
+      expect(r.stderr).toContain(path);
+    }
+  });
+
   it("catches the marker in any of the three reference docs (thin-client)", () => {
     seedClean();
     writeDoc("docs/architecture/thin-client.md", "# Thin-client\n\n**v0.36.3:** added cross-modal.\n");
