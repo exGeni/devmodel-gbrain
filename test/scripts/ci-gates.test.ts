@@ -65,7 +65,7 @@ describe('CI execution evidence', () => {
 
   test('unit aggregate rejects failed, cancelled or skipped required jobs', () => {
     expect(unit.jobs['test-status'].if).toBe("${{ needs.changes.outputs.reuse != 'true' && always() && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || (!inputs.stress_files && !inputs.stress_base)) }}");
-    expect(unit.jobs['test-status'].needs).toEqual(['changes', 'gitleaks', 'dependency-audit', 'verify', 'typecheck', 'serial-tests', 'test', 'stress-changed-tests']);
+    expect(unit.jobs['test-status'].needs).toEqual(['changes', 'gitleaks', 'dependency-audit', 'verify', 'typecheck', 'serial-tests', 'test', 'e2e', 'stress-changed-tests']);
     expect(aggregate(unit, 'test-status', 'pull_request', {})).toBe(0);
     for (const job of unit.jobs['test-status'].needs as string[]) {
       for (const result of ['failure', 'cancelled', 'skipped']) {

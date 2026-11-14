@@ -45,7 +45,7 @@ const bash = (script: string, env: Record<string, string>, cwd = root) =>
   spawnSync('bash', ['-c', script], { cwd, encoding: 'utf8', env: { PATH: process.env.PATH, ...env } });
 
 const CHEAP = ['changes', 'cheap-tier', 'dependency-audit', 'executed-receipts', 'gitleaks', 'stress-changed-tests', 'typecheck', 'verify'];
-const FULL_ONLY = ['serial-tests', 'test', 'coverage-report', 'test-status', 'full-suite'];
+const FULL_ONLY = ['serial-tests', 'test', 'e2e', 'coverage-report', 'test-status', 'full-suite'];
 
 describe('full CI on pull requests', () => {
   test('a pull request runs exactly the cheap tier; every other event runs the full profile', () => {
